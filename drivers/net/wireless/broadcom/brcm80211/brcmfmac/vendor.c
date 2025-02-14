@@ -15,6 +15,7 @@
 #include "cfg80211.h"
 #include "vendor.h"
 #include "fwil.h"
+#include "common.h"
 #include "vendor_ifx.h"
 
 static int brcmf_cfg80211_vndr_cmds_dcmd_handler(struct wiphy *wiphy,
@@ -221,6 +222,55 @@ brcmf_wiphy_phy_temp_evt_handler(struct brcmf_if *ifp,
 	return 0;
 }
 
+s32
+brcmf_wiphy_icmp_echo_req_event_handler(struct brcmf_if *ifp,
+					const struct brcmf_event_msg *e, void *data)
+{
+	struct brcmf_cfg80211_info *cfg = ifp->drvr->config;
+	struct wiphy *wiphy = cfg_to_wiphy(cfg);
+	struct sk_buff *skb;
+	struct ifx_icmp_echo_req_event *echo_req_event;
+
+	echo_req_event = (struct ifx_icmp_echo_req_event *)data;
+
+	brcmf_dbg(INFO, "Enter: event %s (%d), status=%d\n",
+		  brcmf_fweh_event_name(e->event_code), e->event_code,
+		  e->status);
+
+	brcmf_dbg(INFO, "icmp_echo_req_event reason = %d icmp_echo_req_event count = %d\n",
+		  echo_req_event->reason, echo_req_event->echo_req_cnt);
+
+	if (echo_req_event->ip_ver == ICMP_ECHO_REQ_IP_V6) {
+		brcmf_dbg(INFO, "icmp_echo_req_event IPv6 address = %pI6",
+			  &echo_req_event->u.ipv6.addr);
+	} else if (echo_req_event->ip_ver == ICMP_ECHO_REQ_IP_V4) {
+		brcmf_dbg(INFO, "icmp_echo_req_event IPv4 address = %pI4",
+			  &echo_req_event->u.ipv6.addr);
+	} else {
+		brcmf_err("Invalid IP address\n");
+		return -EINVAL;
+	}
+
+	skb = cfg80211_vendor_event_alloc(wiphy, NULL,
+					  echo_req_event->length,
+					  IFX_VENDOR_EVTS_ICMP_ECHO_REQ,
+					  GFP_KERNEL);
+
+	if (!skb) {
+		brcmf_err("NO MEM: can't allocate skb for ICMP_ECHO_REQ_EVENT\n");
+		return -ENOMEM;
+	}
+
+	if (nla_put(skb, NL80211_ATTR_VENDOR_DATA, echo_req_event->length, data)) {
+		kfree_skb(skb);
+		brcmf_err("NO ROOM in skb for ICMP_ECHO_REQ_EVENT\n");
+		return -EMSGSIZE;
+	}
+
+	cfg80211_vendor_event(skb, GFP_KERNEL);
+	return 0;
+}
+
 const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 	{
 		{
@@ -386,11 +436,26 @@ const struct nl80211_vendor_cmd_info brcmf_vendor_events[] = {
 		.vendor_id = BROADCOM_OUI,
 		.subcmd = BRCMF_VNDR_EVTS_PHY_TEMP,
 	},
+	{
+		.vendor_id = OUI_IFX,
+		.subcmd = IFX_VENDOR_EVTS_RSV1,		/* Reserved for WLAN Sense */
+	},
+	{
+		.vendor_id = OUI_IFX,
+		.subcmd = IFX_VENDOR_EVTS_ICMP_ECHO_REQ,
+	},
 };
 
 int get_brcmf_num_vndr_cmds(void)
 {
 	int num = ARRAY_SIZE(brcmf_vendor_cmds);
+
+	return num;
+}
+
+int get_brcmf_num_vndr_evts(void)
+{
+	int num = ARRAY_SIZE(brcmf_vendor_events);
 
 	return num;
 }

@@ -153,6 +153,24 @@ enum ifx_nl80211_vendor_subcmds {
 	SCMD(MAX)		= 31
 };
 
+/* enum ifx_vendor_evts - IFX nl80211 vendor events
+ *
+ * @IFX_VENDOR_EVTS_RSV0: Reserved Event
+ *
+ * @IFX_VENDOR_EVTS_RSV1: Reserved Event
+ *
+ * @IFX_VENDOR_EVTS_ICMP_ECHO_REQ: ICMP Echo Request Event
+ *
+ * @IFX_VENDOR_EVTS_LAST: This acts as a the tail of evts list.
+ *      Make sure it located at the end of the list.
+ */
+enum ifx_vendor_evts {
+	IFX_VENDOR_EVTS_RSV0,
+	IFX_VENDOR_EVTS_RSV1,
+	IFX_VENDOR_EVTS_ICMP_ECHO_REQ,
+	IFX_VENDOR_EVTS_LAST
+};
+
 /*
  * enum ifx_vendor_attr - IFX nl80211 vendor attributes
  *
@@ -752,10 +770,9 @@ struct ifx_tko_enable {
 	u8 pad[3];		/* 4-byte struct alignment */
 };
 
-/* String based vendor commands infra
- */
+/* String based vendor commands infra */
 #define VNDR_CMD_STR_NUM	15
-#define VNDR_CMD_STR_MAX_LEN	20
+#define VNDR_CMD_STR_MAX_LEN	50
 #define VNDR_CMD_VAL_NUM	50
 #define VNDR_CMD_HASH_BITS	4
 
@@ -818,6 +835,9 @@ int ifx_vndr_cmdstr_mkeep_alive(struct wiphy *wiphy, struct wireless_dev *wdev,
 int ifx_vndr_cmdstr_tko(struct wiphy *wiphy, struct wireless_dev *wdev,
 			char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
 			long *cmd_val);
+int ifx_vndr_cmdstr_icmp_echo_req(struct wiphy *wiphy, struct wireless_dev *wdev,
+				  char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
+				  long *cmd_val);
 int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 			       const void *data, int len);
 int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,

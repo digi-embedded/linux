@@ -1349,4 +1349,82 @@ struct brcmf_ol_cfg_v1 {
 	u32 offload_skip;				/* Bitmap of offload to be skipped */
 };
 
+#define WL_ICMP_ECHO_REQ_VER		1
+
+#define ICMP_ECHO_REQ_IP_BOTH		0
+#define ICMP_ECHO_REQ_IP_V4		1
+#define ICMP_ECHO_REQ_IP_V6		2
+
+/* ICMP Echo Request Sub commands */
+enum {
+	WL_ICMP_ECHO_REQ_ENAB,
+	WL_ICMP_ECHO_REQ_ADD,
+	WL_ICMP_ECHO_REQ_DEL,
+	WL_ICMP_ECHO_REQ_START,
+	WL_ICMP_ECHO_REQ_STOP,
+	WL_ICMP_ECHO_REQ_INFO
+};
+
+struct ifx_icmp_echo_req_peer_ip {
+	u16 version;
+	u16 length;
+	u8 ip_ver;				/* IP Version IPv4:1 IPv6:2 */
+	u8 pad[3];
+	union {
+		struct ipv4_addr ipv4;		/* Peer IPV4 Address */
+		struct ipv6_addr ipv6;		/* Peer IPV6 Address */
+	} u;
+};
+
+struct ifx_icmp_echo_req_peer_config {
+	u16 version;
+	u16 length;
+	u8 ip_ver;				/* IP Version IPv4:1 IPv6:2 */
+	u8 pad[3];
+	u32 periodicity;			/* Periodicty of Ping in sec */
+	u32 duration;				/* Duration in sec  */
+	union {
+		struct ipv4_addr ipv4;		/* Peer IPv4 Address */
+		struct ipv6_addr ipv6;		/* Peer IPv6 Address */
+	} u;
+	u8 mac_addr[ETH_ALEN];			/* Peer Mac Address */
+};
+
+/* ICMP Echo Req IOVAR Struct */
+struct ifx_icmp_echo_req_cmd {
+	u16 version;
+	u16 length;
+	u8 cmd_type;				/* ICMP Echo Req Cmd Type */
+	u8 pad[3];
+	u8 data[];				/* Data Pointing to Sub cmd structure */
+};
+
+/* ICMP Echo Request IOVAR INFO Struct */
+struct ifx_icmp_echo_req_get_peer_info {
+	u32 state;					/* State of the Peer */
+	struct ifx_icmp_echo_req_peer_config config;	/* Configuration of Peer */
+};
+
+struct ifx_icmp_echo_req_get_info {
+	u16 version;
+	u16 length;
+	u8 enable;				/* Offload Enable */
+	u8 count;				/* Peer Count */
+	u8 pad[2];
+	u8 data[];				/* Data Pointing to get peer info structure */
+};
+
+struct ifx_icmp_echo_req_event {
+	u16 version;
+	u16 length;
+	u8 ip_ver;			/* Peer IP Version IPv4:1 IPv6:2 */
+	u8 reason;			/* Event reason */
+	u8 pad[2];
+	u32 echo_req_cnt;		/* ICMP Echo Req Count */
+	union {
+		struct ipv4_addr ipv4;	/* Peer IPV4 Address */
+		struct ipv6_addr ipv6;	/* Peer IPV6 Address */
+	} u;
+};
+
 #endif /* FWIL_TYPES_H_ */

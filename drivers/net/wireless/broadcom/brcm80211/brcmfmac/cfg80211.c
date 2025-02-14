@@ -8820,6 +8820,8 @@ static void brcmf_register_event_handlers(struct brcmf_cfg80211_info *cfg)
 			    brcmf_notify_assoc_req_ie);
 	brcmf_fweh_register(cfg->pub, BRCMF_E_ASSOC_RESP_IE,
 			    brcmf_notify_assoc_resp_ie);
+	brcmf_fweh_register(cfg->pub, BRCMF_E_ICMP_ECHO_REQ,
+			    brcmf_wiphy_icmp_echo_req_event_handler);
 }
 
 static void brcmf_deinit_priv_mem(struct brcmf_cfg80211_info *cfg)
@@ -10059,7 +10061,7 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
 	wiphy->vendor_commands = brcmf_vendor_cmds;
 	wiphy->n_vendor_commands = get_brcmf_num_vndr_cmds();
 	wiphy->vendor_events = brcmf_vendor_events;
-	wiphy->n_vendor_events = BRCMF_VNDR_EVTS_LAST;
+	wiphy->n_vendor_events = get_brcmf_num_vndr_evts();
 	brcmf_fweh_register(cfg->pub, BRCMF_E_PHY_TEMP,
 			    brcmf_wiphy_phy_temp_evt_handler);
 

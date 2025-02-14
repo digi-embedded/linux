@@ -44,12 +44,14 @@
 #include <linux/kernel.h>
 #include <linux/jhash.h>
 #include <linux/hashtable.h>
+#include <linux/inet.h>
 #include "common.h"
 
 static const struct ifx_vendor_cmdstr ifx_vndr_cmdstr[] = {
 	{ "offload_config", ifx_vndr_cmdstr_offload_config},
 	{ "mkeep_alive", ifx_vndr_cmdstr_mkeep_alive},
 	{ "tko", ifx_vndr_cmdstr_tko},
+	{ "icmp_echo_req", ifx_vndr_cmdstr_icmp_echo_req},
 	{ NULL, NULL }
 };
 
@@ -1020,6 +1022,251 @@ int ifx_vndr_cmdstr_tko(struct wiphy *wiphy, struct wireless_dev *wdev,
 		brcmf_err("Failed to configure tko: %d\n", ret);
 
 	return ret;
+}
+
+/* ifx_vndr_cmd_str_parse_ip()
+ * Get ip version. based on the ip version parse the command string into IP.
+ * In Param
+ * @cmd_str - String to be parsed.
+ * @ip_addr - Parsed IP address storage.
+ * Out Param
+ * @ip_ver -  Pointer to IP version.
+ * Return
+ * true - success.
+ * false - otherwise.
+ */
+static
+int ifx_vndr_cmdstr_parse_ip(char *cmd_str, u8 *ip_addr, u8 *ip_ver)
+{
+	if (in4_pton(cmd_str, strlen(cmd_str), ip_addr, -1, NULL)) {
+		*ip_ver = ICMP_ECHO_REQ_IP_V4;
+		brcmf_dbg(INFO, "Peer IP Version: %d Peer IPv4 Address: %pI4\n",
+			  *ip_ver, ip_addr);
+		return true;
+	} else if (in6_pton(cmd_str, strlen(cmd_str), ip_addr, -1, NULL)) {
+		*ip_ver = ICMP_ECHO_REQ_IP_V6;
+		brcmf_dbg(INFO, "Peer IP Version: %d Peer IPv6 Address: %pI6\n",
+			  *ip_ver, ip_addr);
+		return true;
+	}
+
+	return false;
+}
+
+/* ifx_vndr_icmp_echo_req_config()
+ * Prepare ICMP Echo Request IOVAR based on the ICMP Echo Request Parameters.
+ * In Param
+ * @ifp - Pointer to brcmf_if structure.
+ * @u8 - Sub Command Type.
+ * @enable - Enable.
+ * @ip_addr - IP Address to be filled.
+ * @ip_ver - IP version.
+ * @mac_addr - MAC Address to be filled.
+ * @periodicity - Periodicity of ping in sec.
+ * @duration - Duration in sec.
+ * Return
+ * 0 - success
+ * Non Zero  - otherwise
+ */
+static
+int ifx_vndr_icmp_echo_req_config(struct brcmf_if *ifp, u8 cmd_type,
+				  u8 enable, u8 *ip_addr, u8 ip_ver,
+				  u8 *mac_addr, u32 periodicity, u32 duration)
+{
+	struct brcmf_cfg80211_info *cfg = ifp->drvr->config;
+	struct wiphy *wiphy = cfg_to_wiphy(cfg);
+	struct ifx_icmp_echo_req_cmd *icmp_echo_req_cmd;
+	struct ifx_icmp_echo_req_peer_config *icmp_echo_req_peer_config;
+	struct ifx_icmp_echo_req_peer_ip *icmp_echo_req_peer_ip;
+	struct ifx_icmp_echo_req_get_info *icmp_echo_req_get_info;
+	int ret = 0;
+
+	memset(cfg->extra_buf, '\0', WL_EXTRA_BUF_MAX);
+	icmp_echo_req_cmd = (struct ifx_icmp_echo_req_cmd *)cfg->extra_buf;
+
+	icmp_echo_req_cmd->version = WL_ICMP_ECHO_REQ_VER;
+	icmp_echo_req_cmd->cmd_type = cmd_type;
+
+	switch (icmp_echo_req_cmd->cmd_type) {
+	case WL_ICMP_ECHO_REQ_ENAB:
+		icmp_echo_req_cmd->data[0] = enable;
+		icmp_echo_req_cmd->length = sizeof(struct ifx_icmp_echo_req_cmd) +
+					    sizeof(u8);
+		break;
+	case WL_ICMP_ECHO_REQ_ADD:
+		icmp_echo_req_peer_config = (struct ifx_icmp_echo_req_peer_config *)
+					    icmp_echo_req_cmd->data;
+		icmp_echo_req_cmd->length = sizeof(*icmp_echo_req_peer_config) +
+					    sizeof(struct ifx_icmp_echo_req_cmd);
+		icmp_echo_req_peer_config->version = WL_ICMP_ECHO_REQ_VER;
+		icmp_echo_req_peer_config->ip_ver = ip_ver;
+		memcpy(icmp_echo_req_peer_config->u.ipv6.addr, ip_addr,
+		       (icmp_echo_req_peer_config->ip_ver == ICMP_ECHO_REQ_IP_V6) ?
+			BRCMF_IPV6_ADDR_LEN : BRCMF_IPV4_ADDR_LEN);
+		memcpy(icmp_echo_req_peer_config->mac_addr, mac_addr, ETH_ALEN);
+		icmp_echo_req_peer_config->periodicity = periodicity;
+		icmp_echo_req_peer_config->duration = duration;
+		icmp_echo_req_peer_config->length = sizeof(struct ifx_icmp_echo_req_peer_config);
+		break;
+	case WL_ICMP_ECHO_REQ_DEL:
+	case WL_ICMP_ECHO_REQ_START:
+	case WL_ICMP_ECHO_REQ_STOP:
+		icmp_echo_req_peer_ip = (struct ifx_icmp_echo_req_peer_ip *)
+					icmp_echo_req_cmd->data;
+		icmp_echo_req_cmd->length = sizeof(*icmp_echo_req_peer_ip) +
+					    sizeof(struct ifx_icmp_echo_req_cmd);
+		icmp_echo_req_peer_ip->version = WL_ICMP_ECHO_REQ_VER;
+		icmp_echo_req_peer_ip->ip_ver = ip_ver;
+		memcpy(icmp_echo_req_peer_ip->u.ipv6.addr, ip_addr,
+		       (icmp_echo_req_peer_ip->ip_ver == ICMP_ECHO_REQ_IP_V6) ?
+			BRCMF_IPV6_ADDR_LEN : BRCMF_IPV4_ADDR_LEN);
+		icmp_echo_req_peer_ip->length = sizeof(struct ifx_icmp_echo_req_peer_ip);
+		break;
+	case WL_ICMP_ECHO_REQ_INFO:
+		icmp_echo_req_peer_ip = (struct ifx_icmp_echo_req_peer_ip *)
+					icmp_echo_req_cmd->data;
+		icmp_echo_req_cmd->length = sizeof(*icmp_echo_req_peer_ip) +
+					    sizeof(struct ifx_icmp_echo_req_cmd);
+		icmp_echo_req_peer_ip->version = WL_ICMP_ECHO_REQ_VER;
+		icmp_echo_req_peer_ip->ip_ver = ip_ver;
+		if (ip_ver != ICMP_ECHO_REQ_IP_BOTH) {
+			memcpy(icmp_echo_req_peer_ip->u.ipv6.addr, ip_addr,
+			       (icmp_echo_req_peer_ip->ip_ver == ICMP_ECHO_REQ_IP_V6) ?
+				BRCMF_IPV6_ADDR_LEN : BRCMF_IPV4_ADDR_LEN);
+		}
+		icmp_echo_req_peer_ip->length = sizeof(struct ifx_icmp_echo_req_peer_ip);
+		break;
+	default:
+		brcmf_err("offload icmp_echo_req subcmd id %d not recognized",
+			  icmp_echo_req_cmd->cmd_type);
+		return -EOPNOTSUPP;
+	}
+
+	if (icmp_echo_req_cmd->cmd_type == WL_ICMP_ECHO_REQ_INFO) {
+		icmp_echo_req_get_info = (struct ifx_icmp_echo_req_get_info *)cfg->extra_buf;
+		ret = brcmf_fil_iovar_data_get(ifp, "icmp_echo_req", cfg->extra_buf,
+					       WL_EXTRA_BUF_MAX);
+		if (ret)
+			brcmf_err("Failed to get icmp_echo_req info: %d\n", ret);
+		else
+			ifx_cfg80211_vndr_send_cmd_reply(wiphy, (void *)icmp_echo_req_get_info,
+							 icmp_echo_req_get_info->length);
+	} else {
+		ret = brcmf_fil_iovar_data_set(ifp, "icmp_echo_req", (u8 *)icmp_echo_req_cmd,
+					       icmp_echo_req_cmd->length);
+		if (ret)
+			brcmf_err("Failed to configure icmp_echo_req: %d\n", ret);
+	}
+	return ret;
+}
+
+int ifx_vndr_cmdstr_icmp_echo_req(struct wiphy *wiphy, struct wireless_dev *wdev,
+				  char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
+				  long *cmd_val)
+{
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	bool is_ip = false;
+	u8 cmd_type, enable, ip_ver;
+	u32 periodicity = 0, duration = 0;
+	u8 ip_addr[BRCMF_IPV6_ADDR_LEN];
+	u8 mac_addr[ETH_ALEN];
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+
+	if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 6) &&
+	    (memcmp(cmd_str[1], "enable", 6) == 0) &&
+	     (cmd_val[0] == 0 || cmd_val[0] == 1)) {
+		/* echo 'icmp_echo_req enable 0/1 ' | iw dev wlan0 vendor
+		 * send 0x000319 0x1C -
+		 */
+		cmd_type = WL_ICMP_ECHO_REQ_ENAB;
+		enable = cmd_val[0];
+		brcmf_dbg(INFO, "Cmd Type: %d enable: %d\n", cmd_type, enable);
+
+	} else if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 3) &&
+		   (memcmp(cmd_str[1], "add", 3)) == 0) {
+		/* echo 'icmp_echo_req add <peer_ip> <peer_mac>
+		 *  <periodicity> <duration> ' | iw dev wlan0 vendor
+		 * send 0x000319 0x1C -
+		 */
+		cmd_type = WL_ICMP_ECHO_REQ_ADD;
+		is_ip = true;
+
+		if (cmd_str[3][0] != '\0') {
+			if (!mac_pton(cmd_str[3], mac_addr)) {
+				brcmf_err("Invalid icmp_echo_req peer MAC address\n");
+				return -EINVAL;
+			}
+		}
+
+		if (cmd_val[0] >= 0 && cmd_val[1] >= 0) {
+			periodicity = cmd_val[0];
+			duration = cmd_val[1];
+		}
+		brcmf_dbg(INFO, "Cmd Type: %d MAC Address: %pM Periodicity: %d Duration: %d\n",
+			  cmd_type, mac_addr, periodicity, duration);
+
+	} else if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 3) &&
+		   (memcmp(cmd_str[1], "del", 3)) == 0) {
+		/* echo 'icmp_echo_req del <peer_ip> ' | iw dev wlan0 vendor
+		 * send 0x000319 0x1C -
+		 */
+		cmd_type = WL_ICMP_ECHO_REQ_DEL;
+		is_ip = true;
+		brcmf_dbg(INFO, "Cmd Type: %d\n", cmd_type);
+
+	} else if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 5) &&
+		   (memcmp(cmd_str[1], "start", 5)) == 0) {
+		/* echo 'icmp_echo_req start <peer_ip> ' | iw dev wlan0 vendor
+		 * send 0x000319 0x1C -
+		 */
+		cmd_type = WL_ICMP_ECHO_REQ_START;
+		is_ip = true;
+		brcmf_dbg(INFO, "Cmd Type: %d\n", cmd_type);
+
+	} else if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 4) &&
+		   (memcmp(cmd_str[1], "stop", 4)) == 0) {
+		/* echo 'icmp_echo_req stop <peer_ip> ' | iw dev wlan0 vendor
+		 * send 0x000319 0x1C -
+		 */
+		cmd_type = WL_ICMP_ECHO_REQ_STOP;
+		is_ip = true;
+		brcmf_dbg(INFO, "Cmd type: %d\n", cmd_type);
+
+	} else if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 4) &&
+		   (memcmp(cmd_str[1], "info", 4)) == 0) {
+		 /* echo 'icmp_echo_req info <peer_ip> ' | iw dev wlan0 vendor
+		  * recv 0x000319 0x1C -
+		  *
+		  * echo 'icmp_echo_req info all ' | iw dev wlan0 vendor
+		  * recv 0x000319 0x1C -
+		  */
+		cmd_type = WL_ICMP_ECHO_REQ_INFO;
+
+		if (cmd_str[2][0] != '\0' && (strlen(cmd_str[2]) == 3) &&
+		    (memcmp(cmd_str[2], "all", 3)) == 0)
+			ip_ver = ICMP_ECHO_REQ_IP_BOTH;
+		else
+			is_ip = true;
+		brcmf_dbg(INFO, "Cmd Type: %d\n", cmd_type);
+
+	} else {
+		brcmf_err("Invalid icmp_echo_req command format\n");
+		return -EINVAL;
+	}
+
+	if (is_ip && (cmd_str[2][0] != '\0')) {
+		if (!ifx_vndr_cmdstr_parse_ip(cmd_str[2], ip_addr, &ip_ver)) {
+			brcmf_err("Invalid  peer IP address\n");
+			return -EINVAL;
+		}
+	}
+
+	return ifx_vndr_icmp_echo_req_config(ifp, cmd_type, enable, ip_addr,
+					     ip_ver, mac_addr, periodicity,
+					     duration);
 }
 
 int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
