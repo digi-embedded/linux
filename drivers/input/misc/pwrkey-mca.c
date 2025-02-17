@@ -42,6 +42,11 @@
 #define MAX_PWR_KEY_DEBOUNCE_TB_50MS	(255 * 50)
 #define MAX_PWR_KEY_DELAY		255
 #define MAX_PWR_KEY_GUARD		255
+#ifdef CONFIG_ANDROID
+#define DEFAULT_EVENT_ON_WAKEUP		true
+#else
+#define DEFAULT_EVENT_ON_WAKEUP		false
+#endif
 
 #ifdef CONFIG_OF
 struct mca_pwrkey_data {
@@ -60,6 +65,7 @@ struct mca_pwrkey {
 	bool key_power_up;
 	bool key_sleep;
 	bool suspended;
+	bool event_on_wakeup;
 	uint32_t debounce_ms;
 	uint32_t pwroff_delay_sec;
 	uint32_t pwroff_guard_sec;
@@ -129,8 +135,11 @@ static irqreturn_t mca_pwrkey_sleep_irq_handler(int irq, void *data)
 {
 	struct mca_pwrkey *pwrkey = data;
 
-	/* Report the event only if not coming from suspend */
-	if (!pwrkey->suspended) {
+	/*
+	 * Generate the event always, if configured to do so, or only if the
+	 * system was already awake
+	 */
+	if (pwrkey->event_on_wakeup || !pwrkey->suspended) {
 		dev_notice(&pwrkey->input->dev, "Power button - %u\n",
 			   pwrkey->short_press_kcode);
 
@@ -138,20 +147,6 @@ static irqreturn_t mca_pwrkey_sleep_irq_handler(int irq, void *data)
 		input_report_key(pwrkey->input, pwrkey->short_press_kcode, 0);
 		input_sync(pwrkey->input);
 	}
-#ifdef CONFIG_ANDROID
-	else {
-		/*
-		 * Android requires a KEY_POWER event when the device is
-		 * suspended in order to perform a full wake up.
-		 */
-		dev_notice(&pwrkey->input->dev, "Power button - %u\n",
-			   pwrkey->long_press_kcode);
-
-		input_report_key(pwrkey->input, pwrkey->long_press_kcode, 1);
-		input_report_key(pwrkey->input, pwrkey->long_press_kcode, 0);
-		input_sync(pwrkey->input);
-	}
-#endif
 
 	return IRQ_HANDLED;
 }
@@ -384,6 +379,8 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 	pwrkey->input->name = dev_name(&pdev->dev);
 	pwrkey->input->phys = devdata->drv_name_phys;
 	pwrkey->input->dev.parent = &pdev->dev;
+	pwrkey->suspended = false;
+	pwrkey->event_on_wakeup = DEFAULT_EVENT_ON_WAKEUP;
 
 	/* Initialize driver settings from device tree */
 	ret = of_mca_pwrkey_read_settings(np, pwrkey, devdata);
