@@ -381,7 +381,7 @@
 		};
 
 		rifsc: bus@42080000 {
-			compatible = "st,stm32mp25-rifsc", "simple-bus";
+			compatible = "st,stm32mp21-rifsc", "simple-bus";
 			reg = <0x42080000 0x0 0x1000>;
 			#address-cells = <1>;
 			#size-cells = <2>;
