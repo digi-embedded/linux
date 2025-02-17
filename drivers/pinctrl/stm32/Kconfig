@@ -55,13 +55,13 @@ config PINCTRL_STM32MP157
 config PINCTRL_STM32MP215
 	tristate "STMicroelectronics STM32MP215 pin control"
 	depends on OF && HAS_IOMEM
-	default MACH_STM32MP21 || ARM64
+	default MACH_STM32MP21 || ARM64 || ARM
 	select PINCTRL_STM32
 
 config PINCTRL_STM32MP235
 	tristate "STMicroelectronics STM32MP235 pin control"
 	depends on OF && HAS_IOMEM
-	default MACH_STM32MP23 || ARM64
+	default MACH_STM32MP23 || ARM64 || ARM
 	select PINCTRL_STM32
 
 config PINCTRL_STM32MP257
@@ -73,7 +73,8 @@ config PINCTRL_STM32MP257
 config PINCTRL_STM32_HDP
 	tristate "STMicroelectronics STM32 Hardware Debug Port (HDP) pin control"
 	depends on OF && HAS_IOMEM
-	default MACH_STM32MP157 || MACH_STM32MP13 || MACH_STM32MP25 || ARM64
+	default MACH_STM32MP157 || MACH_STM32MP13 || MACH_STM32MP21 || \
+		MACH_STM32MP23 || MACH_STM32MP25 || ARM64 || ARM
 	select PINMUX
 	select GENERIC_PINCONF
 	select GPIOLIB
