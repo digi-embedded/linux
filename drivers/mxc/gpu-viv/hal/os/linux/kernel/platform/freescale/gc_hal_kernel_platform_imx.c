@@ -1275,7 +1275,7 @@ static int patch_param(struct platform_device *pdev,
     contiguous_table = of_find_property(pdev->dev.of_node, "digi,contiguous-size-table", NULL);
     if (contiguous_table && contiguous_table->value) {
         unsigned long entries = contiguous_table->length / sizeof(u32);
-        __be32 *val = contiguous_table->value;
+        __be64 *val = contiguous_table->value;
 
         /* Only iterate through table if it has an even number of entries */
         if (entries % 2 == 0) {
@@ -1287,8 +1287,8 @@ static int patch_param(struct platform_device *pdev,
             * mem_threshold.
             */
             for (i = 0; i < entries / 2; i++) {
-                unsigned long mem_threshold = be32_to_cpup(val++);
-                args->contiguousSize = be32_to_cpup(val++);
+                unsigned long mem_threshold = be64_to_cpup(val++);
+                args->contiguousSize = be64_to_cpup(val++);
 
                 if (system_memory <= mem_threshold)
                     break;
