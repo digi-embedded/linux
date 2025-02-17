@@ -35,7 +35,7 @@ Required properties:
 
 Optional properties:
 - key-power: enable the KEY_POWER event (KEY_POWER DOWN)
-- key-power-up: enable an additional KEY_POWER UP  event when the power button is
+- key-power-up: enable an additional KEY_POWER UP event when the power button is
                 released after KEY_POWER DOWN.
 - key-sleep: enable the KEY_SLEEP events
 - debounce-ms: debounce filter in ms. Number of ms that the input/Key must be
@@ -47,6 +47,8 @@ Optional properties:
                             to generate a KEY_POWER event.
 - pwroff-guard-sec (0-255): time that the MCA will wait for the OS to power off
                             the system. After that the MCA will switch it off.
+- short-press-kcode: key code generated under a short press event.
+- long-press-kcode: key code generated under a long press event.
 
 Example:
 	mca_cc6ul: mca@7e {

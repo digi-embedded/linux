@@ -54,6 +54,8 @@ struct mca_pwrkey {
 	struct input_dev *input;
 	int irq_power;
 	int irq_sleep;
+	unsigned int short_press_kcode;
+	unsigned int long_press_kcode;
 	bool key_power;
 	bool key_power_up;
 	bool key_sleep;
@@ -70,11 +72,12 @@ static DEFINE_SPINLOCK(lock);
 
 static irqreturn_t mca_pwrkey_power_off_legacy_irq(struct mca_pwrkey *pwrkey)
 {
-	dev_notice(&pwrkey->input->dev, "Power Button - KEY_POWER\n");
+	dev_notice(&pwrkey->input->dev, "Power Button - %u\n",
+		   pwrkey->short_press_kcode);
 
 	/* Clear before set to ensure the event is generated */
-	input_report_key(pwrkey->input, KEY_POWER, 0);
-	input_report_key(pwrkey->input, KEY_POWER, 1);
+	input_report_key(pwrkey->input, pwrkey->long_press_kcode, 0);
+	input_report_key(pwrkey->input, pwrkey->long_press_kcode, 1);
 	input_sync(pwrkey->input);
 
 	return IRQ_HANDLED;
@@ -83,10 +86,10 @@ static irqreturn_t mca_pwrkey_power_off_legacy_irq(struct mca_pwrkey *pwrkey)
 static irqreturn_t mca_pwrkey_power_off_irq(struct mca_pwrkey *pwrkey,
 					    unsigned int pwr_status)
 {
-	dev_notice(&pwrkey->input->dev, "Power Button - KEY_POWER %s\n",
-		   pwr_status ? "DOWN" : "UP");
+	dev_notice(&pwrkey->input->dev, "Power Button - %u %s\n",
+		   pwrkey->long_press_kcode, pwr_status ? "DOWN" : "UP");
 
-	input_report_key(pwrkey->input, KEY_POWER, pwr_status);
+	input_report_key(pwrkey->input, pwrkey->long_press_kcode, pwr_status);
 	input_sync(pwrkey->input);
 
 	return IRQ_HANDLED;
@@ -128,10 +131,11 @@ static irqreturn_t mca_pwrkey_sleep_irq_handler(int irq, void *data)
 
 	/* Report the event only if not coming from suspend */
 	if (!pwrkey->suspended) {
-		dev_notice(&pwrkey->input->dev, "Power button - KEY_SLEEP\n");
+		dev_notice(&pwrkey->input->dev, "Power button - %u\n",
+			   pwrkey->short_press_kcode);
 
-		input_report_key(pwrkey->input, KEY_SLEEP, 1);
-		input_report_key(pwrkey->input, KEY_SLEEP, 0);
+		input_report_key(pwrkey->input, pwrkey->short_press_kcode, 1);
+		input_report_key(pwrkey->input, pwrkey->short_press_kcode, 0);
 		input_sync(pwrkey->input);
 	}
 #ifdef CONFIG_ANDROID
@@ -140,10 +144,11 @@ static irqreturn_t mca_pwrkey_sleep_irq_handler(int irq, void *data)
 		 * Android requires a KEY_POWER event when the device is
 		 * suspended in order to perform a full wake up.
 		 */
-		dev_notice(&pwrkey->input->dev, "Power button - KEY_POWER\n");
+		dev_notice(&pwrkey->input->dev, "Power button - %u\n",
+			   pwrkey->long_press_kcode);
 
-		input_report_key(pwrkey->input, KEY_POWER, 1);
-		input_report_key(pwrkey->input, KEY_POWER, 0);
+		input_report_key(pwrkey->input, pwrkey->long_press_kcode, 1);
+		input_report_key(pwrkey->input, pwrkey->long_press_kcode, 0);
 		input_sync(pwrkey->input);
 	}
 #endif
@@ -226,6 +231,8 @@ static int of_mca_pwrkey_read_settings(struct device_node *np,
 	pwrkey->debounce_ms = DEFAULT_PWR_KEY_DEBOUNCE;
 	pwrkey->pwroff_delay_sec = DEFAULT_PWR_KEY_DEBOUNCE;
 	pwrkey->pwroff_guard_sec = 0;
+	pwrkey->short_press_kcode = KEY_SLEEP;
+	pwrkey->long_press_kcode = KEY_POWER;
 
 	pwrkey->key_power = of_property_read_bool(np, "digi,key-power");
 	pwrkey->key_power_up = of_property_read_bool(np, "digi,key-power-up");
@@ -247,6 +254,9 @@ static int of_mca_pwrkey_read_settings(struct device_node *np,
 
 	max_key_deb = pwrkey->supports_debtb50ms ?
 		      MAX_PWR_KEY_DEBOUNCE_TB_50MS : MAX_PWR_KEY_DEBOUNCE;
+
+	of_property_read_u32(np, "digi,short-press-kcode", &pwrkey->short_press_kcode);
+	of_property_read_u32(np, "digi,long-press-kcode", &pwrkey->long_press_kcode);
 
 	if (!of_property_read_u32(np, "digi,debounce-ms", &val)) {
 		if (val <= max_key_deb)
@@ -375,9 +385,6 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 	pwrkey->input->phys = devdata->drv_name_phys;
 	pwrkey->input->dev.parent = &pdev->dev;
 
-	input_set_capability(pwrkey->input, EV_KEY, KEY_POWER);
-	input_set_capability(pwrkey->input, EV_KEY, KEY_SLEEP);
-
 	/* Initialize driver settings from device tree */
 	ret = of_mca_pwrkey_read_settings(np, pwrkey, devdata);
 	if (ret) {
@@ -385,6 +392,9 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 			dev_name(&pdev->dev));
 		goto err_free_inputdev;
 	}
+
+	input_set_capability(pwrkey->input, EV_KEY, pwrkey->long_press_kcode);
+	input_set_capability(pwrkey->input, EV_KEY, pwrkey->short_press_kcode);
 
 	ret = mca_pwrkey_initialize(pwrkey);
 	if (ret) {
