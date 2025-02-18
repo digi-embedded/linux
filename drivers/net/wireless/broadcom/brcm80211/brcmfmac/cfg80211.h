@@ -14,6 +14,9 @@
 #include "p2p.h"
 #include "pno.h"
 
+/* Max length of Interworking element */
+#define BRCMF_IW_IES_MAX_BUF_LEN	8
+
 #define BRCMF_SCAN_IE_LEN_MAX		2048
 
 #define WL_NUM_SCAN_MAX			10

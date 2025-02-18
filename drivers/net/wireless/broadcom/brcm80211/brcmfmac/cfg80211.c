@@ -379,6 +379,21 @@ struct parsed_extension_ies {
 	struct parsed_ext_ie_info ie_info[VNDR_IE_PARSE_LIMIT];
 };
 
+struct ie_info {
+	u32 pktflag;			/* bitmask indicating which packet(s) contain this IE */
+	struct brcmf_tlv ie_data;	/* IE data */
+} __packed;
+
+struct ie_buf {
+	s32 iecount;			/* number of entries in the ie_list[] array */
+	struct ie_info ie_list[1];	/* variable size list of ie_info_t structs */
+} __packed;
+
+struct ie_set_buffer {
+	char cmd[VNDR_IE_CMD_LEN];	/* ie IOVar set command : "add" + NUL */
+	struct ie_buf ie_buffer;	/* buffer containing IE list information */
+} __packed;
+
 /* flags */
 #define BRCMF_ASSOC_REQ_IS_REASSOC 0x01 /* assoc req was actually a reassoc */
 
@@ -751,6 +766,97 @@ brcmf_find_wpsie(const u8 *parse, u32 len)
 			return (struct brcmf_vs_tlv *)ie;
 	}
 	return NULL;
+}
+
+struct brcmf_tlv *
+brcmf_find_iwie(const u8 *parse, u32 len)
+{
+	const struct brcmf_tlv *ie = NULL;
+
+/* unfortunately it's too much work to dispose the const cast - inff_parse_tlvs
+ * is used everywhere and changing its prototype to take const qualifier needs
+ * a massive change to all its callers...
+ */
+
+	ie = brcmf_parse_tlvs(parse, len, WLAN_EID_INTERWORKING);
+	if (ie)
+		return (struct brcmf_tlv *)ie;
+	return NULL;
+}
+
+s32
+brcmf_clear_iwie(struct brcmf_cfg80211_info *cfg, struct brcmf_if *ifp)
+{
+	struct ie_set_buffer ie_setbuf = {0};
+
+	brcmf_dbg(TRACE, "clear interworking IE\n");
+
+	memset(&ie_setbuf, 0, sizeof(struct ie_set_buffer));
+
+	ie_setbuf.ie_buffer.iecount = cpu_to_le32(1);
+	ie_setbuf.ie_buffer.ie_list[0].ie_data.id = WLAN_EID_INTERWORKING;
+	ie_setbuf.ie_buffer.ie_list[0].ie_data.len = 0;
+
+	return brcmf_fil_iovar_data_set(ifp, "ie", &ie_setbuf, sizeof(ie_setbuf));
+}
+
+s32
+brcmf_add_iwie(struct brcmf_cfg80211_info *cfg, struct brcmf_if *ifp, s32 pktflag,
+	       u8 ie_id, u8 *data, u8 data_len)
+{
+	int err = 0;
+	u32 buf_len;
+	struct ie_set_buffer *ie_setbuf;
+
+	if (ie_id != WLAN_EID_INTERWORKING) {
+		brcmf_err("unsupported (id=%d)\n", ie_id);
+		return -EINVAL;
+	}
+
+	/* access network options (1 octet)  is the mandatory field */
+	if (!data || data_len == 0 || data_len > BRCMF_IW_IES_MAX_BUF_LEN) {
+		brcmf_err("wrong interworking IE (len=%d)\n", data_len);
+		return -EINVAL;
+	}
+
+	/* Validate the pktflag parameter */
+	if (pktflag & ~(BRCMF_VNDR_IE_CUSTOM_FLAG)) {
+		brcmf_err("invalid packet flag 0x%x\n", pktflag);
+		return -EINVAL;
+	}
+
+	buf_len = sizeof(struct ie_set_buffer) + data_len - 1;
+
+	/* if already set with previous values, delete it first */
+	err = brcmf_clear_iwie(cfg, ifp);
+	if (err)
+		return err;
+
+	ie_setbuf = kmalloc(buf_len, GFP_KERNEL);
+	if (!ie_setbuf)
+		return -ENOMEM;
+
+	strscpy(ie_setbuf->cmd, "add", sizeof(ie_setbuf->cmd));
+
+	/* Buffer contains only 1 IE */
+	ie_setbuf->ie_buffer.iecount = cpu_to_le32(1);
+	/* use VNDR_IE_CUSTOM_FLAG flags for none vendor IE . currently fixed value */
+	ie_setbuf->ie_buffer.ie_list[0].pktflag = cpu_to_le32(pktflag);
+
+	/* Now, add the IE to the buffer */
+	ie_setbuf->ie_buffer.ie_list[0].ie_data.id = WLAN_EID_INTERWORKING;
+	ie_setbuf->ie_buffer.ie_list[0].ie_data.len = data_len;
+	/* Returning void here as max data_len can be 8 */
+	(void)memcpy((u8 *)&ie_setbuf->ie_buffer.ie_list[0].ie_data.data[0],
+			data, data_len);
+
+	err = brcmf_fil_iovar_data_set(ifp, "ie", ie_setbuf, buf_len);
+	if (err)
+		brcmf_err("Failed to add interworking IE\n");
+
+	kfree(ie_setbuf);
+
+	return err;
 }
 
 static int brcmf_vif_change_validate(struct brcmf_cfg80211_info *cfg,
@@ -1798,6 +1904,7 @@ brcmf_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
 	struct brcmf_pub *drvr = cfg->pub;
 	struct brcmf_cfg80211_vif *vif;
 	s32 err = 0;
+	struct brcmf_tlv *interworking_ie = NULL;
 
 	brcmf_dbg(TRACE, "Enter\n");
 	vif = container_of(request->wdev, struct brcmf_cfg80211_vif, wdev);
@@ -1832,6 +1939,20 @@ brcmf_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
 
 	cfg->scan_request = request;
 	set_bit(BRCMF_SCAN_STATUS_BUSY, &cfg->scan_status);
+
+	interworking_ie = brcmf_find_iwie(request->ie, request->ie_len);
+	if (interworking_ie) {
+		err = brcmf_add_iwie(cfg, vif->ifp,
+				     BRCMF_VNDR_IE_CUSTOM_FLAG,
+				     interworking_ie->id,
+				     interworking_ie->data,
+				     interworking_ie->len);
+		if (err)
+			brcmf_err("Failed to add interworking IE");
+	} else {
+		/* we have to clear IW IE  */
+		brcmf_clear_iwie(cfg, vif->ifp);
+	}
 
 	cfg->escan_info.run = brcmf_run_escan;
 	err = brcmf_p2p_scan_prep(wiphy, request, vif);
