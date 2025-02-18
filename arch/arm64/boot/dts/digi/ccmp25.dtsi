@@ -202,6 +202,39 @@
 		device_type = "memory";
 		reg = <0x0 0x80000000 0x0 0x40000000>;
 	};
+
+	thermal-zones {
+		cpu-thermal {
+			trips {
+				cpu_alert: cpu-alert {
+					temperature = <95000>;
+					hysteresis = <10000>;
+					type = "passive";
+				};
+
+				cpu_crit: cpu-crit {
+					temperature = <105000>;
+					hysteresis = <1000>;
+					type = "critical";
+				};
+
+				gpu_alert: gpu-alert {
+					temperature = <95000>;
+					hysteresis = <10000>;
+					type = "passive";
+				};
+			};
+		};
+		soc-thermal {
+			trips {
+				soc_crit: soc-crit {
+					temperature = <105000>;
+					hysteresis = <1000>;
+					type = "critical";
+				};
+			};
+		};
+	};
 };
 
 &a35ss_syscfg {
