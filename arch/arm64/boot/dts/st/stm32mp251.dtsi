@@ -37,8 +37,8 @@
 				compatible = "arm,idle-state";
 				arm,psci-suspend-param = <0x00000001>;
 				local-timer-stop;
-				entry-latency-us = <300>;
-				exit-latency-us = <500>;
+				entry-latency-us = <150>;
+				exit-latency-us = <200>;
 				min-residency-us = <1000>;
 			};
 		};
@@ -47,25 +47,25 @@
 			STOP1: domain-stop1 {
 				compatible = "domain-idle-state";
 				arm,psci-suspend-param = <0x00000011>;
-				entry-latency-us = <400>;
-				exit-latency-us = <1200>;
+				entry-latency-us = <300>;
+				exit-latency-us = <500>;
 				min-residency-us = <1500>;
 			};
 
 			LP_STOP1: domain-lp-stop1 {
 				compatible = "domain-idle-state";
 				arm,psci-suspend-param = <0x0000021>;
-				entry-latency-us = <500>;
-				exit-latency-us = <2000>;
-				min-residency-us = <3000>;
+				entry-latency-us = <350>;
+				exit-latency-us = <600>;
+				min-residency-us = <2000>;
 			};
 
 			LPLV_STOP1: domain-lplv-stop1 {
 				compatible = "domain-idle-state";
 				arm,psci-suspend-param = <0x00000211>;
 				entry-latency-us = <500>;
-				exit-latency-us = <3000>;
-				min-residency-us = <4000>;
+				exit-latency-us = <2000>;
+				min-residency-us = <2500>;
 			};
 		};
 	};
