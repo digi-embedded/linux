@@ -81,6 +81,7 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	stm32mp157f-ev1.dtb \
 	stm32mp157f-ev1-a7-examples.dtb \
 	stm32mp157f-ev1-m4-examples.dtb \
+	stm32mp215f-dk.dtb \
 	stm32mp257f-ev1.dtb
 
 dtb-$(CONFIG_ARCH_U8500) += \

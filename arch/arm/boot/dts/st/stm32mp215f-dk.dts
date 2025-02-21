@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2025 - All Rights Reserved
+ * Author: Amelie Delaunay <amelie.delaunay@foss.st.com> for STMicroelectronics.
+ */
+
+/dts-v1/;
+
+#include "../../../../arm64/boot/dts/st/stm32mp215f-dk.dts"
+
+/ {
+	model = "STMicroelectronics STM32MP215F-DK AARCH32 Discovery Board";
+	compatible = "st,stm32mp215f-dk-aarch32", "st,stm32mp215f-dk", "st,stm32mp215";
+
+	timer {
+		arm,cpu-registers-not-fw-configured;
+	};
+};
