@@ -1053,10 +1053,7 @@ static int lvds_probe(struct platform_device *pdev)
 	struct device_node *port1, *port2, *remote;
 	struct device *dev = &pdev->dev;
 	struct reset_control *rstc;
-	struct lvds_phy_info *phy;
 	struct stm_lvds *lvds;
-	unsigned int pll_in_khz, bdiv, mdiv, ndiv;
-	int multiplier, rate;
 	int ret, dual_link;
 
 	dev_dbg(dev, "Probing LVDS driver...\n");
@@ -1200,38 +1197,6 @@ static int lvds_probe(struct platform_device *pdev)
 	pm_runtime_enable(lvds->dev);
 	drm_bridge_add(&lvds->lvds_bridge);
 	platform_set_drvdata(pdev, lvds);
-
-	/*
-	 * To obtain a continuous display after the probe,
-	 *  the clocks must remain activated
-	 */
-	if (device_property_read_bool(dev, "default-on")) {
-		ret = pm_runtime_resume_and_get(lvds->dev);
-		if (ret < 0) {
-			DRM_ERROR("Failed to probe lvds, cannot resume pm\n");
-			return ret;
-		}
-
-		if (lvds->primary) {
-			if (lvds_is_dual_link(lvds->link_type))
-				multiplier = 2;
-			else
-				multiplier = 1;
-
-			phy = lvds->primary;
-			pll_in_khz = clk_get_rate(lvds->pllref_clk) / 1000;
-
-			ndiv = lvds_read(lvds, phy->base + phy->ofs.PLLCR2) >> 16;
-			bdiv = lvds_read(lvds, phy->base + phy->ofs.PLLCR2) & 0xFFFF;
-			mdiv = lvds_read(lvds, phy->base + phy->ofs.PLLSDCR1);
-
-			/* X7 because for each pixel in 1 lane there is 7 bits
-			 * We want pixclk, not bitclk
-			 */
-			rate = pll_get_clkout_khz(pll_in_khz, bdiv, mdiv, ndiv);
-			lvds->pixel_clock_rate = (unsigned long) rate  * 1000 * multiplier / 7;
-		}
-	}
 
 	return 0;
 }
