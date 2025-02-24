@@ -17,7 +17,7 @@
  * TDLS: Tunneled Direct Link Setup
  * SCAN_RANDOM_MAC: Random MAC during (net detect) scheduled scan.
  * WOWL_ND: WOWL net detect (PNO)
- * WOWL_GTK: (WOWL) GTK rekeying offload
+ * WOWL_GTK: WOWL GTK rekey failure detect
  * WOWL_ARP_ND: ARP and Neighbor Discovery offload support during WOWL.
  * MFP: 802.11w Management Frame Protection.
  * GSCAN: enhanced scan offload feature.
@@ -40,6 +40,7 @@
  *	ARP, ND, etc and send out a suitable response packet from within
  * 	Firmware.
  * ULP: Firmware supports Ultra Low Power mode of operation.
+ * GTKO: GTK rekey offload.
  */
 #define BRCMF_FEAT_LIST \
 	BRCMF_FEAT_DEF(MBSS) \
@@ -76,7 +77,8 @@
 	BRCMF_FEAT_DEF(OFFLOADS) \
 	BRCMF_FEAT_DEF(ULP) \
 	BRCMF_FEAT_DEF(PROPTXSTATUS) \
-	BRCMF_FEAT_DEF(OWE)
+	BRCMF_FEAT_DEF(OWE) \
+	BRCMF_FEAT_DEF(GTKO)
 
 /*
  * Quirks:
