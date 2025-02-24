@@ -35,6 +35,7 @@
 #define RNG_SR_DRDY		BIT(0)
 #define RNG_SR_CECS		BIT(1)
 #define RNG_SR_SECS		BIT(2)
+#define RNG_SR_BUSY		BIT(4)
 #define RNG_SR_CEIS		BIT(5)
 #define RNG_SR_SEIS		BIT(6)
 #define RNG_SR_ERROR_MASK	(RNG_SR_CECS | RNG_SR_SECS | RNG_SR_CEIS | RNG_SR_SEIS)
@@ -284,7 +285,7 @@ static int stm32_rng_init(struct hwrng *rng)
 	struct stm32_rng_private *priv =
 	    container_of(rng, struct stm32_rng_private, rng);
 	int err;
-	u32 reg;
+	u32 reg, mask;
 
 	err = clk_prepare_enable(priv->clk);
 	if (err)
@@ -359,7 +360,10 @@ static int stm32_rng_init(struct hwrng *rng)
 	err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_SR, reg,
 						reg & RNG_SR_DRDY,
 						10, 100000);
-	if (err || (reg & RNG_SR_ERROR_MASK)) {
+
+	mask = RNG_SR_ERROR_MASK;
+
+	if (err || (reg & mask)) {
 		if (priv->bus_clk)
 			clk_disable_unprepare(priv->bus_clk);
 		clk_disable_unprepare(priv->clk);
