@@ -9936,10 +9936,14 @@ static void brcmf_wiphy_wowl_params(struct wiphy *wiphy, struct brcmf_if *ifp)
 			init_waitqueue_head(&cfg->wowl.nd_data_wait);
 		}
 	}
-	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_WOWL_GTK)) {
+
+	/* for backward compatibility, retain BRCMF_FEAT_WOWL_GTK */
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_WOWL_GTK) ||
+	    brcmf_feat_is_enabled(ifp, BRCMF_FEAT_GTKO))
 		wowl->flags |= WIPHY_WOWLAN_SUPPORTS_GTK_REKEY;
+
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_WOWL_GTK))
 		wowl->flags |= WIPHY_WOWLAN_GTK_REKEY_FAILURE;
-	}
 
 	wiphy->wowlan = wowl;
 
@@ -10859,7 +10863,9 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 		*cap |= IEEE80211_HT_CAP_SUP_WIDTH_20_40;
 	}
 #ifdef CONFIG_PM
-	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_WOWL_GTK))
+	/* for backward compatibility, retain BRCMF_FEAT_WOWL_GTK */
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_WOWL_GTK) ||
+	    brcmf_feat_is_enabled(ifp, BRCMF_FEAT_GTKO))
 		ops->set_rekey_data = brcmf_cfg80211_set_rekey_data;
 #endif
 	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_DUMP_OBSS))
