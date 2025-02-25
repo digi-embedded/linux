@@ -8385,23 +8385,63 @@ brcmf_notify_ext_auth_request(struct brcmf_if *ifp,
 	struct brcmf_auth_req_status_le *auth_req =
 		(struct brcmf_auth_req_status_le *)data;
 	s32 err = 0;
+	struct brcmf_auth_req_status_info_le_v2 *auth_req_v2 = NULL;
+	struct brcmf_bss_info_le *bi = NULL;
+	struct brcmf_cfg80211_info *cfg = drvr->config;
 
 	brcmf_dbg(INFO, "Enter: event %s (%d) received\n",
 		  brcmf_fweh_event_name(e->event_code), e->event_code);
 
-	if (e->datalen < sizeof(*auth_req)) {
-		bphy_err(drvr, "Event %s (%d) data too small. Ignore\n",
-			 brcmf_fweh_event_name(e->event_code), e->event_code);
-		return -EINVAL;
-	}
+	if (drvr->wlc_ver.wlc_ver_major > BRCMF_AUTH_STATUS_V2_FW_MAJOR ||
+	    (drvr->wlc_ver.wlc_ver_major == BRCMF_AUTH_STATUS_V2_FW_MAJOR &&
+	    drvr->wlc_ver.wlc_ver_minor >= BRCMF_AUTH_STATUS_V2_FW_MINOR)) {
+		auth_req_v2 = (struct brcmf_auth_req_status_info_le_v2 *)data;
+		if (e->datalen < sizeof(*auth_req_v2)) {
+			brcmf_err("Ext auth req event data too small. Ignoring event\n");
+			return -EINVAL;
+		}
+		/* Inform bss info to cfg80211 layer as during roaming
+		 * Supplicant might not have scan results,if scan results
+		 * are not found the SAE auth uses HNP by default and
+		 * Target AP will reject the connection.
+		 */
+		if (e->datalen > sizeof(*auth_req_v2)) {
+			bi = (struct brcmf_bss_info_le *)&auth_req_v2->bss_info_le;
+			if (bi) {
+				err = brcmf_inform_single_bss(cfg, bi);
+				if (err) {
+					brcmf_err("failed to update bss info, err=%d\n", err);
+					return err;
+				}
+			} else {
+				brcmf_err("External Auth request bss info is null\n");
+				return -EINVAL;
+			}
+		}
+		/* 10 ms delay to update results in cfg80211 */
+		brcmf_delay(10);
+		memset(&params, 0, sizeof(params));
+		params.action = NL80211_EXTERNAL_AUTH_START;
+		params.key_mgmt_suite = ntohl(WLAN_AKM_SUITE_SAE);
+		params.status = WLAN_STATUS_SUCCESS;
+		params.ssid.ssid_len = min_t(u32, IEEE80211_MAX_SSID_LEN, auth_req_v2->ssid_len);
+		memcpy(params.ssid.ssid, auth_req_v2->ssid, params.ssid.ssid_len);
+		memcpy(params.bssid, auth_req_v2->peer_mac, ETH_ALEN);
+	} else {
+		if (e->datalen < sizeof(*auth_req)) {
+			bphy_err(drvr, "Event %s (%d) data too small. Ignore\n",
+				 brcmf_fweh_event_name(e->event_code), e->event_code);
+			return -EINVAL;
+		}
 
-	memset(&params, 0, sizeof(params));
-	params.action = NL80211_EXTERNAL_AUTH_START;
-	params.key_mgmt_suite = ntohl(WLAN_AKM_SUITE_SAE);
-	params.status = WLAN_STATUS_SUCCESS;
-	params.ssid.ssid_len = min_t(u32, 32, le32_to_cpu(auth_req->ssid_len));
-	memcpy(params.ssid.ssid, auth_req->ssid, params.ssid.ssid_len);
-	memcpy(params.bssid, auth_req->peer_mac, ETH_ALEN);
+		memset(&params, 0, sizeof(params));
+		params.action = NL80211_EXTERNAL_AUTH_START;
+		params.key_mgmt_suite = ntohl(WLAN_AKM_SUITE_SAE);
+		params.status = WLAN_STATUS_SUCCESS;
+		params.ssid.ssid_len = min_t(u32, 32, le32_to_cpu(auth_req->ssid_len));
+		memcpy(params.ssid.ssid, auth_req->ssid, params.ssid.ssid_len);
+		memcpy(params.bssid, auth_req->peer_mac, ETH_ALEN);
+	}
 
 	err = cfg80211_external_auth_request(ifp->ndev, &params, GFP_ATOMIC);
 	if (err)
