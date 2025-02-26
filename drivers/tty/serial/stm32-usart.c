@@ -2515,6 +2515,10 @@ static int __maybe_unused stm32_usart_serial_suspend(struct device *dev)
 			stm32_usart_enable_am(stm32port);
 	}
 
+	/* Maintain the console clock to avoid issue with the bootloaders. */
+	if (uart_console(port))
+		clk_prepare_enable(stm32port->clk);
+
 	uart_suspend_port(&stm32_usart_driver, port);
 
 	/*
@@ -2550,7 +2554,12 @@ static int __maybe_unused stm32_usart_serial_resume(struct device *dev)
 			return ret;
 	}
 
-	return uart_resume_port(&stm32_usart_driver, port);
+	ret = uart_resume_port(&stm32_usart_driver, port);
+
+	if (uart_console(port))
+		clk_disable_unprepare(stm32port->clk);
+
+	return ret;
 }
 
 static int __maybe_unused stm32_usart_runtime_suspend(struct device *dev)
