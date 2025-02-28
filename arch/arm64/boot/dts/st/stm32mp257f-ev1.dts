@@ -92,7 +92,6 @@
 		compatible = "gpio-leds";
 
 		led-blue {
-			label = "heartbeat";
 			function = LED_FUNCTION_HEARTBEAT;
 			color = <LED_COLOR_ID_BLUE>;
 			gpios = <&gpioj 7 GPIO_ACTIVE_HIGH>;
