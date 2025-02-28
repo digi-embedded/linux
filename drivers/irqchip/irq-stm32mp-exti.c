@@ -316,9 +316,6 @@ static void stm32mp_chip_resume(struct stm32mp_exti_chip_data *chip_data,
 	val &= ~wake_active;
 	val |= mask_cache;
 	writel_relaxed(val, base + bank->imr_ofst);
-
-	if (mask_cache)
-		pm_runtime_get(chip_data->host_data->dev);
 }
 
 /* directly set the target bit without reading first. */
@@ -369,10 +366,6 @@ static void stm32mp_exti_eoi(struct irq_data *d)
 	stm32mp_exti_write_bit(d, bank->rpr_ofst);
 	stm32mp_exti_write_bit(d, bank->fpr_ofst);
 
-	/* power domain is ON when IMR change from 0 */
-	if (!chip_data->mask_cache)
-		pm_runtime_get(chip_data->host_data->dev);
-
 	chip_data->mask_cache |= stm32mp_exti_set_bit(d, bank->imr_ofst);
 
 	raw_spin_unlock(&chip_data->rlock);
@@ -387,11 +380,6 @@ static void stm32mp_exti_mask(struct irq_data *d)
 
 	raw_spin_lock(&chip_data->rlock);
 	chip_data->mask_cache &= ~stm32mp_exti_clr_bit(d, bank->imr_ofst);
-
-	/* power domain is OFF when IMR becomes 0 */
-	if (!chip_data->mask_cache)
-		pm_runtime_put(chip_data->host_data->dev);
-
 	raw_spin_unlock(&chip_data->rlock);
 
 	irq_chip_mask_parent(d);
@@ -403,11 +391,6 @@ static void stm32mp_exti_unmask(struct irq_data *d)
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
 
 	raw_spin_lock(&chip_data->rlock);
-
-	/* power domain is ON when IMR change from 0 */
-	if (!chip_data->mask_cache)
-		pm_runtime_get(chip_data->host_data->dev);
-
 	chip_data->mask_cache |= stm32mp_exti_set_bit(d, bank->imr_ofst);
 	raw_spin_unlock(&chip_data->rlock);
 
@@ -933,6 +916,8 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	irq_domain_set_pm_device(domain, dev);
+
 	if (of_property_read_bool(np, "interrupts-extended"))
 		host_data->dt_has_irqs_desc = true;
 
@@ -972,6 +957,8 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 		ret = devm_add_action_or_reset(dev, stm32mp_exti_remove_irq, domain);
 		if (ret)
 			return ret;
+
+		irq_domain_set_pm_device(domain, dev);
 	}
 
 	devm_pm_runtime_enable(dev);
