@@ -493,7 +493,7 @@ static void dw_mipi_dsi_clk_disable(struct clk_hw *clk)
 			dsi_clear(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
 		}
 	} else {
-		DRM_WARN("Warning peripheral clock was not enabled!\n");
+		DRM_DEBUG_DRIVER("Warning peripheral clock was not enabled!\n");
 	}
 }
 
