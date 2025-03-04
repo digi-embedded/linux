@@ -557,12 +557,17 @@ static int lvds_pixel_clk_enable(struct clk_hw *hw)
 	struct lvds_phy_info *phy;
 	int ret;
 
-	if (!pm_runtime_active(lvds->dev)) {
-		ret = pm_runtime_resume_and_get(lvds->dev);
-		if (ret < 0) {
-			DRM_ERROR("Failed to enable clocks, cannot resume pm\n");
-			return ret;
-		}
+	ret = clk_prepare_enable(lvds->pclk);
+	if (ret) {
+		DRM_ERROR("Failed to enable pclk: %d\n", ret);
+		return ret;
+	}
+
+	ret = clk_prepare_enable(lvds->pllref_clk);
+	if (ret) {
+		clk_disable_unprepare(lvds->pclk);
+		DRM_ERROR("Failed to enable pllref_clk: %d\n", ret);
+		return ret;
 	}
 
 	/* In case we are operating in dual link the second PHY is set before the primary PHY. */
@@ -626,7 +631,8 @@ static void lvds_pixel_clk_disable(struct clk_hw *hw)
 			   PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
 	}
 
-	pm_runtime_put(lvds->dev);
+	clk_disable_unprepare(lvds->pllref_clk);
+	clk_disable_unprepare(lvds->pclk);
 }
 
 static unsigned long lvds_pixel_clk_recalc_rate(struct clk_hw *hw,
