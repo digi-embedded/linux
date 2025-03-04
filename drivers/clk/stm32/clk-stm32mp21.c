@@ -208,7 +208,6 @@ static const struct stm32_mux_cfg stm32mp21_muxes[MUX_NB] = {
 enum enum_gate_cfg {
 	GATE_ADC1,
 	GATE_ADC2,
-	GATE_CCB,
 	GATE_CRC,
 	GATE_CRYP1,
 	GATE_CRYP2,
@@ -364,7 +363,6 @@ static const struct stm32_gate_cfg stm32mp21_gates[GATE_NB] = {
 	GATE_CFG(GATE_CRC,		RCC_CRCCFGR,		1,	0),
 	GATE_CFG(GATE_CRYP1,		RCC_CRYP1CFGR,		1,	0),
 	GATE_CFG(GATE_CRYP2,		RCC_CRYP2CFGR,		1,	0),
-	GATE_CFG(GATE_CCB,		RCC_CCBCFGR,		1,	0),
 	GATE_CFG(GATE_CSI,		RCC_CSICFGR,		1,	0),
 	GATE_CFG(GATE_DCMIPP,		RCC_DCMIPPCFGR,		1,	0),
 	GATE_CFG(GATE_DCMIPSSI,		RCC_DCMIPSSICFGR,	1,	0),
@@ -629,11 +627,6 @@ static struct clk_stm32_gate ck_icn_p_cryp1 = {
 static struct clk_stm32_gate ck_icn_p_cryp2 = {
 	.gate_id = GATE_CRYP2,
 	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_cryp2", ICN_LS_MCU, &clk_stm32_gate_ops, 0),
-};
-
-static struct clk_stm32_gate ck_icn_p_ccb = {
-	.gate_id = GATE_CCB,
-	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_ccb", ICN_LS_MCU, &clk_stm32_gate_ops, 0),
 };
 
 /* DBG & TRACE*/
@@ -1461,7 +1454,6 @@ static const struct clock_config stm32mp21_clock_cfg[] = {
 	STM32_GATE_CFG(CK_BUS_RNG2, ck_icn_p_rng2, SEC_RIFSC(93)),
 	STM32_GATE_CFG(CK_BUS_CRYP1, ck_icn_p_cryp1, SEC_RIFSC(98)),
 	STM32_GATE_CFG(CK_BUS_CRYP2, ck_icn_p_cryp2, SEC_RIFSC(99)),
-	STM32_GATE_CFG(CK_BUS_CCB, ck_icn_p_ccb, SEC_RIFSC(91)),
 	STM32_GATE_CFG(CK_BUS_SAES, ck_icn_p_saes, SEC_RIFSC(95)),
 	STM32_GATE_CFG(CK_BUS_PKA, ck_icn_p_pka, SEC_RIFSC(94)),
 	STM32_GATE_CFG(CK_BUS_LPUART1, ck_icn_p_lpuart1, SEC_RIFSC(40)),
@@ -2229,7 +2221,6 @@ CS_GATE(ck_icn_p_rng1, ck_icn_ls_mcu, GATE_RNG1);
 CS_GATE(ck_icn_p_rng2, ck_icn_ls_mcu, GATE_RNG1);
 CS_GATE(ck_icn_p_cryp1, ck_icn_ls_mcu, GATE_CRYP1);
 CS_GATE(ck_icn_p_cryp2, ck_icn_ls_mcu, GATE_CRYP2);
-CS_GATE(ck_icn_p_ccb, ck_icn_ls_mcu, GATE_CCB);
 CS_GATE(ck_icn_p_saes, ck_icn_ls_mcu, GATE_SAES);
 CS_GATE(ck_icn_p_pka, ck_icn_ls_mcu, GATE_PKA);
 CS_GATE(ck_icn_p_gpioa, ck_icn_ls_mcu, GATE_GPIOA);
@@ -2536,7 +2527,6 @@ static struct clk_summary *stm32mp21_clock_summary[] = {
 	CS_CLOCK(ck_icn_p_rng2),
 	CS_CLOCK(ck_icn_p_cryp1),
 	CS_CLOCK(ck_icn_p_cryp2),
-	CS_CLOCK(ck_icn_p_ccb),
 	CS_CLOCK(ck_icn_p_saes),
 	CS_CLOCK(ck_icn_p_pka),
 	CS_CLOCK(ck_icn_p_gpioa),

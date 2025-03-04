@@ -393,7 +393,6 @@
 #define RCC_HASH2CFGR				0x884
 #define RCC_CRYP1CFGR				0x888
 #define RCC_CRYP2CFGR				0x88C
-#define RCC_CCBCFGR				0x890
 #define RCC_IWDG1CFGR				0x894
 #define RCC_IWDG2CFGR				0x898
 #define RCC_IWDG3CFGR				0x89C
@@ -1587,11 +1586,6 @@
 #define RCC_CRYP2CFGR_CRYP2RST			BIT(0)
 #define RCC_CRYP2CFGR_CRYP2EN			BIT(1)
 #define RCC_CRYP2CFGR_CRYP2LPEN			BIT(2)
-
-/* RCC_CCBCFGR register fields */
-#define RCC_CCBCFGR_CCBRST			BIT(0)
-#define RCC_CCBCFGR_CCBEN			BIT(1)
-#define RCC_CCBCFGR_CCBLPEN			BIT(2)
 
 /* RCC_IWDG1CFGR register fields */
 #define RCC_IWDG1CFGR_IWDG1EN			BIT(1)
