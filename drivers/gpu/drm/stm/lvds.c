@@ -995,19 +995,32 @@ static void lvds_atomic_enable(struct drm_bridge *bridge,
 	struct drm_connector *connector;
 	int ret;
 
+	ret = regulator_enable(lvds->vdda18_supply);
+	if (ret) {
+		DRM_ERROR("Failed to enable regulator vdda18: %d\n", ret);
+		return;
+	}
+
+	ret = regulator_enable(lvds->vdd_supply);
+	if (ret) {
+		regulator_disable(lvds->vdda18_supply);
+		DRM_ERROR("Failed to enable regulator vdd: %d\n", ret);
+		return;
+	}
+
 	ret = pm_runtime_resume_and_get(lvds->dev);
 	if (ret < 0) {
 		DRM_ERROR("Failed to enable lvds, cannot resume pm\n");
-		return;
+		goto err;
 	}
 
 	connector = drm_atomic_get_new_connector_for_encoder(state, bridge->encoder);
 	if (!connector)
-		return;
+		goto err;
 
 	conn_state = drm_atomic_get_new_connector_state(state, connector);
 	if (!conn_state)
-		return;
+		goto err;
 
 	lvds_config_mode(lvds);
 
@@ -1021,6 +1034,11 @@ static void lvds_atomic_enable(struct drm_bridge *bridge,
 		drm_panel_prepare(lvds->panel);
 		drm_panel_enable(lvds->panel);
 	}
+
+	return;
+err:
+	regulator_disable(lvds->vdd_supply);
+	regulator_disable(lvds->vdda18_supply);
 }
 
 static void lvds_atomic_disable(struct drm_bridge *bridge,
@@ -1037,6 +1055,9 @@ static void lvds_atomic_disable(struct drm_bridge *bridge,
 	lvds_clear(lvds, LVDS_CR, CR_LVDSEN);
 
 	pm_runtime_put(lvds->dev);
+
+	regulator_disable(lvds->vdd_supply);
+	regulator_disable(lvds->vdda18_supply);
 }
 
 static const struct drm_bridge_funcs lvds_bridge_funcs = {
@@ -1221,8 +1242,6 @@ static int __maybe_unused lvds_runtime_suspend(struct device *dev)
 
 	clk_disable_unprepare(lvds->pllref_clk);
 	clk_disable_unprepare(lvds->pclk);
-	regulator_disable(lvds->vdd_supply);
-	regulator_disable(lvds->vdda18_supply);
 
 	return 0;
 }
@@ -1234,23 +1253,8 @@ static int __maybe_unused lvds_runtime_resume(struct device *dev)
 
 	DRM_DEBUG_DRIVER("\n");
 
-	ret = regulator_enable(lvds->vdda18_supply);
-	if (ret) {
-		DRM_ERROR("Failed to enable regulator vdda18: %d\n", ret);
-		return ret;
-	}
-
-	ret = regulator_enable(lvds->vdd_supply);
-	if (ret) {
-		regulator_disable(lvds->vdda18_supply);
-		DRM_ERROR("Failed to enable regulator vdd: %d\n", ret);
-		return ret;
-	}
-
 	ret = clk_prepare_enable(lvds->pclk);
 	if (ret) {
-		regulator_disable(lvds->vdd_supply);
-		regulator_disable(lvds->vdda18_supply);
 		DRM_ERROR("Failed to enable pclk: %d\n", ret);
 		return ret;
 	}
@@ -1258,8 +1262,6 @@ static int __maybe_unused lvds_runtime_resume(struct device *dev)
 	ret = clk_prepare_enable(lvds->pllref_clk);
 	if (ret) {
 		clk_disable_unprepare(lvds->pclk);
-		regulator_disable(lvds->vdd_supply);
-		regulator_disable(lvds->vdda18_supply);
 		DRM_ERROR("Failed to enable pllref_clk: %d\n", ret);
 	}
 
