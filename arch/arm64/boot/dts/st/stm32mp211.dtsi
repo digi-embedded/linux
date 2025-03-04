@@ -58,14 +58,6 @@
 				exit-latency-us = <600>;
 				min-residency-us = <2000>;
 			};
-
-			LPLV_STOP1: domain-lplv-stop1 {
-				compatible = "domain-idle-state";
-				arm,psci-suspend-param = <0x00000211>;
-				entry-latency-us = <500>;
-				exit-latency-us = <2000>;
-				min-residency-us = <2500>;
-			};
 		};
 	};
 
@@ -220,7 +212,6 @@
 
 		ret_pd: power-domain-retention {
 			#power-domain-cells = <0>;
-			domain-idle-states = <&LPLV_STOP1>;
 		};
 	};
 
