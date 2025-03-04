@@ -769,7 +769,7 @@ static struct clk_stm32_gate ck_ker_adf1 = {
 
 static struct clk_stm32_gate ck_ker_adf1_am = {
 	.gate_id = GATE_ADF1AM,
-	.hw.init = CLK_HW_INIT_INDEX("ck_ker_adf1_am", MSI_KER, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_HW("ck_ker_adf1_am", &ck_ker_adf1.hw, &clk_stm32_gate_ops, 0),
 };
 
 /* C3 */
@@ -780,62 +780,62 @@ static struct clk_stm32_gate ck_cpu3 = {
 
 static struct clk_stm32_gate ck_cpu3_am = {
 	.gate_id = GATE_C3AM,
-	.hw.init = CLK_HW_INIT_INDEX("ck_cpu3_am", ICN_LS_MCU, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_HW("ck_cpu3_am", &ck_cpu3.hw, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_adf1 = {
 	.gate_id = GATE_ADF1C3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_adf1", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_adf1", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_gpioz = {
 	.gate_id = GATE_GPIOZC3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_gpioz", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_gpioz", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_i2c8 = {
 	.gate_id = GATE_I2C8C3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_i2c8", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_i2c8", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_i3c4 = {
 	.gate_id = GATE_I3C4C3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_i3c4", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_i3c4", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_lpdma = {
 	.gate_id = GATE_LPDMAC3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_lpdma", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_lpdma", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_lptim3 = {
 	.gate_id = GATE_LPTIM3C3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_lptim3", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_lptim3", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_lptim4 = {
 	.gate_id = GATE_LPTIM4C3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_lptim4", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_lptim4", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_lptim5 = {
 	.gate_id = GATE_LPTIM5C3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_lptim5", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_lptim5", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_lpuart1 = {
 	.gate_id = GATE_LPUART1C3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_lpuart1", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_lpuart1", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_rtc = {
 	.gate_id = GATE_RTCC3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_rtc", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_rtc", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_c3_spi8 = {
 	.gate_id = GATE_SPI8C3,
-	.hw.init = CLK_HW_INIT_NO_PARENT("ck_c3_spi8", &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_c3_spi8", MSI_KER, &clk_stm32_gate_ops, 0),
 };
 
 /* DCMI */
@@ -1166,7 +1166,7 @@ static struct clk_stm32_gate ck_ker_i2c8 = {
 
 static struct clk_stm32_gate ck_ker_i2c8_am = {
 	.gate_id = GATE_I2C8AM,
-	.hw.init = CLK_HW_INIT_INDEX("ck_ker_i2c8_am", MSI_KER, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_HW("ck_ker_i2c8_am", &ck_ker_i2c8.hw, &clk_stm32_gate_ops, 0),
 };
 
 /* I3C */
@@ -1212,7 +1212,7 @@ static struct clk_stm32_gate ck_ker_i3c4 = {
 
 static struct clk_stm32_gate ck_ker_i3c4_am = {
 	.gate_id = GATE_I3C4AM,
-	.hw.init = CLK_HW_INIT_INDEX("ck_ker_i3c4_am", MSI_KER, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_HW("ck_ker_i3c4_am", &ck_ker_i3c4.hw, &clk_stm32_gate_ops, 0),
 };
 
 /* I2S */
@@ -1290,7 +1290,7 @@ static struct clk_stm32_gate ck_ker_lptim3 = {
 
 static struct clk_stm32_gate ck_ker_lptim3_am = {
 	.gate_id = GATE_LPTIM3AM,
-	.hw.init = CLK_HW_INIT_INDEX("ck_ker_lptim3_am", MSI_KER, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_HW("ck_ker_lptim3_am", &ck_ker_lptim3.hw, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_ker_lptim4 = {
@@ -1300,7 +1300,7 @@ static struct clk_stm32_gate ck_ker_lptim4 = {
 
 static struct clk_stm32_gate ck_ker_lptim4_am = {
 	.gate_id = GATE_LPTIM4AM,
-	.hw.init = CLK_HW_INIT_INDEX("ck_ker_lptim4_am", MSI_KER, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_HW("ck_ker_lptim4_am", &ck_ker_lptim4.hw, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_ker_lptim5 = {
@@ -1310,7 +1310,7 @@ static struct clk_stm32_gate ck_ker_lptim5 = {
 
 static struct clk_stm32_gate ck_ker_lptim5_am = {
 	.gate_id = GATE_LPTIM5AM,
-	.hw.init = CLK_HW_INIT_INDEX("ck_ker_lptim5_am", MSI_KER, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_HW("ck_ker_lptim5_am", &ck_ker_lptim5.hw, &clk_stm32_gate_ops, 0),
 };
 
 /* LPUART */
@@ -1326,7 +1326,7 @@ static struct clk_stm32_gate ck_ker_lpuart1 = {
 
 static struct clk_stm32_gate ck_ker_lpuart1_am = {
 	.gate_id = GATE_LPUART1AM,
-	.hw.init = CLK_HW_INIT_INDEX("ck_ker_lpuart1_am", MSI_KER, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_HW("ck_ker_lpuart1_am", &ck_ker_lpuart1.hw, &clk_stm32_gate_ops, 0),
 };
 
 /* MCO1 & MCO2 */
@@ -1565,7 +1565,7 @@ static struct clk_stm32_gate ck_ker_spi8 = {
 
 static struct clk_stm32_gate ck_ker_spi8_am = {
 	.gate_id = GATE_SPI8AM,
-	.hw.init = CLK_HW_INIT_INDEX("ck_ker_spi8_am", MSI_KER, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_HW("ck_ker_spi8_am", &ck_ker_spi8.hw, &clk_stm32_gate_ops, 0),
 };
 
 /* Timers */
@@ -2892,19 +2892,19 @@ CS_STM32_TIMER(ck_timg1, ck_icn_apb1, RCC_APB1DIVR, RCC_TIMG1PRER);
 CS_STM32_TIMER(ck_timg2, ck_icn_apb2, RCC_APB2DIVR, RCC_TIMG2PRER);
 
 CS_GATE(ck_cpu3, ck_icn_hs_mcu, GATE_C3);
-CS_GATE(ck_cpu3_am, ck_icn_hs_mcu, GATE_C3AM);
+CS_GATE(ck_cpu3_am, ck_cpu3, GATE_C3AM);
 
-CS_GATE_NO_PARENT(ck_c3_adf1, GATE_ADF1C3);
-CS_GATE_NO_PARENT(ck_c3_gpioz, GATE_GPIOZC3);
-CS_GATE_NO_PARENT(ck_c3_i2c8, GATE_I2C8C3);
-CS_GATE_NO_PARENT(ck_c3_i3c4, GATE_I3C4C3);
-CS_GATE_NO_PARENT(ck_c3_lpdma, GATE_LPDMAC3);
-CS_GATE_NO_PARENT(ck_c3_lptim3, GATE_LPTIM3C3);
-CS_GATE_NO_PARENT(ck_c3_lptim4, GATE_LPTIM4C3);
-CS_GATE_NO_PARENT(ck_c3_lptim5, GATE_LPTIM5C3);
-CS_GATE_NO_PARENT(ck_c3_lpuart1, GATE_LPUART1C3);
-CS_GATE_NO_PARENT(ck_c3_rtc, GATE_RTCC3);
-CS_GATE_NO_PARENT(ck_c3_spi8, GATE_SPI8C3);
+CS_GATE(ck_c3_adf1, msi_ker_ck, GATE_ADF1C3);
+CS_GATE(ck_c3_gpioz, msi_ker_ck, GATE_GPIOZC3);
+CS_GATE(ck_c3_i2c8, msi_ker_ck, GATE_I2C8C3);
+CS_GATE(ck_c3_i3c4, msi_ker_ck, GATE_I3C4C3);
+CS_GATE(ck_c3_lpdma, msi_ker_ck, GATE_LPDMAC3);
+CS_GATE(ck_c3_lptim3, msi_ker_ck, GATE_LPTIM3C3);
+CS_GATE(ck_c3_lptim4, msi_ker_ck, GATE_LPTIM4C3);
+CS_GATE(ck_c3_lptim5, msi_ker_ck, GATE_LPTIM5C3);
+CS_GATE(ck_c3_lpuart1, msi_ker_ck, GATE_LPUART1C3);
+CS_GATE(ck_c3_rtc, msi_ker_ck, GATE_RTCC3);
+CS_GATE(ck_c3_spi8, msi_ker_ck, GATE_SPI8C3);
 
 CS_GATE(ck_icn_s_sysram, ck_icn_hs_mcu, GATE_SYSRAM);
 CS_GATE(ck_icn_s_vderam, ck_icn_hs_mcu, GATE_VDERAM);
@@ -2923,7 +2923,7 @@ CS_GATE(ck_icn_p_hpdma2, ck_icn_ls_mcu, GATE_HPDMA2);
 CS_GATE(ck_icn_p_hpdma3, ck_icn_ls_mcu, GATE_HPDMA3);
 CS_GATE(ck_icn_p_ipcc1, ck_icn_ls_mcu, GATE_IPCC1);
 CS_GATE(ck_icn_p_ipcc2, ck_icn_ls_mcu, GATE_IPCC2);
-CS_GATE(ck_icn_p_ipcc2_am, ck_icn_ls_mcu, GATE_IPCC2AM);
+CS_GATE(ck_icn_p_ipcc2_am, ck_icn_p_ipcc2, GATE_IPCC2AM);
 CS_GATE(ck_icn_p_cci, ck_icn_ls_mcu, GATE_CCI);
 CS_GATE(ck_icn_p_crc, ck_icn_ls_mcu, GATE_CRC);
 CS_GATE(ck_icn_p_ospiiom, ck_icn_ls_mcu, GATE_OSPIIOM);
@@ -2948,13 +2948,13 @@ CS_GATE(ck_icn_s_lpsram1, ck_icn_ls_mcu, GATE_LPSRAM1);
 CS_GATE(ck_icn_s_lpsram2, ck_icn_ls_mcu, GATE_LPSRAM2);
 CS_GATE(ck_icn_s_lpsram3, ck_icn_ls_mcu, GATE_LPSRAM3);
 CS_GATE(ck_icn_p_gpioz, ck_icn_ls_mcu, GATE_GPIOZ);
-CS_GATE(ck_icn_p_gpioz_am, ck_icn_ls_mcu, GATE_GPIOZAM);
+CS_GATE(ck_icn_p_gpioz_am, ck_icn_p_gpioz, GATE_GPIOZAM);
 CS_GATE(ck_icn_p_lpdma, ck_icn_ls_mcu, GATE_LPDMA);
-CS_GATE(ck_icn_p_lpdma_am, ck_icn_ls_mcu, GATE_LPDMAAM);
+CS_GATE(ck_icn_p_lpdma_am, ck_icn_p_lpdma, GATE_LPDMAAM);
 CS_GATE(ck_icn_p_adf1, ck_icn_ls_mcu, GATE_ADF1);
 CS_GATE(ck_icn_p_hsem, ck_icn_ls_mcu, GATE_HSEM);
 CS_GATE(ck_icn_p_rtc, ck_icn_ls_mcu, GATE_RTC);
-CS_GATE(ck_icn_p_rtc_am, ck_icn_ls_mcu, GATE_RTCAM);
+CS_GATE(ck_icn_p_rtc_am, ck_icn_p_rtc, GATE_RTCAM);
 CS_GATE(ck_icn_p_iwdg5, ck_icn_ls_mcu, GATE_IWDG5);
 CS_GATE(ck_icn_p_wwdg2, ck_icn_ls_mcu, GATE_WWDG2);
 CS_GATE(ck_icn_s_stm, ck_icn_ls_mcu, GATE_STM);
@@ -3117,21 +3117,21 @@ CS_GATE(ck_ker_csi2phy, ck_flexgen_31, GATE_CSI);
 CS_GATE(ck_ker_stgen, ck_flexgen_33, GATE_STGEN);
 CS_GATE(ck_ker_usbtc, ck_flexgen_35, GATE_USBTC);
 CS_GATE(ck_ker_i3c4, ck_flexgen_36, GATE_I3C4);
-CS_GATE(ck_ker_i3c4_am, msi_ker_ck, GATE_I3C4AM);
+CS_GATE(ck_ker_i3c4_am, ck_ker_i3c4, GATE_I3C4AM);
 CS_GATE(ck_ker_spi8, ck_flexgen_37, GATE_SPI8);
-CS_GATE(ck_ker_spi8_am, msi_ker_ck, GATE_SPI8AM);
+CS_GATE(ck_ker_spi8_am, ck_ker_spi8, GATE_SPI8AM);
 CS_GATE(ck_ker_i2c8, ck_flexgen_38, GATE_I2C8);
-CS_GATE(ck_ker_i2c8_am, msi_ker_ck, GATE_I2C8AM);
+CS_GATE(ck_ker_i2c8_am, ck_ker_i2c8, GATE_I2C8AM);
 CS_GATE(ck_ker_lpuart1, ck_flexgen_39, GATE_LPUART1);
-CS_GATE(ck_ker_lpuart1_am, msi_ker_ck, GATE_LPUART1AM);
+CS_GATE(ck_ker_lpuart1_am, ck_ker_lpuart1, GATE_LPUART1AM);
 CS_GATE(ck_ker_lptim3, ck_flexgen_40, GATE_LPTIM3);
-CS_GATE(ck_ker_lptim3_am, msi_ker_ck, GATE_LPTIM3AM);
+CS_GATE(ck_ker_lptim3_am, ck_ker_lptim3, GATE_LPTIM3AM);
 CS_GATE(ck_ker_lptim4, ck_flexgen_41, GATE_LPTIM4);
-CS_GATE(ck_ker_lptim4_am, msi_ker_ck, GATE_LPTIM4AM);
+CS_GATE(ck_ker_lptim4_am, ck_ker_lptim4, GATE_LPTIM4AM);
 CS_GATE(ck_ker_lptim5, ck_flexgen_41, GATE_LPTIM5);
-CS_GATE(ck_ker_lptim5_am, msi_ker_ck, GATE_LPTIM5AM);
+CS_GATE(ck_ker_lptim5_am, ck_ker_lptim5, GATE_LPTIM5AM);
 CS_GATE(ck_ker_adf1, ck_flexgen_42, GATE_ADF1);
-CS_GATE(ck_ker_adf1_am, msi_ker_ck, GATE_ADF1AM);
+CS_GATE(ck_ker_adf1_am, ck_ker_adf1, GATE_ADF1AM);
 CS_GATE(ck_ker_tsdbg, ck_flexgen_43, GATE_DBG);
 CS_GATE(ck_ker_tpiu, ck_flexgen_44, GATE_TRACE);
 CS_GATE(ck_icn_m_etr, ck_flexgen_45, GATE_ETR);
