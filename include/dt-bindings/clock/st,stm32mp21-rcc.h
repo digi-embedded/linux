@@ -143,7 +143,6 @@
 #define CK_BUS_GPIOH		120
 #define CK_BUS_GPIOI		121
 #define CK_BUS_GPIOZ		122
-#define CK_BUS_CCB		123
 #define CK_BUS_RTC		124
 #define CK_BUS_LPUART1		125
 #define CK_BUS_LPTIM3		126
