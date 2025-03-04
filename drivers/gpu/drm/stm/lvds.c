@@ -556,6 +556,7 @@ static int lvds_pixel_clk_enable(struct clk_hw *hw)
 	struct drm_device *drm = lvds->lvds_bridge.dev;
 	struct lvds_phy_info *phy;
 	int ret;
+	u32 reg;
 
 	ret = clk_prepare_enable(lvds->pclk);
 	if (ret) {
@@ -573,10 +574,13 @@ static int lvds_pixel_clk_enable(struct clk_hw *hw)
 	/* In case we are operating in dual link the second PHY is set before the primary PHY. */
 	if (lvds->secondary) {
 		phy = lvds->secondary;
+		reg = lvds_read(lvds, phy->base + phy->ofs.GCR);
 
 		/* Release LVDS PHY from reset mode */
-		lvds_set(lvds, phy->base + phy->ofs.GCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
-		lvds_pll_config(lvds, phy);
+		if (!(reg & (PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ))) {
+			lvds_set(lvds, phy->base + phy->ofs.GCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
+			lvds_pll_config(lvds, phy);
+		}
 
 		ret = lvds_pll_enable(lvds, phy);
 		if (ret) {
@@ -587,10 +591,13 @@ static int lvds_pixel_clk_enable(struct clk_hw *hw)
 
 	if (lvds->primary) {
 		phy = lvds->primary;
+		reg = lvds_read(lvds, phy->base + phy->ofs.GCR);
 
 		/* Release LVDS PHY from reset mode */
-		lvds_set(lvds, phy->base + phy->ofs.GCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
-		lvds_pll_config(lvds, phy);
+		if (!(reg & (PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ))) {
+			lvds_set(lvds, phy->base + phy->ofs.GCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
+			lvds_pll_config(lvds, phy);
+		}
 
 		ret = lvds_pll_enable(lvds, phy);
 		if (ret) {
