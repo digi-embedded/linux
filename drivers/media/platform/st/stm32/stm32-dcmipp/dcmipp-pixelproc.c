@@ -17,6 +17,7 @@
 #include <media/v4l2-subdev.h>
 
 #include "dcmipp-common.h"
+#include "uapi/linux/stm32-dcmipp-config.h"
 
 #define DCMIPP_P1FCTCR	0x900
 #define DCMIPP_P2FCTCR	0xD00
@@ -463,8 +464,6 @@ static const struct v4l2_rect crop_min = {
 /*
  * Functions handling controls
  */
-#define V4L2_CID_PIXELPROC_GAMMA_CORRECTION	(V4L2_CID_USER_BASE | 0x1001)
-
 static int dcmipp_pixelproc_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct dcmipp_pixelproc_device *pixelproc =

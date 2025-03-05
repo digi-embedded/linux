@@ -9,6 +9,9 @@
 
 #include <linux/types.h>
 
+/* DCMIPP specific V4L2 control */
+#define V4L2_CID_PIXELPROC_GAMMA_CORRECTION	(V4L2_CID_USER_BASE | 0x1001)
+
 /* Bad Pixel Removal */
 #define STM32_DCMIPP_ISP_BPR		(1U << 0)
 /* Black Level Correction */
