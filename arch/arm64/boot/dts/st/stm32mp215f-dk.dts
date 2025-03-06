@@ -52,6 +52,7 @@
 		compatible = "dmic-codec";
 		#sound-dai-cells = <1>;
 		sound-name-prefix = "dmic0";
+		vref-supply = <&scmi_v3v3>;
 		status = "okay";
 
 		port {
@@ -65,6 +66,7 @@
 		compatible = "dmic-codec";
 		#sound-dai-cells = <1>;
 		sound-name-prefix = "dmic1";
+		vref-supply = <&scmi_v3v3>;
 		status = "okay";
 
 		port {
