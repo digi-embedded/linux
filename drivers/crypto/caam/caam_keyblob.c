@@ -7,6 +7,7 @@
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
 #include <linux/miscdevice.h>
+#include <linux/mutex.h>
 
 #include "compat.h"
 #include "regs.h"
@@ -24,7 +25,7 @@
  */
 struct kb_device {
 	struct miscdevice misc_dev;
-    struct device *jr_dev;
+	struct mutex sem;
 };
 
 /*
@@ -42,53 +43,15 @@ static struct kb_device *kb_dev;
 
 static struct kb_device *kb_device_create(void);
 static int kb_device_destroy(struct kb_device *kb_dev);
-static int kb_open(struct inode *inode, struct file *file);
-static int kb_release(struct inode *inode, struct file *file);
 static void sm_key_job_done(struct device *dev, u32 *desc,
 		u32 err, void *context);
-static int gen_mem_encap(struct device *jr_dev, void __user *secretbuf,
+static int gen_mem_encap(void __user *secretbuf,
 		int keylen, void __user *kmodbuf, void __user *outbuf);
-static int gen_mem_decap(struct device *jr_dev, void __user *keyblobbuf,
+static int gen_mem_decap(void __user *keyblobbuf,
 		int bloblen, void __user *kmodbuf, void __user *outbuf);
 static long kb_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 static int caam_keyblob_probe(struct platform_device *pdev);
 static int caam_keyblob_remove(struct platform_device *pdev);
-
-static int kb_open(struct inode *inode, struct file *file)
-{
-	struct miscdevice *miscdev = file->private_data;
-	struct kb_device *dev = container_of(miscdev, struct kb_device, misc_dev);
-    struct device *jr_dev;
-
-    if (!dev->jr_dev) {
-		jr_dev = caam_jr_alloc();
-		if (IS_ERR(jr_dev)) {
-			pr_err("Job Ring Device allocation for transform failed\n");
-			return -ENOMEM;
-		}
-		pr_debug("Allocate a job ring device\n");
-		dev->jr_dev = jr_dev;
-    }
-	else {
-		pr_err("Already created a job ring device");
-		return -EPERM;
-	}
-
-	return 0;
-}
-
-static int kb_release(struct inode *inode, struct file *file)
-{
-	struct miscdevice *miscdev = file->private_data;
-	struct kb_device *dev = container_of(miscdev, struct kb_device, misc_dev);
-
-    if (dev && dev->jr_dev) {
-	    caam_jr_free(dev->jr_dev);
-		pr_debug("Free a job ring device\n");
-		dev->jr_dev = NULL;
-    }
-	return 0;
-}
 
 static void sm_key_job_done(struct device *dev, u32 *desc,
 		u32 err, void *context)
@@ -358,23 +321,33 @@ int blob_decap_jobdesc(u32 **desc, dma_addr_t keymod, dma_addr_t blobbuf,
 
 
 
-static int gen_mem_encap(struct device *jr_dev, void __user *secretbuf,
+static int gen_mem_encap(void __user *secretbuf,
 		int keylen, void __user *kmodbuf, void __user *outbuf)
 {
 	int retval = 0;
-    u32 __iomem *encapdesc = NULL;
+	u32 __iomem *encapdesc = NULL;
 	dma_addr_t secret_dma = 0, keymod_dma = 0, outbuf_dma = 0;
 	u8 __iomem *lsecret = NULL, *lkeymod = NULL, *loutbuf = NULL;
 	struct sm_key_job_result testres;
+	struct device *jr_dev;
+
+	/* Allocate caam job ring for operation to be performed from CAAM */
+	jr_dev = caam_jr_alloc();
+	if (IS_ERR(jr_dev)) {
+		pr_err("Job Ring Device allocation for transform failed\n");
+		return -ENOMEM;
+	}
+	pr_debug("Allocate a job ring device; by %s,%d\n",
+		 current->comm, current->pid);
 
 	/* Build/map/flush the scret */
 	lsecret = kmalloc(keylen, GFP_KERNEL | GFP_DMA);
-    if (!lsecret) {
+	if (!lsecret) {
 		dev_err(jr_dev, "%s: can't alloc for key\n", __func__);
 		retval = -ENOMEM;
 		goto out;
 	}
-    if (copy_from_user(lsecret, secretbuf, keylen)) {
+	if (copy_from_user(lsecret, secretbuf, keylen)) {
 		dev_err(jr_dev, "%s: can't Copy for key\n", __func__);
 		retval = -EFAULT;
 		goto out;
@@ -384,12 +357,12 @@ static int gen_mem_encap(struct device *jr_dev, void __user *secretbuf,
 
 	/* Build/map/flush the key modifier */
 	lkeymod = kmalloc(GENMEM_KEYMOD_LEN, GFP_KERNEL | GFP_DMA);
-    if (!lkeymod) {
+	if (!lkeymod) {
 		dev_err(jr_dev, "%s: can't alloc for keymod\n", __func__);
 		retval = -ENOMEM;
 		goto out;
 	}
-    if (copy_from_user(lkeymod, kmodbuf, GENMEM_KEYMOD_LEN)) {
+	if (copy_from_user(lkeymod, kmodbuf, GENMEM_KEYMOD_LEN)) {
 		dev_err(jr_dev, "%s: can't Copy for keymod\n", __func__);
 		retval = -EFAULT;
 		goto out;
@@ -437,49 +410,62 @@ out:
 			 DMA_FROM_DEVICE);
 	if (keymod_dma)
 		dma_unmap_single(jr_dev, keymod_dma, GENMEM_KEYMOD_LEN, DMA_TO_DEVICE);
-    if (secret_dma)
+	if (secret_dma)
 		dma_unmap_single(jr_dev, secret_dma, keylen, DMA_TO_DEVICE);
 	kfree(encapdesc);
 	kfree(lkeymod);
 	kfree(lsecret);
 	kfree(loutbuf);
 
+	caam_jr_free(jr_dev);
+	pr_debug("Free a job ring device; by %s,%d\n", current->comm, current->pid);
+
 	return retval;
 }
 
-static int gen_mem_decap(struct device *jr_dev, void __user *keyblobbuf,
+static int gen_mem_decap(void __user *keyblobbuf,
 		int bloblen, void __user *kmodbuf, void __user *outbuf)
 {
 	int retval = 0;
-    int keylen = bloblen - BLOB_OVERHEAD;
+	int keylen = bloblen - BLOB_OVERHEAD;
 	dma_addr_t keyblob_dma = 0, keymod_dma = 0, outbuf_dma = 0;
 	u8 __iomem *lkeyblob = NULL, *lkeymod = NULL, *loutbuf = NULL;
 	struct sm_key_job_result testres;
 	u32 __iomem *decapdesc = NULL;
+	struct device *jr_dev;
+
+	/* Allocate caam job ring for operation to be performed from CAAM */
+	jr_dev = caam_jr_alloc();
+	if (IS_ERR(jr_dev)) {
+		pr_err("Job Ring Device allocation for transform failed\n");
+		return -ENOMEM;
+	}
+	pr_debug("Allocate a job ring device; by %s,%d\n",
+		 current->comm, current->pid);
 
 	/* Build/map/flush the scret */
 	lkeyblob = kmalloc(bloblen, GFP_KERNEL | GFP_DMA);
-    if (!lkeyblob) {
+	if (!lkeyblob) {
 		dev_err(jr_dev, "%s: can't alloc for keylob\n", __func__);
 		retval = -ENOMEM;
 		goto out;
 	}
-    if (copy_from_user(lkeyblob, keyblobbuf, bloblen)) {
+	if (copy_from_user(lkeyblob, keyblobbuf, bloblen)) {
 		dev_err(jr_dev, "%s: can't Copy for keyblob\n", __func__);
 		retval = -EFAULT;
 		goto out;
-    }
+	}
 	keyblob_dma = dma_map_single(jr_dev, lkeyblob, bloblen,
 				    DMA_TO_DEVICE);
 
 	/* Build/map/flush the key modifier */
 	lkeymod = kmalloc(GENMEM_KEYMOD_LEN, GFP_KERNEL | GFP_DMA);
-    if (!lkeymod) {
+	if (!lkeymod) {
 		dev_err(jr_dev, "%s: can't alloc for keymod\n", __func__);
 		retval = -ENOMEM;
 		goto out;
 	}
-    if (copy_from_user(lkeymod, kmodbuf, GENMEM_KEYMOD_LEN)) {
+	if (copy_from_user(lkeymod, kmodbuf, GENMEM_KEYMOD_LEN)) {
 		dev_err(jr_dev, "%s: can't Copy for keymod\n", __func__);
 		retval = -EFAULT;
 		goto out;
@@ -488,7 +474,7 @@ static int gen_mem_decap(struct device *jr_dev, void __user *keyblobbuf,
 				    DMA_TO_DEVICE);
 
 	loutbuf = kmalloc(keylen, GFP_KERNEL | GFP_DMA);
-    if (!loutbuf) {
+	if (!loutbuf) {
 		dev_err(jr_dev, "%s: can't alloc for outbuf\n", __func__);
 		retval = -ENOMEM;
 		goto out;
@@ -538,6 +524,9 @@ out:
 	kfree(lkeyblob);
 	kfree(loutbuf);
 
+	caam_jr_free(jr_dev);
+	pr_debug("Free a job ring device; by %s,%d\n", current->comm, current->pid);
+
 	return retval;
 }
 
@@ -545,50 +534,54 @@ out:
 static long kb_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int retval = 0;
-    struct caam_kb_data kb_data;
-	struct miscdevice *miscdev = file->private_data;
-	struct kb_device *dev = container_of(miscdev, struct kb_device, misc_dev);
+	struct caam_kb_data kb_data;
+	struct kb_device *kb_dev = file->private_data;
 
-    if (copy_from_user(&kb_data, (void *)arg, sizeof(kb_data))) {
+	retval = mutex_lock_interruptible(&kb_dev->sem);
+	if (retval)
+		return retval;
+
+	if (copy_from_user(&kb_data, (void *)arg, sizeof(kb_data))) {
 		retval = -EFAULT;
 		goto err;
 	}
 
-    if (!kb_data.rawkey || !kb_data.keyblob ||
+	if (!kb_data.rawkey || !kb_data.keyblob ||
 			(kb_data.rawkey_len + BLOB_OVERHEAD != kb_data.keyblob_len) ||
 			(kb_data.keymod_len != GENMEM_KEYMOD_LEN)) {
 		retval = -EINVAL;
 		goto err;
 	}
 
-	pr_debug("%s:rawkey_len %zd, keyblob_len %zd\n", __func__,
-		kb_data.rawkey_len, kb_data.keyblob_len);
+	pr_debug("%s:rawkey_len %zd, keyblob_len %zd, cmd %s; by %s,%d\n", __func__,
+		 kb_data.rawkey_len, kb_data.keyblob_len,
+		 cmd == CAAM_KB_ENCRYPT ? "enc" : cmd == CAAM_KB_DECRYPT ? "dec" : "unk",
+		 current->comm, current->pid);
 
 	switch (cmd) {
 	case CAAM_KB_ENCRYPT:
 	    {
-			retval = gen_mem_encap(dev->jr_dev, kb_data.rawkey, kb_data.rawkey_len,
+			retval = gen_mem_encap(kb_data.rawkey, kb_data.rawkey_len,
 					kb_data.keymod, kb_data.keyblob);
 		    break;
 	    }
 	case CAAM_KB_DECRYPT:
 	    {
-			retval = gen_mem_decap(dev->jr_dev, kb_data.keyblob, kb_data.keyblob_len,
+			retval = gen_mem_decap(kb_data.keyblob, kb_data.keyblob_len,
 					kb_data.keymod, kb_data.rawkey);
 		    break;
 	    }
 	default:
-		    return -ENOTTY;
+		    retval = -ENOTTY;
 	}
 
 err:
+	mutex_unlock(&kb_dev->sem);
 	return retval;
 }
 
 static const struct file_operations kb_fops = {
 	.owner          = THIS_MODULE,
-	.open           = kb_open,
-	.release        = kb_release,
 	.unlocked_ioctl = kb_ioctl,
 };
 
@@ -605,6 +598,9 @@ static struct kb_device *kb_device_create(void)
 	idev->misc_dev.name = "caam_kb";
 	idev->misc_dev.fops = &kb_fops;
 	idev->misc_dev.parent = NULL;
+
+	mutex_init(&idev->sem);
+
 	ret = misc_register(&idev->misc_dev);
 	if (ret) {
 		pr_err("kb: failed to register misc device.\n");
@@ -616,11 +612,6 @@ static struct kb_device *kb_device_create(void)
 
 static int kb_device_destroy(struct kb_device *kb_dev)
 {
-    if ((kb_dev) && (kb_dev->jr_dev)) {
-		caam_jr_free(kb_dev->jr_dev);
-		kb_dev->jr_dev = NULL;
-	}
-
     if (kb_dev)
 		misc_deregister(&kb_dev->misc_dev);
 
@@ -639,6 +630,9 @@ static int caam_keyblob_probe(struct platform_device *pdev)
 		err = PTR_ERR(kb_dev);
 		goto err;
 	}
+
+	dev_set_drvdata(&pdev->dev, kb_dev);
+
 	dev_info(&pdev->dev, "caam keyblob initialized\n");
 	return 0;
 err:
