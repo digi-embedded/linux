@@ -189,6 +189,7 @@ properties:
         items:
           - enum:
               - st,stm32mp215f-dk
+              - st,stm32mp215f-dk-aarch32
           - const: st,stm32mp215
 
 additionalProperties: true
