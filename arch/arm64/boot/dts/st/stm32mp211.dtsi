@@ -1495,6 +1495,7 @@
 				dmas = <&hpdma 105 0x60 0x3012>;
 				dma-names = "tx";
 				access-controllers = <&rifsc 88>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
 
