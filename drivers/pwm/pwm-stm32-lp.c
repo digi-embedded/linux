@@ -188,9 +188,16 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	dty = prd * state->duty_cycle;
 	dty = DIV_ROUND_CLOSEST_ULL(dty, state->period);
 
+	if (!cstate.enabled) {
+		/* enable clock to drive PWM counter */
+		ret = pm_runtime_resume_and_get(chip->dev);
+		if (ret)
+			return ret;
+	}
+
 	ret = regmap_read(priv->regmap, STM32_LPTIM_CFGR, &cfgr);
 	if (ret)
-		return ret;
+		goto err;
 
 	/*
 	 * When there are several channels, they share the same prescaler and reload value.
@@ -199,17 +206,12 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	if (!stm32_pwm_lp_update_allowed(priv, pwm->hwpwm)) {
 		ret = regmap_read(priv->regmap, STM32_LPTIM_ARR, &arr);
 		if (ret)
-			return ret;
+			goto err;
 
-		if ((FIELD_GET(STM32_LPTIM_PRESC, cfgr) != presc) || (arr != prd - 1))
-			return -EBUSY;
-	}
-
-	if (!cstate.enabled) {
-		/* enable clock to drive PWM counter */
-		ret = pm_runtime_resume_and_get(chip->dev);
-		if (ret)
-			return ret;
+		if ((FIELD_GET(STM32_LPTIM_PRESC, cfgr) != presc) || (arr != prd - 1)) {
+			ret = -EBUSY;
+			goto err;
+		}
 	}
 
 	if ((FIELD_GET(STM32_LPTIM_PRESC, cfgr) != presc) ||
@@ -304,6 +306,11 @@ static int stm32_pwm_lp_get_state(struct pwm_chip *chip,
 	u64 tmp;
 	int ret;
 
+	/* Enable the clock to access registers */
+	ret = pm_runtime_resume_and_get(chip->dev);
+	if (ret < 0)
+		return ret;
+
 	regmap_read(priv->regmap, STM32_LPTIM_CR, &val);
 	enabled = !!FIELD_GET(STM32_LPTIM_ENABLE, val);
 	if (priv->num_cc_chans) {
@@ -319,8 +326,10 @@ static int stm32_pwm_lp_get_state(struct pwm_chip *chip,
 	/* Keep PWM counter clock refcount in sync with PWM initial state */
 	if (state->enabled) {
 		ret = pm_runtime_resume_and_get(chip->dev);
-		if (ret < 0)
+		if (ret < 0) {
+			pm_runtime_put_sync_suspend(chip->dev);
 			return ret;
+		}
 	}
 
 	regmap_read(priv->regmap, STM32_LPTIM_CFGR, &val);
@@ -344,7 +353,7 @@ static int stm32_pwm_lp_get_state(struct pwm_chip *chip,
 	tmp = (tmp << presc) * NSEC_PER_SEC;
 	state->duty_cycle = DIV_ROUND_CLOSEST_ULL(tmp, rate);
 
-	return 0;
+	return pm_runtime_put_sync_suspend(chip->dev);
 }
 
 static const struct pwm_ops stm32_pwm_lp_ops = {
