@@ -53,7 +53,6 @@ static const struct stm32_lptim_cfg stm32mp25_lptim_cfg = {
 struct stm32_lptim_trigger {
 	struct device *dev;
 	const char * const *triggers;
-	struct list_head tr_list;
 };
 
 static int stm32_lptim_validate_device(struct iio_trigger *trig,
@@ -82,20 +81,10 @@ bool is_stm32_lptim_trigger(struct iio_trigger *trig)
 }
 EXPORT_SYMBOL(is_stm32_lptim_trigger);
 
-static void stm32_lptim_unregister_triggers(struct stm32_lptim_trigger *priv)
-{
-	struct iio_trigger *tr;
-
-	list_for_each_entry(tr, &priv->tr_list, alloc_list)
-		iio_trigger_unregister(tr);
-}
-
-static int stm32_lptim_register_triggers(struct stm32_lptim_trigger *priv)
+static int stm32_lptim_setup_trig(struct stm32_lptim_trigger *priv)
 {
 	const char * const *cur = priv->triggers;
 	int ret;
-
-	INIT_LIST_HEAD(&priv->tr_list);
 
 	while (cur && *cur) {
 		struct iio_trigger *trig;
@@ -108,11 +97,9 @@ static int stm32_lptim_register_triggers(struct stm32_lptim_trigger *priv)
 		trig->ops = &stm32_lptim_trigger_ops;
 		iio_trigger_set_drvdata(trig, priv);
 
-		ret = iio_trigger_register(trig);
+		ret = devm_iio_trigger_register(priv->dev, trig);
 		if (ret)
 			return ret;
-
-		list_add_tail(&trig->alloc_list, &priv->tr_list);
 		cur++;
 	}
 
@@ -124,7 +111,6 @@ static int stm32_lptim_trigger_probe(struct platform_device *pdev)
 	struct stm32_lptim_trigger *priv;
 	struct stm32_lptim_cfg const *lptim_cfg;
 	u32 index;
-	int ret;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -141,37 +127,19 @@ static int stm32_lptim_trigger_probe(struct platform_device *pdev)
 	priv->dev = &pdev->dev;
 	priv->triggers = lptim_cfg->triggers[index];
 
-	ret = stm32_lptim_register_triggers(priv);
-	if (ret) {
-		stm32_lptim_unregister_triggers(priv);
-		return ret;
-	}
-
-	platform_set_drvdata(pdev, priv);
-
-	return 0;
-}
-
-static int stm32_lptim_trigger_remove(struct platform_device *pdev)
-{
-	struct stm32_lptim_trigger *priv = platform_get_drvdata(pdev);
-
-	stm32_lptim_unregister_triggers(priv);
-
-	return 0;
+	return stm32_lptim_setup_trig(priv);
 }
 
 static const struct of_device_id stm32_lptim_trig_of_match[] = {
-	{ .compatible = "st,stm32-lptimer-trigger", .data = (void *)&stm32mp15_lptim_cfg },
-	{ .compatible = "st,stm32mp21-lptimer-trigger", .data = (void *)&stm32mp25_lptim_cfg},
-	{ .compatible = "st,stm32mp25-lptimer-trigger", .data = (void *)&stm32mp25_lptim_cfg},
+	{ .compatible = "st,stm32-lptimer-trigger", .data = &stm32mp15_lptim_cfg },
+	{ .compatible = "st,stm32mp21-lptimer-trigger", .data = &stm32mp25_lptim_cfg},
+	{ .compatible = "st,stm32mp25-lptimer-trigger", .data = &stm32mp25_lptim_cfg},
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_lptim_trig_of_match);
 
 static struct platform_driver stm32_lptim_trigger_driver = {
 	.probe = stm32_lptim_trigger_probe,
-	.remove = stm32_lptim_trigger_remove,
 	.driver = {
 		.name = "stm32-lptimer-trigger",
 		.of_match_table = stm32_lptim_trig_of_match,
