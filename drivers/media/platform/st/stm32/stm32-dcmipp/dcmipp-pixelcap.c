@@ -636,11 +636,6 @@ static void dcmipp_pixelcap_stop_streaming(struct vb2_queue *vq)
 	u32 status;
 	int ret;
 
-	dcmipp_pipeline_s_stream(vcap, 0);
-
-	/* Stop the media pipeline */
-	media_pipeline_stop(vcap->vdev.entity.pads);
-
 	/* Disable interruptions */
 	spin_lock(&vcap->vdev.v4l2_dev->lock);
 	reg_clear(vcap, DCMIPP_CMIER, vcap->cmier);
@@ -660,6 +655,11 @@ static void dcmipp_pixelcap_stop_streaming(struct vb2_queue *vq)
 
 	/* Disable pipe */
 	reg_clear(vcap, DCMIPP_PxFSCR(vcap->pipe_id), DCMIPP_PxFSCR_PIPEN);
+
+	dcmipp_pipeline_s_stream(vcap, 0);
+
+	/* Stop the media pipeline */
+	media_pipeline_stop(vcap->vdev.entity.pads);
 
 	spin_lock_irq(&vcap->irqlock);
 
