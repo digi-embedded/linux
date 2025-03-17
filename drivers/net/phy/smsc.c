@@ -130,8 +130,12 @@ static int smsc_phy_config_wol(struct phy_device *phydev)
 	int i, wol_ctrl, wol_filter;
 	u16 pwd[3] = {0, 0, 0};
 
+	const u8 *mac_addr = NULL;
+	if(!phydev->attached_dev)
+		return -ENODEV;
+
 	/* Write @MAC in LAN8742_MMD3_MAC_ADDRA/B/C registers */
-	const u8 *mac_addr = phydev->attached_dev->dev_addr;
+	mac_addr = phydev->attached_dev->dev_addr;
 	/* Store the device address for the magic packet */
 	for (i = 0; i < ARRAY_SIZE(pwd); i++)
 		pwd[i] = mac_addr[5 - i * 2] << 8 | mac_addr[5 - (i * 2 + 1)];
