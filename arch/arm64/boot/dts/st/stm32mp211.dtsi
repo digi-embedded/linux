@@ -1518,6 +1518,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 58>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 
 				adc1: adc@0 {
@@ -1553,6 +1554,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 59>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 
 				adc2: adc@0 {
