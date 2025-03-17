@@ -20,8 +20,6 @@
 #define STM32_LPTIM_CMP		0x14	/* Compare Reg (MP25 CCR1)   */
 #define STM32_LPTIM_ARR		0x18	/* Autoreload Reg            */
 #define STM32_LPTIM_CNT		0x1C	/* Counter Reg               */
-#define STM32MP25_LPTIM_CCMR1	0x2C	/* Capture/Compare Mode Reg  */
-#define STM32MP25_LPTIM_CCR2	0x34	/* Compare Reg2              */
 #define STM32_LPTIM_CCMR1	0x2C	/* Capture/Compare Mode MP25 */
 #define STM32_LPTIM_CCR2	0x34	/* Compare Reg2 MP25         */
 
@@ -65,13 +63,6 @@
 /* STM32_LPTIM_ARR */
 #define STM32_LPTIM_MAX_ARR	0xFFFF
 
-/* STM32MP25_LPTIM_CCMR1 */
-#define STM32MP25_LPTIM_CC2P	GENMASK(19, 18)
-#define STM32MP25_LPTIM_CC2E	BIT(17)
-#define STM32MP25_LPTIM_CC2SEL	BIT(16)
-#define STM32MP25_LPTIM_CC1P	GENMASK(3, 2)
-#define STM32MP25_LPTIM_CC1E	BIT(1)
-#define STM32MP25_LPTIM_CC1SEL	BIT(0)
 /* STM32_LPTIM_CCMR1 */
 #define STM32_LPTIM_CC2P	GENMASK(19, 18)
 #define STM32_LPTIM_CC2E	BIT(17)
