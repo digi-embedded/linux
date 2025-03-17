@@ -51,36 +51,32 @@ static int stm32_lptimer_detect_encoder(struct stm32_lptimer *ddata)
 	return 0;
 }
 
-static int stm32_lptimer_detect_hwcfgr(struct device *dev, struct stm32_lptimer *ddata)
+static int stm32_lptimer_detect_hwcfgr(struct stm32_lptimer *ddata)
 {
 	u32 val;
 	int ret;
 
-	/* Try to guess parameters from HWCFGR: e.g. encodrer mode (STM32MP15) */
-	ret = regmap_read(ddata->regmap, STM32MP15_LPTIM_HWCFGR, &val);
+	ret = regmap_read(ddata->regmap, STM32_LPTIM_VERR, &ddata->version);
 	if (ret)
 		return ret;
 
-	/* Fall back to legacy init if HWCFGR isn't present */
+	/* Try to guess parameters from HWCFGR: e.g. encoder mode (STM32MP15) */
+	ret = regmap_read(ddata->regmap, STM32_LPTIM_HWCFGR1, &val);
+	if (ret)
+		return ret;
+
+	/* Fallback to legacy init if HWCFGR isn't present */
 	if (!val)
 		return stm32_lptimer_detect_encoder(ddata);
 
-	ddata->has_encoder = FIELD_GET(STM32MP15_LPTIM_HWCFGR_ENCODER, val);
+	ddata->has_encoder = FIELD_GET(STM32_LPTIM_HWCFGR1_ENCODER, val);
 
-	ret = regmap_read(ddata->regmap, STM32MP15_LPTIM_VERR, &val);
-	if (ret)
-		return ret;
-
-	dev_dbg(dev, "LPTIM version: %lu.%lu\n",
-		FIELD_GET(STM32MP15_MAJREV_MASK, val),
-		FIELD_GET(STM32MP15_MINREV_MASK, val));
-
-	ret = regmap_read(ddata->regmap, STM32MP25_LPTIM_HWCFGR2, &val);
+	ret = regmap_read(ddata->regmap, STM32_LPTIM_HWCFGR2, &val);
 	if (ret)
 		return ret;
 
 	/* Number of capture/compare channels */
-	ddata->num_cc_chans = FIELD_GET(STM32MP25_LPTIM_HWCFGR2_CHAN_NUM, val);
+	ddata->num_cc_chans = FIELD_GET(STM32_LPTIM_HWCFGR2_CHAN_NUM, val);
 
 	return 0;
 }
@@ -109,7 +105,7 @@ static int stm32_lptimer_probe(struct platform_device *pdev)
 	if (IS_ERR(ddata->clk))
 		return PTR_ERR(ddata->clk);
 
-	ret = stm32_lptimer_detect_hwcfgr(dev, ddata);
+	ret = stm32_lptimer_detect_hwcfgr(ddata);
 	if (ret)
 		return ret;
 
@@ -124,8 +120,6 @@ static int stm32_lptimer_probe(struct platform_device *pdev)
 
 static const struct of_device_id stm32_lptimer_of_match[] = {
 	{ .compatible = "st,stm32-lptimer", },
-	{ .compatible = "st,stm32mp21-lptimer", },
-	{ .compatible = "st,stm32mp25-lptimer", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_lptimer_of_match);
