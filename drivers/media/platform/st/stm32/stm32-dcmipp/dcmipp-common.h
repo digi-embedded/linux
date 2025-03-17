@@ -125,6 +125,7 @@ struct dcmipp_pipeline_config {
 	bool has_csi2;
 	bool has_tpg;
 	bool needs_mclk;
+	bool has_histo;
 	unsigned int pipe_nb;
 };
 
