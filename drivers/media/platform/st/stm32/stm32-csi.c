@@ -375,12 +375,12 @@ static int stm32_csi_setup_lane_merger(struct stm32_csi_dev *csi2priv)
 
 	for (i = 0; i < csi2priv->num_lanes; i++) {
 		/* Check that lane ID is < max number of lane */
-		if (csi2priv->lanes[i] >= STM32_CSI_LANES_MAX) {
+		if (!csi2priv->lanes[i] || csi2priv->lanes[i] > STM32_CSI_LANES_MAX) {
 			dev_err(csi2priv->dev, "Invalid lane id (%d)\n",
 				csi2priv->lanes[i]);
 			return -EINVAL;
 		}
-		lmcfgr |= ((csi2priv->lanes[i] + 1) << ((i * 4) +
+		lmcfgr |= (csi2priv->lanes[i] << ((i * 4) +
 			   STM32_CSI_LMCFGR_DL0MAP_SHIFT));
 	}
 
@@ -506,10 +506,10 @@ static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
 
 	/* Prepare lanes related configuration bits */
 	for (i = 0; i < csi2priv->num_lanes; i++) {
-		if (!csi2priv->lanes[i]) {
+		if (csi2priv->lanes[i] == 1) {
 			lanes_ie |= STM32_CSI_SR1_DL0_ERRORS;
 			lanes_en |= STM32_CSI_PCR_DL0EN;
-		} else {
+		} else if (csi2priv->lanes[i] == 2) {
 			lanes_ie |= STM32_CSI_SR1_DL1_ERRORS;
 			lanes_en |= STM32_CSI_PCR_DL1EN;
 		}
