@@ -190,7 +190,7 @@
 			reg = <0>;
 			csi_sink: endpoint {
 				remote-endpoint = <&imx335_ep>;
-				data-lanes = <0 1>;
+				data-lanes = <1 2>;
 				bus-type = <4>;
 			};
 		};
