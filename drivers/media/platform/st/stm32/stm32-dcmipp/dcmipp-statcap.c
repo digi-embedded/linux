@@ -631,26 +631,12 @@ static void dcmipp_statcap_read_avg_stats(struct dcmipp_statcap_device *vcap)
 	}
 }
 
-static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
+static void dcmipp_statcap_update_local_buf(struct dcmipp_statcap_device *vcap)
 {
-	struct dcmipp_statcap_device *vcap =
-			container_of(arg, struct dcmipp_statcap_device, ved);
-	struct dcmipp_ent_device *ved = arg;
 	struct stm32_dcmipp_stat_avr_bins *avr_bins =
 		vcap->stat_location == DCMIPP_P1STXCR_SRC_LOC_PRE ? &vcap->local_buf.pre :
 								    &vcap->local_buf.post;
 	int i;
-
-	/* We only to do things if we are streaming */
-	if (!vb2_is_streaming(&vcap->queue))
-		return IRQ_HANDLED;
-
-	/* We are only interested in VSYNC interrupts */
-	if (!(ved->cmsr2 & DCMIPP_CMSR2_P1VSYNCF) &&
-	    !(ved->cmsr2 & DCMIPP_CMSR2_P2VSYNCF))
-		return IRQ_HANDLED;
-
-	spin_lock_irq(&vcap->irqlock);
 
 	/* Read the bad pixel count stat and store it locally */
 	vcap->local_buf.bad_pixel_count = reg_read(vcap, DCMIPP_P1BPRSR) &
@@ -776,10 +762,6 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 		break;
 	}
 
-	/* If a full capture cycle has been done, output data to a buffer */
-	if (vcap->stat_ready)
-		dcmipp_statcap_buffer_done(vcap);
-
 	/* Update the capture_state & prev_capture_state */
 	switch (vcap->stat_profile) {
 	case V4L2_STAT_PROFILE_FULL:
@@ -802,6 +784,24 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 		}
 		break;
 	}
+}
+
+static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
+{
+	struct dcmipp_statcap_device *vcap =
+			container_of(arg, struct dcmipp_statcap_device, ved);
+
+	/* We only to do things if we are streaming */
+	if (!vb2_is_streaming(&vcap->queue))
+		return IRQ_HANDLED;
+
+	spin_lock_irq(&vcap->irqlock);
+
+	dcmipp_statcap_update_local_buf(vcap);
+
+	/* If a full capture cycle has been done, output data to a buffer */
+	if (vcap->stat_ready)
+		dcmipp_statcap_buffer_done(vcap);
 
 	spin_unlock_irq(&vcap->irqlock);
 
