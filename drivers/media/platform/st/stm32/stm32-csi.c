@@ -968,7 +968,7 @@ static int stm32_csi_parse_dt(struct stm32_csi_dev *csi2priv)
 	}
 
 	csi2priv->num_lanes = v4l2_ep.bus.mipi_csi2.num_data_lanes;
-	if (csi2priv->num_lanes > STM32_CSI_LANES_MAX) {
+	if (!csi2priv->num_lanes || csi2priv->num_lanes > STM32_CSI_LANES_MAX) {
 		dev_err(csi2priv->dev, "Unsupported number of data-lanes: %d\n",
 			csi2priv->num_lanes);
 		return -EINVAL;
