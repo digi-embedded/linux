@@ -649,3 +649,5 @@
 		>;
 	};
 };
+
+#include "ccimx8mm-android.dtsi"

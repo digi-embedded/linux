@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2022 NXP
+ */
+
+/ {
+	firmware {
+		android {
+			compatible = "android,firmware";
+			/* sd card node which used if androidboot.boot_device_root=mmcblk1 */
+			boot_devices_mmcblk1 = "soc@0/30800000.bus/30b50000.mmc";
+			/* emmc node which used if androidboot.boot_device_root=mmcblk0 */
+			boot_devices_mmcblk0 = "soc@0/30800000.bus/30b60000.mmc";
+			vbmeta {
+				/*we need use FirstStageMountVBootV2 if we enable avb*/
+				compatible = "android,vbmeta";
+				/*parts means the partition witch can be mount in first stage*/
+				parts = "vbmeta,dtbo,boot,init_boot,system,vendor,vendor_dlkm,product";
+			};
+		};
+	};
+};
+
+&{/reserved-memory/linux,cma} {
+	status = "disabled";
+};
+
+&resmem {
+	ramoops@bdf00000 {
+		compatible = "ramoops";
+		reg = <0 0xbdf00000 0 0x00100000>;
+		record-size     = <0x00020000>;
+		console-size    = <0x00020000>;
+		ftrace-size     = <0x00020000>;
+		pmsg-size      = <0x00020000>;
+	};
+};

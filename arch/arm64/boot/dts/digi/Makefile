@@ -1,5 +1,6 @@
 ccimx8m_som_overlays := ccimx8m_bt.dtbo \
 			ccimx8m_mca-keypad.dtbo \
+			ccimx8m_trusty.dtbo \
 			ccimx8m_wifi.dtbo
 
 ccimx8m_dvk_overlays := ccimx8m-dvk_flexspi.dtbo \
