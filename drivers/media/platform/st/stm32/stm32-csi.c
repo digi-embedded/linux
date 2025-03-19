@@ -366,19 +366,31 @@ struct stm32_csi_dev *v4l2_subdev_to_csi2priv(struct v4l2_subdev *subdev)
 
 static int stm32_csi_setup_lane_merger(struct stm32_csi_dev *csi2priv)
 {
-	int i;
+	int i, j;
 	u32 lmcfgr;
+	u32 lanes_used = 0;
 
 	lmcfgr = readl_relaxed(csi2priv->base + STM32_CSI_LMCFGR);
 	lmcfgr &= ~(STM32_CSI_LMCFGR_LANENB_MASK | STM32_CSI_LMCFGR_DL0MAP_MASK |
 		    STM32_CSI_LMCFGR_DL1MAP_MASK);
 
-	for (i = 0; i < csi2priv->num_lanes; i++) {
-		/* Check that lane ID is < max number of lane */
-		if (!csi2priv->lanes[i] || csi2priv->lanes[i] > STM32_CSI_LANES_MAX) {
-			dev_err(csi2priv->dev, "Invalid lane id (%d)\n",
-				csi2priv->lanes[i]);
-			return -EINVAL;
+	/* We need to route all lanes, even if not enabled later on */
+	for (i = 0; i < STM32_CSI_LANES_MAX; i++) {
+		if (i < csi2priv->num_lanes) {
+			/* Check that lane ID is not 0 and < max number of lane */
+			if (!csi2priv->lanes[i] || csi2priv->lanes[i] > STM32_CSI_LANES_MAX) {
+				dev_err(csi2priv->dev, "Invalid lane id (%d)\n",
+					csi2priv->lanes[i]);
+				return -EINVAL;
+			}
+			lanes_used |= BIT(csi2priv->lanes[i]);
+		} else {
+			for (j = 1; j <= STM32_CSI_LANES_MAX; j++) {
+				if (!(lanes_used & BIT(j))) {
+					csi2priv->lanes[i] = j;
+					lanes_used |= BIT(j);
+				}
+			}
 		}
 		lmcfgr |= (csi2priv->lanes[i] << ((i * 4) +
 			   STM32_CSI_LMCFGR_DL0MAP_SHIFT));
