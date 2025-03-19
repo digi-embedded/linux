@@ -313,6 +313,7 @@
 				     <GIC_SPI 45 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 46 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scmi_clk CK_SCMI_HPDMA1>;
+			power-domains = <&ret_pd>;
 			#dma-cells = <3>;
 			st,axi-max-burst-len = <16>;
 			st,syscfg-arcr = <&syscfg 0x2050 0x1>;
@@ -338,6 +339,7 @@
 				     <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 62 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scmi_clk CK_SCMI_HPDMA2>;
+			power-domains = <&ret_pd>;
 			#dma-cells = <3>;
 			st,axi-max-burst-len = <16>;
 			st,syscfg-arcr = <&syscfg 0x2050 0x2>;
@@ -363,6 +365,7 @@
 				     <GIC_SPI 77 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 78 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scmi_clk CK_SCMI_HPDMA3>;
+			power-domains = <&ret_pd>;
 			#dma-cells = <3>;
 			st,axi-max-burst-len = <16>;
 			st,syscfg-arcr = <&syscfg 0x2050 0x4>;
