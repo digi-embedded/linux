@@ -573,28 +573,20 @@ void dcmipp_statcap_ent_release(struct dcmipp_ent_device *ved)
 	vb2_video_unregister_device(&vcap->vdev);
 }
 
-static void dcmipp_statcap_buffer_done(struct dcmipp_statcap_device *vcap)
+static void dcmipp_statcap_buffer_done(struct dcmipp_statcap_device *vcap,
+				       struct dcmipp_buf *dcmipp_buf)
 {
 	struct stm32_dcmipp_stat_buf *stat_buf;
-	struct dcmipp_buf *cur_buf = NULL;
 
-	/* Get an available buffer */
-	if (!list_empty(&vcap->buffers)) {
-		cur_buf = list_first_entry(&vcap->buffers, struct dcmipp_buf, list);
-		list_del(&cur_buf->list);
-	}
-	if (!cur_buf)
-		return;
-
-	stat_buf = (struct stm32_dcmipp_stat_buf *)vb2_plane_vaddr(&cur_buf->vb.vb2_buf, 0);
+	stat_buf = (struct stm32_dcmipp_stat_buf *)vb2_plane_vaddr(&dcmipp_buf->vb.vb2_buf, 0);
 	*stat_buf = vcap->local_buf;
 
 	/* Send buffer */
-	vb2_set_plane_payload(&cur_buf->vb.vb2_buf, 0,
+	vb2_set_plane_payload(&dcmipp_buf->vb.vb2_buf, 0,
 			      sizeof(struct stm32_dcmipp_stat_buf));
-	cur_buf->vb.sequence = vcap->sequence++;
-	cur_buf->vb.vb2_buf.timestamp = ktime_get_ns();
-	vb2_buffer_done(&cur_buf->vb.vb2_buf, VB2_BUF_STATE_DONE);
+	dcmipp_buf->vb.sequence = vcap->sequence++;
+	dcmipp_buf->vb.vb2_buf.timestamp = ktime_get_ns();
+	vb2_buffer_done(&dcmipp_buf->vb.vb2_buf, VB2_BUF_STATE_DONE);
 }
 
 static u32 dcmipp_statcap_get_src(u32 location,
@@ -790,6 +782,7 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 {
 	struct dcmipp_statcap_device *vcap =
 			container_of(arg, struct dcmipp_statcap_device, ved);
+	struct dcmipp_buf *cur_buf = NULL;
 
 	/* We only to do things if we are streaming */
 	if (!vb2_is_streaming(&vcap->queue))
@@ -800,8 +793,15 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 	dcmipp_statcap_update_local_buf(vcap);
 
 	/* If a full capture cycle has been done, output data to a buffer */
-	if (vcap->stat_ready)
-		dcmipp_statcap_buffer_done(vcap);
+	if (vcap->stat_ready) {
+		/* Get an available buffer */
+		if (!list_empty(&vcap->buffers)) {
+			cur_buf = list_first_entry(&vcap->buffers, struct dcmipp_buf, list);
+			list_del(&cur_buf->list);
+		}
+		if (cur_buf)
+			dcmipp_statcap_buffer_done(vcap, cur_buf);
+	}
 
 	spin_unlock_irq(&vcap->irqlock);
 
