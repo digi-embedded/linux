@@ -1,0 +1,79 @@
+* Digi GPIO controller for MCA of ConnectCore device tree bindings
+
+Required properties:
+- compatible : must be one of
+    - "digi,mca-gpio"
+    - "digi,mca-ioexp-gpio"
+
+- #gpio-cells : Should be two.
+  - first cell is the pin number
+  - second cell is used to specify flags. Flags are currently unused.
+
+- gpio-controller : Marks the device node as a GPIO controller.
+
+- interrupt-parent:     Phandle for the interrupt controller that
+                        services interrupts for this device.
+- interrupt-controller: Empty boolean property which marks the GPIO
+                        module as an IRQ controller.
+- #interrupt-cells:     Should be <2>.  The first cell is the GPIO number,
+                        the second should specify the flags.
+
+Optional properties:
+- pwroff-wakeup-capable-ios : List of MCA IOs that can wakeup the device from
+                              power off state. Note that only those IOs that
+                              are IRQ capable can wake up the system from low
+                              power modes.
+                              If the property is not provided, all MCA IOs are
+                              configured to wake up the system from power off,
+                              if the irq is enabled by the kernel.
+
+Examples:
+
+	mca_cc6ul: mca@7e {
+		mca_gpio: gpio {
+			compatible = "digi,mca-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc6ul>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+	};
+
+	mca_cc8x: mca@63 {
+		mca_gpio: gpio {
+			compatible = "digi,mca-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc8x>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+	};
+
+	mca_cc8m: mca@63 {
+		mca_gpio: gpio {
+			compatible = "digi,mca-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc8m>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+	};
+
+	mca_ioexp: mca_io@6e {
+		mca_ioexp_gpio: gpio {
+			compatible = "digi,mca-ioexp-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_ioexp>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+	};
+

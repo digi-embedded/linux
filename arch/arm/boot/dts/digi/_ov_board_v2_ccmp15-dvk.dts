@@ -1,0 +1,72 @@
+/*
+ * Copyright 2023 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/clock/stm32mp1-clks.h>
+#include <dt-bindings/reset/stm32mp1-resets.h>
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: version 2";
+
+			/* Disable USB OTG connector based on GPIO lines */
+			usb-b-connector {
+				status = "disabled";
+			};
+
+			/* Add USB OTG node based on native lines */
+			soc {
+				#address-cells = <1>;
+				#size-cells = <1>;
+
+				usbotg_hs_native_vbus: usb-otg-native-vbus@49000000 {
+					compatible = "st,stm32mp15-hsotg", "snps,dwc2";
+					reg = <0x49000000 0x10000>;
+					clocks = <&rcc USBO_K>, <&usbphyc>;
+					clock-names = "otg", "utmi";
+					resets = <&rcc USBO_R>;
+					reset-names = "dwc2";
+					interrupts-extended = <&exti 44 IRQ_TYPE_LEVEL_HIGH>;
+					g-rx-fifo-size = <512>;
+					g-np-tx-fifo-size = <32>;
+					g-tx-fifo-size = <256 16 16 16 16 16 16 16>;
+					dr_mode = "otg";
+					otg-rev = <0x200>;
+					usb33d-supply = <&usb33>;
+					power-domains = <&pd_core>;
+					wakeup-source;
+					pinctrl-0 = <&usbotg_hs_pins_a>;
+					pinctrl-names = "default";
+					phys = <&usbphyc_port1 0>;
+					phy-names = "usb2-phy";
+					vbus-supply = <&vbus_otg>;
+				};
+			};
+		};
+	};
+
+	/* Disable USB OTG node based on GPIO lines */
+	fragment@1 {
+		target = <&usbotg_hs>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+};
