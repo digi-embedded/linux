@@ -2706,7 +2706,7 @@
 		ranges = <0x0 0x0 0x0 0x80000000>;
 
 		dcmipp: dcmipp@48030000 {
-			compatible = "st,stm32mp25-dcmipp";
+			compatible = "st,stm32mp21-dcmipp";
 			reg = <0x48030000 0x1000>;
 			interrupts = <GIC_SPI 170 IRQ_TYPE_LEVEL_HIGH>;
 			resets = <&rcc DCMIPP_R>;
