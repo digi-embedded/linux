@@ -462,14 +462,9 @@ static int dcmipp_inp_configure_csi_dt(struct dcmipp_inp_device *inp,
 
 static int dcmipp_inp_configure_csi(struct dcmipp_inp_device *inp)
 {
-	int i, pipe_nb, ret;
+	int i, ret;
 
-	if (of_device_is_compatible(inp->dev->of_node, "st,stm32mp25-dcmipp"))
-		pipe_nb = 3;
-	else
-		pipe_nb = 1;
-
-	for (i = 0; i < pipe_nb; i++) {
+	for (i = 0; i < inp->ved.dcmipp->pipe_cfg->pipe_nb; i++) {
 		ret = dcmipp_inp_configure_csi_dt(inp, i);
 		if (ret)
 			return ret;
@@ -587,8 +582,6 @@ void dcmipp_inp_ent_release(struct dcmipp_ent_device *ved)
 	mutex_destroy(&inp->lock);
 }
 
-#define DCMIPP_INP_SINK_PAD_NB_MP13	1
-#define DCMIPP_INP_SINK_PAD_NB_MP25	3
 struct dcmipp_ent_device *dcmipp_inp_ent_init(const char *entity_name,
 					      struct dcmipp_device *dcmipp)
 {
@@ -598,13 +591,9 @@ struct dcmipp_ent_device *dcmipp_inp_ent_init(const char *entity_name,
 		MEDIA_PAD_FL_SOURCE, MEDIA_PAD_FL_SOURCE,
 	};
 	struct device *dev = dcmipp->dev;
-	u16 pads_nb = DCMIPP_INP_SINK_PAD_NB_MP25 + 1;
+	u16 pads_nb = dcmipp->pipe_cfg->pipe_nb + 1;
 	int ret;
 
-	if (of_device_is_compatible(dev->of_node, "st,stm32mp13-dcmipp"))
-		pads_nb = DCMIPP_INP_SINK_PAD_NB_MP13 + 1;
-	else if (of_device_is_compatible(dev->of_node, "st,stm32mp25-dcmipp"))
-		pads_nb = DCMIPP_INP_SINK_PAD_NB_MP25 + 1;
 
 	/* Allocate the inp struct */
 	inp = kzalloc(sizeof(*inp), GFP_KERNEL);
