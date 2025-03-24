@@ -632,6 +632,38 @@ err_pool_free:
 	return -ENOMEM;
 }
 
+static int stm32_dma3_chan_get_lap(struct stm32_dma3_chan *chan, struct stm32_dma3_swdesc *swdesc)
+{
+	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
+	unsigned long addr = (unsigned long)swdesc->lli[0].hwdesc;
+	size_t size = sizeof(struct stm32_dma3_hwdesc);
+	const char *str_axirmp = "Address remapping enabled on AXI port,";
+
+	if (ddata->gen_pool && gen_pool_has_addr(ddata->gen_pool, addr, size)) {
+		if (port_is_axi(ddata->ports_max_dw[ddata->lap])) {
+			if (port_is_ahb(ddata->ports_max_dw[1])) {
+				dev_notice_once(chan2dev(chan),
+						"%s force LL port on AHB to access %pad\n",
+						str_axirmp, &swdesc->lli[0].hwdesc_addr);
+				return 1;
+			}
+			/* We should not go there */
+			dev_err(chan2dev(chan), "%s %pad unreachable for LL\n",
+				str_axirmp, &swdesc->lli[0].hwdesc_addr);
+			kfree(swdesc);
+			return -EINVAL;
+		}
+	} else {
+		if (port_is_ahb(ddata->ports_max_dw[ddata->lap])) {
+			dev_notice_once(chan2dev(chan), "%s force LL port on AXI to access %pad\n",
+					str_axirmp, &swdesc->lli[0].hwdesc_addr);
+			return 0;
+		}
+	}
+
+	return ddata->lap;
+}
+
 static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_chan *chan, u32 count)
 {
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
@@ -664,24 +696,18 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 	swdesc->lli_size = count;
 
 	/*
-	 * Force using the second port (hopefully AHB) if addresses are remapped on AXI,
-	 * and LLI are in internal RAM.
+	 * If addresses are remapped on AXI, check if current linked-list allocated port allows
+	 * to address the linked-list items, if not:
+	 * - force using the second port (hopefully AHB) if LLI are in internal RAM,
+	 * - force using the first port (AXI) if LLI are not in internal RAM.
 	 */
-	if (ddata->axi_addr_offset && port_is_axi(ddata->ports_max_dw[lap]) &&
-	    ddata->gen_pool && gen_pool_has_addr(ddata->gen_pool,
-						 (unsigned long)swdesc->lli[0].hwdesc,
-						 sizeof(struct stm32_dma3_hwdesc))) {
-		if (port_is_ahb(ddata->ports_max_dw[1])) {
-			dev_notice_once(chan2dev(chan),
-				"Address remapping enabled on AXI port, force LL port on AHB\n");
-			lap = 1;
-		} else { /* We should not enter this condition */
-			dev_err(chan2dev(chan),
-				"Address remapping enabled on AXI port, %pad unreachable for LL\n",
-				&swdesc->lli[0].hwdesc_addr);
+	if (ddata->axi_addr_offset) {
+		ret = stm32_dma3_chan_get_lap(chan, swdesc);
+		if (ret < 0) {
 			kfree(swdesc);
 			return NULL;
 		}
+		lap = ret;
 	}
 
 	/* Set LL allocated port */
@@ -691,9 +717,6 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 	base_addr = stm32_dma3_translate_addr(ddata, lap, ddata2dev(ddata),
 					      swdesc->lli[0].hwdesc_addr);
 	writel_relaxed(base_addr & CLBAR_LBA, ddata->base + STM32_DMA3_CLBAR(chan->id));
-	if (ddata->axi_addr_offset && base_addr != swdesc->lli[0].hwdesc_addr)
-		dev_dbg(chan2dev(chan), "Configured LL base=%pap, real LL base=%pap\n",
-			&base_addr, &swdesc->lli[0].hwdesc_addr);
 
 	return swdesc;
 }
