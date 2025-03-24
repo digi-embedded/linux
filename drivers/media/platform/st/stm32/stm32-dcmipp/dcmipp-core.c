@@ -184,6 +184,20 @@ static const struct dcmipp_pipeline_config stm32mp25_pipe_cfg = {
 	.pipe_nb	= 3
 };
 
+#define DCMIPP_STM32MP21_VERR  0x31
+static const struct dcmipp_pipeline_config stm32mp21_pipe_cfg = {
+	.ents		= stm32mp25_ent_config,
+	.num_ents	= ARRAY_SIZE(stm32mp25_ent_config),
+	.links		= stm32mp25_ent_links,
+	.num_links	= ARRAY_SIZE(stm32mp25_ent_links),
+	.hw_revision	= DCMIPP_STM32MP21_VERR,
+	.has_csi2	= true,
+	.has_tpg	= true,
+	.has_histo	= true,
+	.needs_mclk	= true,
+	.pipe_nb	= 3
+};
+
 #define LINK_FLAG_TO_STR(f) ((f) == 0 ? "" :\
 			     (f) == MEDIA_LNK_FL_ENABLED ? "ENABLED" :\
 			     (f) == MEDIA_LNK_FL_IMMUTABLE ? "IMMUTABLE" :\
@@ -262,6 +276,7 @@ err_init_entity:
 
 static const struct of_device_id dcmipp_of_match[] = {
 	{ .compatible = "st,stm32mp13-dcmipp", .data = &stm32mp13_pipe_cfg },
+	{ .compatible = "st,stm32mp21-dcmipp", .data = &stm32mp21_pipe_cfg },
 	{ .compatible = "st,stm32mp25-dcmipp", .data = &stm32mp25_pipe_cfg },
 	{ /* end node */ },
 };
