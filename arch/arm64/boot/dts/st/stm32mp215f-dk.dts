@@ -328,14 +328,17 @@
 
 &hpdma {
 	memory-region = <&hpdma1_lli>;
+	lli-bus-interface = <1>;
 };
 
 &hpdma2 {
 	memory-region = <&hpdma2_lli>;
+	lli-bus-interface = <1>;
 };
 
 &hpdma3 {
 	memory-region = <&hpdma3_lli>;
+	lli-bus-interface = <1>;
 };
 
 &i2c2 {
