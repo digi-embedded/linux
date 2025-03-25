@@ -161,8 +161,21 @@ static inline int caam_algapi_init(struct device *dev)
 static inline void caam_algapi_exit(void)
 {
 }
-
 #endif /* CONFIG_CRYPTO_DEV_FSL_CAAM_CRYPTO_API */
+
+#ifdef CONFIG_CRYPTO_DEV_FSL_CAAM_RNG_ERRATA
+enum{
+	WA_E_REQ_DECO_FAILED	= 5,
+	WA_E_SW_TEST_FAILED	= 6,
+	WA_E_INVALID_PARM	= 7,
+	WA_E_TIMEOUT		= 8,
+	WA_E_SH_NOT_INIT	= 9,
+	WA_E_AGAIN		= 11,
+};
+
+int rng_workaround_run(struct device *dev, unsigned long ent_dly,
+		       int state_handle_mask, int gen_sk, int reseed);
+#endif /* CONFIG_CRYPTO_DEV_FSL_CAAM_RNG_ERRATA */
 
 #ifdef CONFIG_CRYPTO_DEV_FSL_CAAM_AHASH_API
 

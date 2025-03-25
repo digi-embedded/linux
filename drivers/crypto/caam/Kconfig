@@ -173,6 +173,14 @@ config CRYPTO_DEV_FSL_CAAM_PRNG_API
 config CRYPTO_DEV_FSL_CAAM_BLOB_GEN
 	bool
 
+config CRYPTO_DEV_FSL_CAAM_RNG_ERRATA
+	bool "Enable SW test for CAAM TRNG Output"
+	depends on CRYPTO_DEV_FSL_CAAM_RNG_API
+	help
+	  Selecting this will disable CAAM RNG HW health tests and
+	  enable SW tests for TRNG output data. Then, instantiate DRBG
+	  in deterministic mode.
+
 config CRYPTO_DEV_FSL_CAAM_TK_API
 	bool "Register tagged key cryptography implementations with Crypto API"
 	default y

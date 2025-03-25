@@ -30,6 +30,30 @@ EXPORT_SYMBOL(caam_dpaa2);
 #include "qi.h"
 #endif
 
+static int force_rng_errata = 0;
+
+#ifdef CONFIG_CAAM_ALLOW_FORCE_RNG_FAIL
+static int __init get_rng_fail(char *str)
+{
+	get_option(&str, &force_rng_errata);
+
+	return 0;
+}
+early_param("rng_fail", get_rng_fail);
+#endif
+
+#ifdef CONFIG_CAAM_ALLOW_DEINST_RNG
+static int deinst_rng_if_initialized = 0;
+
+static int __init get_deinst_rng(char *str)
+{
+	get_option(&str, &deinst_rng_if_initialized);
+
+	return 0;
+}
+early_param("deinst_rng", get_deinst_rng);
+#endif
+
 /*
  * Descriptor to instantiate RNG State Handle 0 in normal mode and
  * load the JDKEK, TDKEK and TDSK registers
@@ -689,6 +713,21 @@ static int caam_ctrl_rng_init(struct device *dev)
 	if (!(ctrlpriv->mc_en && ctrlpriv->pr_support) && rng_vid >= 4) {
 		ctrlpriv->rng4_sh_init =
 			rd_reg32(&ctrl->r4tst[0].rdsta);
+
+#ifdef CONFIG_CAAM_ALLOW_DEINST_RNG
+		/*
+		 *Just for testing purposes, allow to deinstantiate the rng
+		 * based on the config provided through command line
+		 */
+		if (deinst_rng_if_initialized) {
+			/* verify if the RNG was already initialized */
+			if (ctrlpriv->rng4_sh_init) {
+				deinstantiate_rng(dev, ctrlpriv->rng4_sh_init);
+				ctrlpriv->rng4_sh_init =
+					rd_reg32(&ctrl->r4tst[0].rdsta);
+			}
+		}
+#endif
 		/*
 		 * If the secure keys (TDKEK, JDKEK, TDSK), were already
 		 * generated, signal this to the function that is instantiating
@@ -740,9 +779,29 @@ static int caam_ctrl_rng_init(struct device *dev)
 				 */
 				cpu_relax();
 		} while ((ret == -EAGAIN) && (ent_delay < RTSDCTL_ENT_DLY_MAX));
-		if (ret) {
-			dev_err(dev, "failed to instantiate RNG");
-			return ret;
+
+		if (ret || force_rng_errata) {
+			dev_err(dev, ret ? "failed to instantiate RNG" : "forcing RNG workaround");
+#ifdef CONFIG_CRYPTO_DEV_FSL_CAAM_RNG_ERRATA
+			//if RNG instantiation failed in normal case, try SW workaround
+			dev_err(dev,"applying RNG workaround\n");
+
+			ent_delay = RTSDCTL_ENT_DLY_MIN;
+			do{
+				int inst_handles = rd_reg32(&ctrl->r4tst[0].rdsta) & 0x3;
+				int secure_keys = (rd_reg32(&ctrl->r4tst[0].rdsta) & 0xC0000000) ? 0 : 1;
+				dev_err(dev,"rng_workaround_run %d\n", ent_delay);
+
+				ret = rng_workaround_run(dev, ent_delay, inst_handles, secure_keys, 0);
+				if (ret == -WA_E_AGAIN || ret == -WA_E_SW_TEST_FAILED){
+					ent_delay *= 2;
+					cpu_relax();
+				}
+
+			} while ((ret == -WA_E_AGAIN || ret == -WA_E_SW_TEST_FAILED) && (ent_delay < RTSDCTL_ENT_DLY_MAX));
+#endif
+			if (ret)
+				return ret;
 		}
 		/*
 		 * Set handles initialized by this module as the complement of

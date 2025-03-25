@@ -185,6 +185,11 @@
 			#size-cells = <1>;
 		};
 
+		rng_workaround: sram@0x916000 {
+			compatible = "mmio-sram";
+			reg = <0x916000 0x2000>;
+		};
+
 		ocram_optee: sram@918000 {
 			compatible = "fsl,optee-lpm-sram";
 			reg = <0x918000 0x8000>;
@@ -892,6 +897,7 @@
 				clocks = <&clks IMX6UL_CLK_CAAM_IPG>, <&clks IMX6UL_CLK_CAAM_ACLK>,
 					 <&clks IMX6UL_CLK_CAAM_MEM>;
 				clock-names = "ipg", "aclk", "mem";
+				sram = <&rng_workaround>;
 
 				sec_jr0: jr@1000 {
 					compatible = "fsl,sec-v4.0-job-ring";
