@@ -6,29 +6,29 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	ccmp157-dvk.dtb \
 	ccmp157-mfg-functional.dtb \
 	ccmp157-mfg-functional-wb.dtb \
-	_ov_board_mikroe-accel2-click_ccmp13-dvk.dtbo \
-	_ov_board_mikroe-accel2-click_ccmp15-dvk.dtbo \
-	_ov_board_mikroe-gyro-click_ccmp13-dvk.dtbo \
-	_ov_board_mikroe-gyro-click_ccmp15-dvk.dtbo \
-	_ov_board_mikroe-i2c-to-spi-click_ccmp13-dvk.dtbo \
-	_ov_board_mikroe-i2c-to-spi-click_ccmp15-dvk.dtbo \
-	_ov_board_nhd-3-5-640480ef-msxp-mipi-dsi_ccmp15-dvk.dtbo \
-	_ov_board_can1_ccmp15-dvk.dtbo \
-	_ov_board_can2_ccmp15-dvk.dtbo \
-	_ov_board_dlc0200ccp04df-mipi-dsi_ccmp15-dvk.dtbo \
-	_ov_board_eth0-10-100_ccmp15-dvk.dtbo \
-	_ov_board_fusion10-lvds_ccmp15-dvk.dtbo \
-	_ov_board_fusion7-parallel_ccmp15-dvk.dtbo \
-	_ov_board_g101evn010-lvds_ccmp15-dvk.dtbo \
-	_ov_board_sv4e-mipi-analyzer_ccmp15-dvk.dtbo \
-	_ov_board_pwm8_ccmp13-dvk.dtbo \
-	_ov_board_v1_ccmp15-dvk.dtbo \
-	_ov_board_v2_ccmp13-dvk.dtbo \
-	_ov_board_v2_ccmp15-dvk.dtbo \
-	_ov_som_bt_ccmp13.dtbo \
-	_ov_som_bt_ccmp15.dtbo \
-	_ov_som_bt_test_ccmp13.dtbo \
-	_ov_som_bt_test_ccmp15.dtbo \
-	_ov_som_v1_ccmp15.dtbo \
-	_ov_som_wifi_ccmp13.dtbo \
-	_ov_som_wifi_ccmp15.dtbo
+	ccmp13-dvk_mikroe-accel2-click.dtbo \
+	ccmp15-dvk_mikroe-accel2-click.dtbo \
+	ccmp13-dvk_mikroe-gyro-click.dtbo \
+	ccmp15-dvk_mikroe-gyro-click.dtbo \
+	ccmp13-dvk_mikroe-i2c-to-spi-click.dtbo \
+	ccmp15-dvk_mikroe-i2c-to-spi-click.dtbo \
+	ccmp15-dvk_nhd-3-5-640480ef-msxp-mipi-dsi.dtbo \
+	ccmp15-dvk_can1.dtbo \
+	ccmp15-dvk_can2.dtbo \
+	ccmp15-dvk_dlc0200ccp04df-mipi-dsi.dtbo \
+	ccmp15-dvk_eth0-10-100.dtbo \
+	ccmp15-dvk_fusion10-lvds.dtbo \
+	ccmp15-dvk_fusion7-parallel.dtbo \
+	ccmp15-dvk_g101evn010-lvds.dtbo \
+	ccmp15-dvk_sv4e-mipi-analyzer.dtbo \
+	ccmp13-dvk_pwm8.dtbo \
+	ccmp15-dvk_v1.dtbo \
+	ccmp13-dvk_v2.dtbo \
+	ccmp15-dvk_v2.dtbo \
+	ccmp13_bt.dtbo \
+	ccmp15_bt.dtbo \
+	ccmp13_bt_test.dtbo \
+	ccmp15_bt_test.dtbo \
+	ccmp15_v1.dtbo \
+	ccmp13_wifi.dtbo \
+	ccmp15_wifi.dtbo
