@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2023 Digi International, Inc.
+ * Copyright 2022-2025, Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -16,8 +16,8 @@
 #include <dt-bindings/leds/common.h>
 #include <dt-bindings/rtc/rtc-stm32.h>
 #include "ccmp13.dtsi"
-#include "stm32mp13xc.dtsi"
-#include "stm32mp13-pinctrl.dtsi"
+#include "../st/stm32mp13xc.dtsi"
+#include "../st/stm32mp13-pinctrl.dtsi"
 
 / {
 	model = "Digi International ConnectCore MP13 DVK.";

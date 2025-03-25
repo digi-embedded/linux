@@ -1,5 +1,5 @@
 /*
- * Copyright 2022, 2023 Digi International, Inc.
+ * Copyright 2022-2025, Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -9,8 +9,8 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-#include "stm32mp15-m4-srm.dtsi" /* Cortex-M4 Peripherals */
-//#include "stm32mp15-m4-srm-pinctrl.dtsi"
+#include "../st/stm32mp15-m4-srm.dtsi" /* Cortex-M4 Peripherals */
+//#include "../st/stm32mp15-m4-srm-pinctrl.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
 #include <dt-bindings/rtc/rtc-stm32.h>
