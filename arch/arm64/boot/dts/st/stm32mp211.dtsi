@@ -1503,6 +1503,7 @@
 				reg = <0x404c0000 0x0 0x400>;
 				clocks = <&rcc CK_BUS_CRC>;
 				access-controllers = <&rifsc 109>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
 
