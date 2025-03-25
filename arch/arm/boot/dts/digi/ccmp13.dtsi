@@ -93,14 +93,6 @@
 	status = "okay";
 };
 
-&dma1 {
-	sram = <&dma_pool>;
-};
-
-&dma2 {
-	sram = <&dma_pool>;
-};
-
 &dts {
 	status = "okay";
 };
@@ -185,13 +177,6 @@
 	scmi_vrefbuf: voltd-vrefbuf {
 		voltd-name = "vrefbuf";
 		regulator-name = "vrefbuf";
-	};
-};
-
-&sram {
-	dma_pool: dma-sram@0 {
-		reg = <0x0 0x4000>;
-		pool;
 	};
 };
 

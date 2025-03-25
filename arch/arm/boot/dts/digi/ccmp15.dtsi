@@ -9,7 +9,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-#include "../st/stm32mp15-m4-srm.dtsi" /* Cortex-M4 Peripherals */
+//#include "../st/stm32mp15-m4-srm.dtsi" /* Cortex-M4 Peripherals */
 //#include "../st/stm32mp15-m4-srm-pinctrl.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
@@ -138,23 +138,15 @@
 	cpu-supply = <&vddcore>;
 };
 
-&sram {
-	dma_pool: dma_pool@0 {
-		reg = <0x50000 0x10000>;
+&sram4 {
+	dcmi_pool: dcmi-pool@0 {
+		reg = <0x0 0x8000>;
 		pool;
 	};
 };
 
 &crc1 {
 	status = "okay";
-};
-
-&dma1 {
-	sram = <&dma_pool>;
-};
-
-&dma2 {
-	sram = <&dma_pool>;
 };
 
 &dts {

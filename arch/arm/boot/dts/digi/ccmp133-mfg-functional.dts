@@ -25,8 +25,8 @@
 	digi,machine,name = "ccmp133-dvk";
 
 	aliases {
-		ethernet0 = &eth1;
-		ethernet1 = &eth2;
+		ethernet0 = &ethernet1;
+		ethernet1 = &ethernet2;
 		mmc1 = &sdmmc1; /* Micro SD */
 		serial0 = &uart5;
 		serial1 = &usart1;
@@ -43,7 +43,7 @@
 };
 
 /* 10/100/1000 Ethernet */
-&eth1 {
+&ethernet1 {
 	status = "disabled";
 	pinctrl-0 = <&eth1_rmii_pins_a>;
 	pinctrl-1 = <&eth1_rmii_sleep_pins_a>;

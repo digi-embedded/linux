@@ -22,6 +22,7 @@
 #include "../st/stm32mp15xxac-pinctrl.dtsi"
 /* Digi ConnectCore CCMP15 */
 #include "ccmp15.dtsi"
+#include <dt-bindings/media/video-interfaces.h>
 #include <dt-bindings/pwm/pwm.h>
 
 / {
@@ -244,6 +245,7 @@
 
 /* Display Controller for MIPI-DSI to HDMI */
 &ltdc {
+	default-on;
 	status = "okay";
 
 	port {
@@ -256,28 +258,16 @@
 &dsi {
 	#address-cells = <1>;
 	#size-cells = <0>;
+	default-on;
 	status = "okay";
+};
 
-	ports {
-		#address-cells = <1>;
-		#size-cells = <0>;
+&dsi_in {
+	remote-endpoint = <&ltdc_ep0_out>;
+};
 
-		port@0 {
-			reg = <0>;
-			dsi_in: endpoint {
-				remote-endpoint = <&ltdc_ep0_out>;
-			};
-		};
-
-		port@1 {
-			reg = <1>;
-			dsi_out: endpoint {
-				remote-endpoint = <&lt8912_1_in>;
-			};
-		};
-
-	};
-
+&dsi_out {
+	remote-endpoint = <&lt8912_1_in>;
 };
 
 &spi4 {
@@ -303,6 +293,7 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "okay";
+
 	pwm2: pwm {
 		pinctrl-0 = <&ccmp15_pwm2_pins>;
 		pinctrl-1 = <&ccmp15_pwm2_sleep_pins>;
@@ -318,6 +309,7 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "okay";
+
 	pwm4: pwm {
 		pinctrl-0 = <&ccmp15_pwm4_pins>;
 		pinctrl-1 = <&ccmp15_pwm4_sleep_pins>;
@@ -378,7 +370,7 @@
 		clock-names = "mclk";
 		#sound-dai-cells = <0>;
 		#clock-cells = <0>;
-	        status = "okay";
+		status = "okay";
 	};
 
 	ov5640: camera@3c {
@@ -486,7 +478,16 @@
 &usbh_ehci {
 	phys = <&usbphyc_port0>;
 	phy-names = "usb";
+	#address-cells = <1>;
+	#size-cells = <0>;
 	status = "okay";
+
+	/* onboard HUB */
+	hub@1 {
+		compatible = "usb424,2514";
+		reg = <1>;
+		vdd-supply = <&vbus_sw>;
+	};
 };
 
 &usbotg_hs {
@@ -509,6 +510,11 @@
 &usbphyc_port0 {
 	phy-supply = <&vdd_usb>;
 	st,phy-tuning = <&usb_phy_tuning>;
+
+	connector {
+		compatible = "usb-a-connector";
+		vbus-supply = <&vbus_sw>;
+	};
 };
 
 &usbphyc_port1 {
@@ -522,10 +528,19 @@
 	pinctrl-0 = <&ccmp15_dcmi_pins_a>;
 	pinctrl-1 = <&ccmp15_dcmi_sleep_pins_a>;
 
+	/*
+	 * Enable DMA-MDMA chaining by adding a SRAM pool and
+	 * a MDMA channel
+	 */
+	sram = <&dcmi_pool>;
+
+	dmas = <&dmamux1 75 0x400 0x01>, <&mdma1 0 0x3 0x1200000a 0 0>;
+	dma-names = "tx", "mdma_tx";
+
 	port {
 		dcmi_0: endpoint {
 			remote-endpoint = <&ov5640_0>;
-			bus-type = <5>;
+			bus-type = <MEDIA_BUS_TYPE_PARALLEL>;
 			bus-width = <8>;
 			hsync-active = <0>;
 			vsync-active = <0>;
