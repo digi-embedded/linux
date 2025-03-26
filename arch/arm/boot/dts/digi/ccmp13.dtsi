@@ -11,6 +11,7 @@
 
 #include "../st/stm32mp133.dtsi"
 #include "../st/stm32mp13xc.dtsi"
+#include "../st/stm32mp13xd.dtsi"
 #include "../st/stm32mp13-pinctrl.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
