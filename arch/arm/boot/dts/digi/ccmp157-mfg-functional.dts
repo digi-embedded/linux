@@ -15,11 +15,6 @@
 
 /dts-v1/;
 
-/* STM32MP157 CPU */
-#include "../st/stm32mp157.dtsi"
-#include "../st/stm32mp15xa.dtsi"
-#include "../st/stm32mp15-pinctrl.dtsi"
-#include "../st/stm32mp15xxac-pinctrl.dtsi"
 /* Digi ConnectCore CCMP15 */
 #include "ccmp15.dtsi"
 

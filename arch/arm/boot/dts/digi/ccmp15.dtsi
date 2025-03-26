@@ -9,6 +9,11 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
+/* STM32MP157 CPU */
+#include "../st/stm32mp157.dtsi"
+#include "../st/stm32mp15xa.dtsi"
+#include "../st/stm32mp15-pinctrl.dtsi"
+#include "../st/stm32mp15xxac-pinctrl.dtsi"
 //#include "../st/stm32mp15-m4-srm.dtsi" /* Cortex-M4 Peripherals */
 //#include "../st/stm32mp15-m4-srm-pinctrl.dtsi"
 #include <dt-bindings/gpio/gpio.h>
