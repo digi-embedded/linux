@@ -44,6 +44,10 @@
 #define MDF_IS_INTERLEAVED_FILT_NOT_0(adc)	({ typeof(adc) x = (adc);\
 						MDF_IS_INTERLEAVED_FILT(x) && !MDF_IS_FILTER0(x); })
 
+#define STM32_MDF_ERR_SCK_FREQ BIT(1)
+#define STM32_MDF_ERR_MODE_RATIO BIT(2)
+#define STM32_MDF_ERR_DECIM_RATIO BIT(3)
+
 struct stm32_mdf_dev_data {
 	int type;
 	int (*init)(struct device *dev, struct iio_dev *indio_dev);
@@ -698,28 +702,63 @@ static int stm32_mdf_adc_set_filters_config(struct iio_dev *indio_dev, unsigned 
 	return stm32_mdf_adc_apply_filters_config(adc, scale);
 }
 
-static int stm32_mdf_adc_check_clock_config(struct stm32_mdf_adc *adc, unsigned long sck_freq)
+static int stm32_mdf_adc_check_clock_config(struct stm32_mdf_adc *adc, unsigned long *sck_freq)
 {
-	unsigned int ratio;
-	unsigned int decim_ratio;
+	unsigned long cck_expected_freq;
+	unsigned int ratio, cic_ratio;
+	int ret, error = 0;
 
-	ratio = DIV_ROUND_CLOSEST(adc->mdf->fproc, sck_freq);
-	decim_ratio = DIV_ROUND_CLOSEST(24, adc->decim_cic);
+	/*
+	 * The cck expected rate is set at probe from "clock-frequency" device tree property.
+	 * The serial interface clock sck (aka cck) is derived from MDF kernel clock frequency.
+	 * The kernel clock rate may have been changed by another consumer, or MDF dividers
+	 * may have been updated through clk_get_rate() call.
+	 * Ensure that kernel clock rate and MDF dividers, still provide the right sck/cck rate
+	 */
+	cck_expected_freq = stm32_mdf_core_get_cck(adc->mdf);
+	if (*sck_freq != cck_expected_freq) {
+		dev_dbg(adc->dev, "Wrong sck_freq [%lu]Hz. Expected [%lu]Hz.\n",
+			*sck_freq, cck_expected_freq);
+		error |= STM32_MDF_ERR_SCK_FREQ;
+	}
 
+	/*
+	 * Mode SPI:    check Fproc >= 4 * Fsck
+	 * Mode LF SPI: check Fproc >= 2 * Fsck
+	 */
+	ratio = DIV_ROUND_CLOSEST(adc->mdf->fproc, *sck_freq);
 	if ((adc->sitf->mode == STM32_MDF_MODE_SPI && ratio <= 4) ||
-	    (adc->sitf->mode == STM32_MDF_MODE_LF_SPI && ratio <= 2))
-		goto err;
+	    (adc->sitf->mode == STM32_MDF_MODE_LF_SPI && ratio <= 2)) {
+		dev_dbg(adc->dev, "Wrong Fproc/Fsck ratio [%d]. sitf mode [%d], RSFLT [%s]\n",
+			ratio, adc->sitf->mode, adc->rsflt_bypass ? "off" : "on");
+		error |= STM32_MDF_ERR_MODE_RATIO;
+	}
 
-	if (adc->rsflt_bypass && ratio <= decim_ratio)
-		goto err;
+	/* RSFLT enabled: check Fproc > 24 * Fsck / (MCICD+1) */
+	cic_ratio = DIV_ROUND_CLOSEST(24, adc->decim_cic);
+	if (!adc->rsflt_bypass && ratio <= cic_ratio)
+		error |= STM32_MDF_ERR_DECIM_RATIO;
+
+	/* If we found an error, try to restore clocks initial settings */
+	if (error) {
+		ret = stm32_mdf_core_restore_cck(adc->mdf);
+		if (ret < 0)
+			goto err;
+
+		*sck_freq = clk_get_rate(adc->sitf->sck);
+		if (!*sck_freq) {
+			ret = -EINVAL;
+			goto err;
+		}
+	}
 
 	return 0;
 
 err:
-	dev_err(adc->dev, "Wrong Fproc/Fsck ratio [%d] for sitf mode [%d] with RSFLT [%s]\n",
-		ratio, adc->sitf->mode, adc->rsflt_bypass ? "off" : "on");
+	dev_err(adc->dev, "Wrong clock configuration [0x%x]. Clock recovering returned [%d]\n",
+		error, ret);
 
-	return -EINVAL;
+	return ret;
 }
 
 static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample_freq, int lock)
@@ -728,7 +767,6 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 	struct device *dev = &indio_dev->dev;
 	unsigned int decim_ratio;
 	unsigned long delta, delta_ppm, sck_freq;
-	unsigned long cck_expected_freq;
 	int ret;
 
 	if (lock) {
@@ -753,25 +791,9 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 	if (!sample_freq)
 		sample_freq = sck_freq / MDF_DEFAULT_DECIM_RATIO;
 
-	/*
-	 * MDF may share its parent clock with SAI, so kernel clock rate may have been changed.
-	 * The set_rate ops is called implicitly through clk_get_rate() call, and MDF dividers
-	 * may have been updated to keep the expected rate on cck clock. Check if sitf clock
-	 * frequency is still the expected one. If not, try to restore the kernel clock rate
-	 * for audio use case.
-	 */
-	cck_expected_freq = stm32_mdf_core_get_cck(adc->mdf);
-	if (sck_freq != cck_expected_freq) {
-		ret = stm32_mdf_core_restore_cck(adc->mdf);
-		if (ret < 0)
-			goto err;
-
-		sck_freq = clk_get_rate(adc->sitf->sck);
-		if (!sck_freq) {
-			ret = -EINVAL;
-			goto err;
-		}
-	}
+	ret = stm32_mdf_adc_check_clock_config(adc, &sck_freq);
+	if (ret)
+		goto err;
 
 	decim_ratio = DIV_ROUND_CLOSEST(sck_freq, sample_freq);
 
@@ -800,10 +822,6 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 	}
 
 	ret = stm32_mdf_adc_set_filters_config(indio_dev, decim_ratio);
-	if (ret < 0)
-		goto err;
-
-	ret = stm32_mdf_adc_check_clock_config(adc, sck_freq);
 	if (ret < 0)
 		goto err;
 
