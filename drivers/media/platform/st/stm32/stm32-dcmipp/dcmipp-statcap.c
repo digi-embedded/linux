@@ -121,7 +121,10 @@ struct dcmipp_statcap_device {
 
 	void __iomem *regs;
 
-	struct stm32_dcmipp_stat_buf local_buf;
+	/* Local copy of statistics */
+	struct stm32_dcmipp_stat_avr_bins stat_pre;
+	struct stm32_dcmipp_stat_avr_bins stat_post;
+	u32 bad_pixel_count;
 };
 
 static int dcmipp_statcap_querycap(struct file *file, void *priv,
@@ -579,7 +582,9 @@ static void dcmipp_statcap_buffer_done(struct dcmipp_statcap_device *vcap,
 	struct stm32_dcmipp_stat_buf *stat_buf;
 
 	stat_buf = (struct stm32_dcmipp_stat_buf *)vb2_plane_vaddr(&dcmipp_buf->vb.vb2_buf, 0);
-	*stat_buf = vcap->local_buf;
+	stat_buf->pre = vcap->stat_pre;
+	stat_buf->post = vcap->stat_post;
+	stat_buf->bad_pixel_count = vcap->bad_pixel_count;
 
 	/* Send buffer */
 	vb2_set_plane_payload(&dcmipp_buf->vb.vb2_buf, 0,
@@ -598,11 +603,11 @@ static u32 dcmipp_statcap_get_src(u32 location,
 static void dcmipp_statcap_read_avg_stats(struct dcmipp_statcap_device *vcap)
 {
 	struct stm32_dcmipp_stat_avr_bins *avr_bins =
-		vcap->stat_location == DCMIPP_P1STXCR_SRC_LOC_PRE ? &vcap->local_buf.pre :
-								    &vcap->local_buf.post;
+		vcap->stat_location == DCMIPP_P1STXCR_SRC_LOC_PRE ? &vcap->stat_pre :
+								    &vcap->stat_post;
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(vcap->local_buf.pre.average_RGB); i++) {
+	for (i = 0; i < ARRAY_SIZE(vcap->stat_pre.average_RGB); i++) {
 		avr_bins->average_RGB[i] = reg_read(vcap, DCMIPP_P1STXSR(i));
 		/* Normalize values */
 		avr_bins->average_RGB[i] <<= 8;
@@ -626,13 +631,13 @@ static void dcmipp_statcap_read_avg_stats(struct dcmipp_statcap_device *vcap)
 static void dcmipp_statcap_update_local_buf(struct dcmipp_statcap_device *vcap)
 {
 	struct stm32_dcmipp_stat_avr_bins *avr_bins =
-		vcap->stat_location == DCMIPP_P1STXCR_SRC_LOC_PRE ? &vcap->local_buf.pre :
-								    &vcap->local_buf.post;
+		vcap->stat_location == DCMIPP_P1STXCR_SRC_LOC_PRE ? &vcap->stat_pre :
+								    &vcap->stat_post;
 	int i;
 
 	/* Read the bad pixel count stat and store it locally */
-	vcap->local_buf.bad_pixel_count = reg_read(vcap, DCMIPP_P1BPRSR) &
-						DCMIPP_P1BPRSR_BADCNT_MASK;
+	vcap->bad_pixel_count = reg_read(vcap, DCMIPP_P1BPRSR) &
+					 DCMIPP_P1BPRSR_BADCNT_MASK;
 
 	/*
 	 * This is the core function for statistic extraction, within the
@@ -646,7 +651,9 @@ static void dcmipp_statcap_update_local_buf(struct dcmipp_statcap_device *vcap)
 	switch (vcap->capture_state) {
 	case COLD_START:
 		vcap->stat_ready = false;
-		memset(&vcap->local_buf, 0, sizeof(vcap->local_buf));
+		memset(&vcap->stat_pre, 0, sizeof(vcap->stat_pre));
+		memset(&vcap->stat_post, 0, sizeof(vcap->stat_post));
+
 		/*
 		 * All stats profile starts from the PRE statistics, except the
 		 * AVERAGE POST
@@ -679,7 +686,7 @@ static void dcmipp_statcap_update_local_buf(struct dcmipp_statcap_device *vcap)
 		if (vcap->prev_capture_state == PHY_BIN_3_SHA_AV_RGB) {
 			/* The data capture refer to the previous location */
 			avr_bins = !(vcap->stat_location == DCMIPP_P1STXCR_SRC_LOC_PRE) ?
-					&vcap->local_buf.pre : &vcap->local_buf.post;
+					&vcap->stat_pre : &vcap->stat_post;
 			/* Accumulators contains the 4th set of BINS */
 			for (i = 0; i < 3; i++)
 				avr_bins->bins[i + 9] = reg_read(vcap, DCMIPP_P1STXSR(i));
