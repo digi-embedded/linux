@@ -516,6 +516,35 @@ static void dcmipp_isp_config_decimation(struct dcmipp_isp_device *isp,
 	reg_write(isp, DCMIPP_P1DECR, decr);
 }
 
+/* Histogram block - only available starting from stm32mp21 */
+#define DCMIPP_P1HSCR			0x8b0
+/* 4 Comp / 64 bins per comp / 1 region / decimated by 2*/
+#define DCMIPP_P1HSCR_DEFAULT		0x08411000
+
+#define DCMIPP_P1HSSTR			0x8b4
+#define DCMIPP_P1HSSTR_START(x, y)	((x) | ((y) << 16))
+
+#define DCMIPP_P1HSSZR			0x8b8
+#define DCMIPP_P1HSSZR_SIZE(w, h)	((w) | ((h) << 16))
+static void dcmipp_isp_config_histo(struct dcmipp_isp_device *isp,
+				    struct v4l2_rect *compose)
+{
+	if (!isp->ved.dcmipp->pipe_cfg->has_histo)
+		return;
+
+	/*
+	 * Configure a default setting for histogram
+	 * In order to be able to capture statistics even if histogram settings
+	 * aren't yet done, perform initial settings of histogram with always
+	 * valid settings
+	 */
+	reg_write(isp, DCMIPP_P1HSCR, DCMIPP_P1HSCR_DEFAULT);
+	reg_write(isp, DCMIPP_P1HSSTR,
+		  DCMIPP_P1HSSTR_START(compose->width / 4, compose->height / 4));
+	reg_write(isp, DCMIPP_P1HSSZR,
+		  DCMIPP_P1HSSZR_SIZE(compose->width / 2, compose->height / 2));
+}
+
 static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
@@ -556,6 +585,9 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 
 		/* Configure Demosaicing */
 		dcmipp_isp_config_demosaicing(isp, sink_fmt);
+
+		/* Configure default ISP Histo area */
+		dcmipp_isp_config_histo(isp, compose);
 	} else {
 		if (isp->usecnt > 1)
 			goto out;
