@@ -138,6 +138,14 @@
 	cpu-supply = <&vddcore>;
 };
 
+&cpu1{
+	cpu-supply = <&vddcore>;
+};
+
+&gpu {
+	contiguous-area = <&gpu_reserved>;
+};
+
 &sram4 {
 	dcmi_pool: dcmi-pool@0 {
 		reg = <0x0 0x8000>;

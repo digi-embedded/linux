@@ -168,14 +168,6 @@
 	status = "okay";
 };
 
-&cpu1{
-	cpu-supply = <&vddcore>;
-};
-
-&gpu {
-	contiguous-area = <&gpu_reserved>;
-};
-
 /* Micro SD */
 &sdmmc2 {
 	pinctrl-names = "default", "opendrain", "sleep";

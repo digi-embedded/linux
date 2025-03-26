@@ -86,14 +86,6 @@
 	status = "okay";
 };
 
-&cpu1{
-	cpu-supply = <&vddcore>;
-};
-
-&gpu {
-	contiguous-area = <&gpu_reserved>;
-};
-
 /* 10/100 Ethernet */
 &ethernet0 {
 	status = "disabled";
