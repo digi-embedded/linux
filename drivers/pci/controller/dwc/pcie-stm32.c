@@ -242,6 +242,14 @@ static irqreturn_t stm32_pcie_aer_msi_irq_handler(int irq, void *priv)
 	struct stm32_pcie *stm32_pcie = priv;
 
 	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEAERRCMSICR, 1);
+
+	return IRQ_WAKE_THREAD;
+}
+
+static irqreturn_t stm32_pcie_aer_msi_isr_handler(int irq, void *priv)
+{
+	struct stm32_pcie *stm32_pcie = priv;
+
 	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEAERRCMSICR, 0);
 
 	return IRQ_HANDLED;
@@ -304,9 +312,10 @@ static int stm32_add_pcie_port(struct stm32_pcie *stm32_pcie,
 		}
 
 		if (stm32_pcie->aer_irq) {
-			ret = devm_request_irq(dev, stm32_pcie->aer_irq,
-					       stm32_pcie_aer_msi_irq_handler,
-					       IRQF_SHARED, "stm32-aer-msi", stm32_pcie);
+			ret = devm_request_threaded_irq(dev, stm32_pcie->aer_irq,
+							stm32_pcie_aer_msi_irq_handler,
+							stm32_pcie_aer_msi_isr_handler,
+							IRQF_SHARED, "stm32-aer-msi", stm32_pcie);
 			if (ret < 0) {
 				dev_err(dev, "failed to request AER MSI IRQ %d\n",
 					stm32_pcie->aer_irq);
