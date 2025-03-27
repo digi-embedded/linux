@@ -1196,6 +1196,7 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	const struct stm32_rproc_data *desc;
 	struct tee_rproc *trproc = NULL;
+	const char *fw_name;
 	struct rproc *rproc;
 	int ret;
 
@@ -1219,9 +1220,15 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 		 */
 		dev_info(dev, "Support of signed firmware only\n");
 	}
+
+	/* Look for an optional firmware name */
+	ret = rproc_of_parse_firmware(dev, 0, &fw_name);
+	if (ret < 0 && ret != -EINVAL)
+		goto free_tee;
+
 	rproc = rproc_alloc(dev, np->name,
 			    trproc ? &st_rproc_tee_ops : &st_rproc_ops,
-			    NULL, sizeof(*ddata));
+			    fw_name, sizeof(*ddata));
 	if (!rproc) {
 		ret = -ENOMEM;
 		goto free_tee;
