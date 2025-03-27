@@ -147,6 +147,10 @@ properties:
       If defined, when remoteproc is probed, it loads the default firmware and
       starts the remote processor.
 
+  firmware-name:
+    maxItems: 1
+    description: Default name of the remote processor firmware.
+
   power-domains:
     items:
       - description: CLUSTER power domain
