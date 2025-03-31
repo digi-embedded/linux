@@ -75,7 +75,8 @@ struct stm32_mdf_adc_chan {
  * @cb: iio consumer callback function pointer
  * @cb_priv: pointer to consumer private structure
  * @sck_freq: serial interface frequency
- * @sample_freq: audio sampling frequency
+ * @requested_sample_freq: requested sample frequency from IIO sysfs or from audio stream
+ * @sample_freq: actual sampling frequency
  * @fl_id: filter index
  * @decim_ratio: total decimation ratio
  * @decim_cic: CIC filter decimation ratio
@@ -111,6 +112,7 @@ struct stm32_mdf_adc {
 	int (*cb)(const void *data, size_t size, void *cb_priv);
 	void *cb_priv;
 	unsigned long sck_freq;
+	unsigned long requested_sample_freq;
 	unsigned long sample_freq;
 	unsigned int fl_id;
 	unsigned int decim_ratio;
@@ -761,19 +763,13 @@ err:
 	return ret;
 }
 
-static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample_freq, int lock)
+static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev)
 {
 	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
 	struct device *dev = &indio_dev->dev;
 	unsigned int decim_ratio;
-	unsigned long delta, delta_ppm, sck_freq;
+	unsigned long delta, delta_ppm, sck_freq, sample_freq = adc->requested_sample_freq;
 	int ret;
-
-	if (lock) {
-		ret = stm32_mdf_core_lock_kclk_rate(adc->mdf);
-		if (ret < 0)
-			return ret;
-	}
 
 	sck_freq = clk_get_rate(adc->sitf->sck);
 	if (!sck_freq) {
@@ -783,8 +779,10 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 	}
 
 	/*
+	 * In analog use cases, the sampling frequency may not be already set in IIO sysfs.
+	 * (In audio use cases, the sampling frequency is always provided on stream startup)
 	 * If requested sampling frequency is 0, set a default frequency.
-	 * The default frequency is computed from default decimation ratio.
+	 * The default frequency is computed from the default decimation ratio.
 	 * This ensures that a filter configuration can be found whatever the selected filter
 	 * order. (Most constrained case is order 5)
 	 */
@@ -828,12 +826,7 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 	adc->sample_freq = DIV_ROUND_CLOSEST(sck_freq, decim_ratio);
 	adc->decim_ratio = decim_ratio;
 
-	return 0;
-
 err:
-	if (lock)
-		stm32_mdf_core_unlock_kclk_rate(adc->mdf);
-
 	return ret;
 }
 
@@ -849,9 +842,18 @@ static int stm32_mdf_adc_start_mdf(struct iio_dev *indio_dev)
 		return ret;
 	}
 
+	ret = mdf_adc_set_samp_freq(indio_dev);
+	if (ret < 0)
+		goto err;
+
 	ret = stm32_mdf_core_start_mdf(adc->mdf);
 	if (ret < 0)
-		clk_disable_unprepare(adc->sitf->sck);
+		goto err;
+
+	return 0;
+
+err:
+	clk_disable_unprepare(adc->sitf->sck);
 
 	return ret;
 }
@@ -873,21 +875,6 @@ static int stm32_mdf_adc_start_conv(struct iio_dev *indio_dev)
 	ret = stm32_mdf_sitf_start(adc->sitf);
 	if (ret < 0)
 		return ret;
-
-	/*
-	 * In audio use cases the sampling frequency is always provided on stream startup.
-	 * In analog use cases the sampling frequency may not be already set in IIO sysfs.
-	 * Set a default frequency here, if frequency is not yet defined.
-	 * Note: The filters configuration is applied when the sampling frequency is set.
-	 * This involves that all the filters are already probed in interleaved case,
-	 * before setting the sampling frequency.
-	 */
-	if (!adc->sample_freq) {
-		/* Setting frequency to 0 means that the default frequency will be applied. */
-		ret = mdf_adc_set_samp_freq(indio_dev, 0, 1);
-		if (ret < 0)
-			goto stop_sitf;
-	}
 
 	ret = stm32_mdf_adc_start_filter(adc);
 	if (ret < 0)
@@ -1368,24 +1355,36 @@ err_conv:
 static int stm32_mdf_adc_write_raw(struct iio_dev *indio_dev, struct iio_chan_spec const *chan,
 				   int val, int val2, long mask)
 {
+	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
 	int ret;
 
-	switch (mask) {
-	case IIO_CHAN_INFO_SAMP_FREQ:
-		if (!val)
-			return -EINVAL;
+	if (mask != IIO_CHAN_INFO_SAMP_FREQ || !val)
+		return -EINVAL;
 
-		ret = iio_device_claim_direct_mode(indio_dev);
-		if (ret)
-			return ret;
-
-		ret = mdf_adc_set_samp_freq(indio_dev, val, 0);
-		iio_device_release_direct_mode(indio_dev);
-
+	ret = iio_device_claim_direct_mode(indio_dev);
+	if (ret)
 		return ret;
+
+	/* Set requested_sample_freq right now, as used by mdf_adc_set_samp_freq() */
+	adc->requested_sample_freq = val;
+
+	if (adc->dev_data->type == STM32_MDF_IIO) {
+		ret = stm32_mdf_core_lock_kclk_rate(adc->mdf);
+		if (ret)
+			goto release_direct_mode;
+
+		ret = mdf_adc_set_samp_freq(indio_dev);
+
+		stm32_mdf_core_unlock_kclk_rate(adc->mdf);
 	}
 
-	return -EINVAL;
+release_direct_mode:
+	iio_device_release_direct_mode(indio_dev);
+
+	if (ret)
+		adc->requested_sample_freq = 0;
+
+	return ret;
 }
 
 static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spec const *chan,
