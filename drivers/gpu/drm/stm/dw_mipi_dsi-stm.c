@@ -338,6 +338,7 @@ static int dsi_phy_141_pll_get_params(struct dw_mipi_dsi_stm *dsi,
 {
 	int i, n;
 	int delta, best_delta; /* all in khz */
+	int lane_mbps = 2 * clkout_khz / 1000; /* in Mhz */
 
 	/* Early checks preventing division by 0 & odd results */
 	if (clkin_khz <= 0 || clkout_khz <= 0)
@@ -345,10 +346,9 @@ static int dsi_phy_141_pll_get_params(struct dw_mipi_dsi_stm *dsi,
 
 	/* find frequency mapping */
 	for (i = 0; i < ARRAY_SIZE(dppa_map); i++) {
-		if (dsi->lane_mbps < dppa_map[i].data_rate) {
+		if (lane_mbps < dppa_map[i].data_rate) {
 			if (i == ARRAY_SIZE(dppa_map) - 1)
 				DRM_WARN("Could not find frequency mapped index\n");
-			i--;
 			break;
 		}
 	}
@@ -357,7 +357,17 @@ static int dsi_phy_141_pll_get_params(struct dw_mipi_dsi_stm *dsi,
 	if (index)
 		*index = i;
 
-	*odf = int_pow(2, ((dppa_map[i].odf & WRPCR1_ODF) >> 28));
+	/* ODF: Output division factor */
+	switch (dppa_map[i].odf) {
+	case(3):
+		*odf = 8; break;
+	case(2):
+		*odf = 4; break;
+	case(1):
+		*odf = 2; break;
+	default:
+		*odf = 1; break;
+	}
 
 	best_delta = 1000000; /* big started value (1000000khz) */
 
@@ -605,7 +615,10 @@ static unsigned long dw_mipi_dsi_clk_recalc_rate(struct clk_hw *hw,
 
 	clk_disable_unprepare(dsi->pclk);
 
-	return (unsigned long)pll_out_khz * 1000;
+	if (dsi->hw_version == HWVER_141)
+		return (unsigned long)pll_out_khz * 2 * 1000;
+	else
+		return (unsigned long)pll_out_khz * 1000;
 }
 
 static long dw_mipi_dsi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
@@ -644,7 +657,10 @@ static long dw_mipi_dsi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 
 	clk_disable_unprepare(dsi->pclk);
 
-	return pll_out_khz * 1000;
+	if (dsi->hw_version == HWVER_141)
+		return pll_out_khz * 2 * 1000;
+	else
+		return pll_out_khz * 1000;
 }
 
 static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
@@ -687,6 +703,7 @@ static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 		int1 = 0x00;
 		gmp = 0x01;
 		prop = dppa_map[dppa_index].prop;
+		odf = dppa_map[dppa_index].odf;
 
 		/* set DLD, HSFR & CCF */
 		val = (hsfreq << 8) | ccf;
@@ -695,8 +712,7 @@ static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 		val = ((ndiv - 2) << 4) | (idf - 1);
 		dsi_write(dsi, DSI_WRPCR0, val);
 
-		val = ((odf - 1) << 28) | (vco << 24) | (bias << 16)
-		       | (int1 << 8) | (gmp << 6) | prop;
+		val = (odf << 28) | (vco << 24) | (bias << 16) | (int1 << 8) | (gmp << 6) | prop;
 		dsi_write(dsi, DSI_WRPCR1, val);
 
 		dsi_write(dsi, DSI_PCTLR, PCTLR_CKEN);
