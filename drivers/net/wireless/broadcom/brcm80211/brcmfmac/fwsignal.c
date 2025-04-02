@@ -1199,7 +1199,7 @@ static void brcmf_fws_return_credits(struct brcmf_fws_info *fws,
 
 	fws->fifo_credit_map |= 1 << fifo;
 
-	if (fifo > BRCMF_FWS_FIFO_AC_BK &&
+	if (fifo >= BRCMF_FWS_FIFO_AC_BK &&
 	    fifo <= BRCMF_FWS_FIFO_AC_VO) {
 		for (lender_ac = BRCMF_FWS_FIFO_AC_VO; lender_ac >= 0;
 		     lender_ac--) {
@@ -2253,6 +2253,7 @@ static void brcmf_fws_dequeue_worker(struct work_struct *worker)
 	u32 hslot;
 	u32 ifidx;
 	int ret;
+	u32 highest_lender = 0;
 
 	fws = container_of(worker, struct brcmf_fws_info, fws_dequeue_work);
 	drvr = fws->drvr;
@@ -2302,12 +2303,18 @@ static void brcmf_fws_dequeue_worker(struct work_struct *worker)
 				break;
 		}
 
-		if (fifo >= BRCMF_FWS_FIFO_AC_BE &&
+		if (fifo >= BRCMF_FWS_FIFO_AC_BK &&
 		    fifo <= BRCMF_FWS_FIFO_AC_VO &&
 		    fws->fifo_credit[fifo] == 0 &&
 		    !fws->bus_flow_blocked) {
+			highest_lender = fifo - 1;
+
+			/* Borrow Credit for BK access category from Higer AC queues */
+			if (fifo == BRCMF_FWS_FIFO_AC_BK)
+				highest_lender = BRCMF_FWS_FIFO_AC_BE;
+
 			while (brcmf_fws_borrow_credit(fws,
-						       fifo - 1, fifo,
+						       highest_lender, fifo,
 						       true) == 0) {
 				skb = brcmf_fws_deq(fws, fifo);
 				if (!skb) {
