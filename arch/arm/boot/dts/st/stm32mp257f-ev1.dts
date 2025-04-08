@@ -16,3 +16,7 @@
 		arm,cpu-registers-not-fw-configured;
 	};
 };
+
+&mm_ospi1 {
+	reg = <0x0 0x60000000 0x0 0x4000000>;
+};
