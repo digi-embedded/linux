@@ -1101,6 +1101,7 @@ struct dwc2_hsotg {
 	struct workqueue_struct *wq_gadget;
 	struct work_struct wf_otg;
 	struct work_struct wf_gadget;
+	struct delayed_work dw_gsetup;
 	struct timer_list wkp_timer;
 	enum dwc2_lx_state lx_state;
 	struct dwc2_gregs_backup gr_backup;
