@@ -207,8 +207,8 @@
 			digi,key-sleep;
 			digi,short-press-kcode=<KEY_POWER>;
 			digi,debounce-ms = <100>;
-			digi,pwroff-delay-sec = <6>;
-			digi,pwroff-guard-sec = <30>;
+			digi,pwroff-delay-sec = <3>;
+			digi,pwroff-guard-sec = <7>;
 		};
 
 		rtc {
