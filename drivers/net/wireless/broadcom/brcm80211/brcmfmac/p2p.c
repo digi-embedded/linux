@@ -18,6 +18,7 @@
 #include "p2p.h"
 #include "cfg80211.h"
 #include "feature.h"
+#include "common.h"
 
 /* parameters used for p2p escan */
 #define P2PAPI_SCAN_NPROBES 1
@@ -1510,7 +1511,8 @@ int brcmf_p2p_notify_action_frame_rx(struct brcmf_if *ifp,
 			       ETH_ALEN);
 	memcpy(mgmt_frame->sa, e->addr, ETH_ALEN);
 	mgmt_frame->frame_control = cpu_to_le16(IEEE80211_STYPE_ACTION);
-	memcpy(mgmt_frame->u.body, frame, mgmt_frame_len);
+	unsafe_memcpy(&mgmt_frame->u, frame, mgmt_frame_len,
+		      /* alloc enough buf*/);
 	mgmt_frame_len += offsetof(struct ieee80211_mgmt, u.body);
 
 	freq = ieee80211_channel_to_frequency(ch.control_ch_num,
