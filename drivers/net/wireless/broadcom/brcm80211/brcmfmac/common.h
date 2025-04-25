@@ -28,6 +28,11 @@
 #define SDIO_SDMODE_4BIT	BIT(5)	/* Set 4-bit Bus mode */
 #endif /* !SDIO_IDLECLOCK_DIS */
 
+#ifndef unsafe_memcpy
+#define unsafe_memcpy(dst, src, bytes, justification)		\
+	memcpy(dst, src, bytes)
+#endif
+
 /* Definitions for the module global and device specific settings are defined
  * here. Two structs are used for them. brcmf_mp_global_t and brcmf_mp_device.
  * The mp_global is instantiated once in a global struct and gets initialized
