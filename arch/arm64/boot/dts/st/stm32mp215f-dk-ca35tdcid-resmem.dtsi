@@ -42,8 +42,18 @@
 			no-map;
 		};
 
-		cm33_sram1: cm33-sram1@a061000 {
-			reg = <0x0 0xa061000 0x0 0x8000>;
+		scmi_cid2_s: scmi-cid2-s@a061000 {
+			reg = <0x0 0xa061000 0x0 0x1000>;
+			no-map;
+		};
+
+		scmi_cid2_ns: scmi-cid2-ns@a062000 {
+			reg = <0x0 0xa062000 0x0 0x1000>;
+			no-map;
+		};
+
+		cm33_sram1: cm33-sram1@a063000 {
+			reg = <0x0 0xa063000 0x0 0xd000>;
 			no-map;
 		};
 
