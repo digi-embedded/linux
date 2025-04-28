@@ -130,6 +130,12 @@
 	vdda-supply = <&vdda>;
 };
 
+/* Secure watchdog running in OP-TEE */
+&arm_wdt {
+	timeout-sec = <32>;
+	status = "okay";
+};
+
 &bsec {
 	/* By default, make the OTP bits read-only */
 	read-only;
@@ -172,11 +178,6 @@
 };
 
 &ipcc {
-	status = "okay";
-};
-
-&iwdg2 {
-	timeout-sec = <32>;
 	status = "okay";
 };
 

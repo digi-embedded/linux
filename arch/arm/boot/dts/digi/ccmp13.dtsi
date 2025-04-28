@@ -82,6 +82,12 @@
 	vdda-supply = <&scmi_vdd_adc>;
 };
 
+/* Secure watchdog running in OP-TEE */
+&arm_wdt {
+	timeout-sec = <32>;
+	status = "okay";
+};
+
 &bsec {
 	/* By default, make the OTP bits read-only */
 	read-only;
@@ -129,11 +135,6 @@
 	/* spare dmas for other usage */
 	/delete-property/dmas;
 	/delete-property/dma-names;
-};
-
-&iwdg2 {
-	timeout-sec = <32>;
-	status = "okay";
 };
 
 &rtc {
