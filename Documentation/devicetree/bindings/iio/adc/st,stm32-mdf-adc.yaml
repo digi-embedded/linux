@@ -124,7 +124,7 @@ patternProperties:
           Select serial interface protocol
           - spi: SPI mode
           - lf_spi: low frequency SPI mode for low power applications
-        $ref: "/schemas/types.yaml#/definitions/string"
+        $ref: /schemas/types.yaml#/definitions/string
         enum:
           - spi
           - lf_spi
@@ -231,10 +231,12 @@ patternProperties:
       - "#size-cells"
       - st,sitf
 
+    unevaluatedProperties: false
+
     patternProperties:
       "^channel@([0-7])$":
         type: object
-        $ref: "adc.yaml"
+        $ref: adc.yaml
         description: Represents the external channel which is connected to the MDF.
 
         properties:
