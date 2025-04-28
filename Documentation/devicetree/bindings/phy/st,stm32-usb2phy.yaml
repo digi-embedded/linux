@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 %YAML 1.2
 ---
-$id: "http://devicetree.org/schemas/phy/st,stm32-usb2phy.yaml#"
-$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+$id: http://devicetree.org/schemas/phy/st,stm32-usb2phy.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
 
 title: STMicroelectronics STM32 MPU High-Speed USB PHY
 
@@ -17,7 +17,7 @@ maintainers:
 
 properties:
   compatible:
-    - enum:
+    enum:
       - st,stm32mp21-usb2phy
       - st,stm32mp25-usb2phy
 
@@ -39,7 +39,7 @@ properties:
     description: phandle to regulator providing 1V8 power supply to the USB2 HS PHY
 
   st,syscfg:
-    $ref: /schemas/types.yaml#/definitions/phandle-array #(arm/stm32/st,stm32-syscon.yaml#)
+    $ref: /schemas/types.yaml#/definitions/phandle-array # (arm/stm32/st,stm32-syscon.yaml#)
     description: Phandle to the STM32-MPU System Controller DT node
                  <syscon-handle cr-offset>
 
