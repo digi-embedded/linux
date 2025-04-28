@@ -618,7 +618,7 @@
 	bluetooth {
 		shutdown-gpios = <&gpiog 4 GPIO_ACTIVE_HIGH>;
 		compatible = "brcm,bcm43438-bt";
-		max-speed = <3000000>;
+		max-speed = <2000000>;
 		vbat-supply = <&scmi_v3v3>;
 		vddio-supply = <&scmi_v3v3>;
 	};
