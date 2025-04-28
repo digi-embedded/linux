@@ -650,7 +650,7 @@
 	bluetooth {
 		shutdown-gpios = <&mcp23017 13 GPIO_ACTIVE_HIGH>;
 		compatible = "brcm,bcm43438-bt";
-		max-speed = <3000000>;
+		max-speed = <2000000>;
 		vbat-supply = <&v3v3_ao>;
 		vddio-supply = <&v3v3_ao>;
 	};
