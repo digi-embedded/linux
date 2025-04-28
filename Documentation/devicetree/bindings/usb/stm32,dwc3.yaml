@@ -26,7 +26,7 @@ properties:
   ranges: true
 
   st,syscfg:
-    $ref: /schemas/types.yaml#/definitions/phandle-array #(arm/stm32/st,stm32-syscon.yaml#)
+    $ref: /schemas/types.yaml#/definitions/phandle-array # (arm/stm32/st,stm32-syscon.yaml#)
     description: <Phandle to the STM32-MPU System Controller DT node> <offset-for-usr3drcr-reg>
 
   st,vbusen-active-low:
