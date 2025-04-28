@@ -24,6 +24,17 @@ properties:
   clocks:
     maxItems: 1
 
+  st,syscfg:
+    description: Use to select the type of USB signals to output, either OTG or
+                 HOST.
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    items:
+      - items:
+          - description: Phandle of syscon node with the HDP option register.
+          - description: The offset of the HDP option register.
+          - description: The mask to use when writing to the register.
+          - description: The value to write in the register.
+
 patternProperties:
   '-pins$':
     type: object
@@ -44,17 +55,8 @@ patternProperties:
 
     additionalProperties: false
 
-  st,syscfg:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    items:
-      - items:
-        - description: Phandle of syscon node with the HDP option register.
-        - description: The offset of the HDP option register.
-        - description: The mask to use when writing to the register.
-        - description: The value to write in the register.
-
 allOf:
-  - $ref: "pinctrl.yaml#"
+  - $ref: pinctrl.yaml#
 
 required:
   - compatible
@@ -68,13 +70,13 @@ examples:
     #include <dt-bindings/clock/stm32mp1-clks.h>
     #include <dt-bindings/pinctrl/stm32mp15-hdp.h>
     //Example 1
-    hdp: pinctrl@54090000 {
+    pinctrl@54090000 {
       compatible = "st,stm32mp-hdp";
       reg = <0x54090000 0x400>;
       clocks = <&rcc HDP>;
       pinctrl-names = "default";
       pinctrl-0 = <&hdp2>;
-      hdp2: hdp2-pins {
+      hdp2-pins {
         function = HDP2_GPOVAL_2;
         pins = "hdp2";
       };
@@ -84,11 +86,11 @@ examples:
     #include <dt-bindings/clock/stm32mp1-clks.h>
     #include <dt-bindings/pinctrl/stm32mp15-hdp.h>
     //Example 2
-    hdp: pinctrl@54090000 {
+    pinctrl@54090000 {
       compatible = "st,stm32mp-hdp";
       reg = <0x54090000 0x400>;
       clocks = <&rcc HDP>;
-      hdp2: hdp2-pins {
+      hdp2-pins {
         pins = "hdp2";
         function = HDP2_GPOVAL_2;
       };
