@@ -2402,9 +2402,12 @@
 			pcie_ep: pcie-ep@48400000 {
 				compatible = "st,stm32mp25-pcie-ep", "snps,dw-pcie-ep";
 				num-lanes = <1>;
-				reg = <0x48400000 0x400000>,
+				reg = <0x48400000 0x100000>,
+				      <0x48500000 0x100000>,
+				      <0x48700000 0x80000>,
+				      <0x48780000 0x80000>,
 				      <0x10000000 0x8000000>;
-				reg-names = "dbi", "addr_space";
+				reg-names = "dbi", "dbi2", "atu", "dma", "addr_space";
 				st,syscfg = <&syscfg>;
 				clocks = <&rcc CK_BUS_PCIE>;
 				clock-names = "core";
