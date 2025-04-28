@@ -43,8 +43,8 @@ properties:
   compatible:
     items:
       - enum:
-        - st,stm32mp21-rifsc
-        - st,stm32mp25-rifsc
+          - st,stm32mp21-rifsc
+          - st,stm32mp25-rifsc
       - const: simple-bus
 
   reg:
