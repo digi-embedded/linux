@@ -10,7 +10,7 @@ maintainers:
   - Amelie Delaunay <amelie.delaunay@foss.st.com>
 
 allOf:
-  - $ref: "i3c.yaml#"
+  - $ref: i3c.yaml#
 
 properties:
   compatible:
