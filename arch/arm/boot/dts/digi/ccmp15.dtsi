@@ -22,6 +22,32 @@
 #include <dt-bindings/rtc/rtc-stm32.h>
 
 / {
+	firmware {
+		optee: optee {
+			compatible = "linaro,optee-tz";
+			method = "smc";
+			interrupt-parent = <&intc>;
+			interrupts = <GIC_PPI 15 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>;
+		};
+
+		scmi: scmi {
+			compatible = "linaro,scmi-optee";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			linaro,optee-channel-id = <0>;
+
+			scmi_clk: protocol@14 {
+				reg = <0x14>;
+				#clock-cells = <1>;
+			};
+
+			scmi_reset: protocol@16 {
+				reg = <0x16>;
+				#reset-cells = <1>;
+			};
+		};
+	};
+
 	aliases {
 		ethernet0 = &ethernet0;
 		i2c1 = &i2c1;
@@ -148,21 +174,12 @@
 
 &cpu0{
 	cpu-supply = <&vddcore>;
+	clocks = <&scmi_clk CK_SCMI_MPU>;
 };
 
 &cpu1{
 	cpu-supply = <&vddcore>;
-};
-
-&gpu {
-	contiguous-area = <&gpu_reserved>;
-};
-
-&sram4 {
-	dcmi_pool: dcmi-pool@0 {
-		reg = <0x0 0x8000>;
-		pool;
-	};
+	clocks = <&scmi_clk CK_SCMI_MPU>;
 };
 
 &crc1 {
@@ -171,40 +188,6 @@
 
 &dts {
 	status = "okay";
-};
-
-&hash1 {
-	status = "okay";
-};
-
-&ipcc {
-	status = "okay";
-};
-
-&rng1 {
-	status = "okay";
-};
-
-&rtc {
-	st,alarm = <RTC_OUT1>;
-	pinctrl-0 = <&ccmp15_rtc_out1_pins_a>;
-	pinctrl-names = "default";
-	status = "okay";
-};
-
-&m4_rproc {
-	memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
-			<&vdev0vring1>, <&vdev0buffer>, <&mcu_rsc_table>;
-	mboxes = <&ipcc 0>, <&ipcc 1>, <&ipcc 2>, <&ipcc 3>;
-	mbox-names = "vq0", "vq1", "shutdown", "detach";
-	interrupt-parent = <&exti>;
-	interrupts = <68 1>;
-	wakeup-source;
-	status = "okay";
-};
-
-&vrefbuf {
-	vdda-supply = <&vdda>;
 };
 
 &fmc {
@@ -225,6 +208,20 @@
 	};
 };
 
+&gpioz {
+	clocks = <&scmi_clk CK_SCMI_GPIOZ>;
+};
+
+&gpu {
+	contiguous-area = <&gpu_reserved>;
+};
+
+&hash1 {
+	clocks = <&scmi_clk CK_SCMI_HASH1>;
+	resets = <&scmi_reset RST_SCMI_HASH1>;
+	status = "okay";
+};
+
 &i2c4 {
 	clock-frequency = <400000>;
 	pinctrl-names = "default", "sleep";
@@ -234,6 +231,8 @@
 	i2c-scl-falling-time-ns = <20>;
 	scl-gpios = <&gpioz 4 GPIO_ACTIVE_HIGH>;
 	sda-gpios = <&gpioz 5 GPIO_ACTIVE_HIGH>;
+	clocks = <&scmi_clk CK_SCMI_I2C4>;
+	resets = <&scmi_reset RST_SCMI_I2C4>;
 	status = "okay";
 	/* spare dmas for other usage */
 	/delete-property/dmas;
@@ -379,6 +378,64 @@
 			status = "disabled";
 		};
 	};
+};
+
+&ipcc {
+	status = "okay";
+};
+
+&m4_rproc {
+	memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
+			<&vdev0vring1>, <&vdev0buffer>, <&mcu_rsc_table>;
+	mboxes = <&ipcc 0>, <&ipcc 1>, <&ipcc 2>, <&ipcc 3>;
+	mbox-names = "vq0", "vq1", "shutdown", "detach";
+	resets = <&scmi_reset RST_SCMI_MCU>,
+		 <&scmi_reset RST_SCMI_MCU_HOLD_BOOT>;
+	reset-names = "mcu_rst", "hold_boot";
+	/delete-property/ st,syscfg-holdboot;
+	interrupt-parent = <&exti>;
+	interrupts = <68 1>;
+	wakeup-source;
+	status = "okay";
+};
+
+&mdma1 {
+	resets = <&scmi_reset RST_SCMI_MDMA>;
+};
+
+&rcc {
+	compatible = "st,stm32mp1-rcc-secure", "syscon";
+	clock-names = "hse", "hsi", "csi", "lse", "lsi";
+	clocks = <&scmi_clk CK_SCMI_HSE>,
+		 <&scmi_clk CK_SCMI_HSI>,
+		 <&scmi_clk CK_SCMI_CSI>,
+		 <&scmi_clk CK_SCMI_LSE>,
+		 <&scmi_clk CK_SCMI_LSI>;
+};
+
+&rng1 {
+	clocks = <&scmi_clk CK_SCMI_RNG1>;
+	resets = <&scmi_reset RST_SCMI_RNG1>;
+	status = "okay";
+};
+
+&rtc {
+	st,alarm = <RTC_OUT1>;
+	pinctrl-0 = <&ccmp15_rtc_out1_pins_a>;
+	pinctrl-names = "default";
+	clocks = <&scmi_clk CK_SCMI_RTCAPB>, <&scmi_clk CK_SCMI_RTC>;
+	status = "okay";
+};
+
+&sram4 {
+	dcmi_pool: dcmi-pool@0 {
+		reg = <0x0 0x8000>;
+		pool;
+	};
+};
+
+&vrefbuf {
+	vdda-supply = <&vdda>;
 };
 
 &pinctrl {
