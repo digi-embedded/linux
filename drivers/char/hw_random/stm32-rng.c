@@ -542,6 +542,8 @@ static int __maybe_unused stm32_rng_resume(struct device *dev)
 		writel_relaxed(reg, priv->base + RNG_CR);
 	}
 
+	if (priv->bus_clk)
+		clk_disable_unprepare(priv->bus_clk);
 	clk_disable_unprepare(priv->clk);
 
 	return 0;
