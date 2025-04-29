@@ -24,15 +24,23 @@ properties:
     maxItems: 1
 
   clocks:
-    maxItems: 2
+    items:
+      - description: bus clock
+      - description: csi clock
+    minItems: 1
 
   clock-names:
     items:
       - const: kclk
       - const: mclk
+    minItems: 1
 
   resets:
     maxItems: 1
+
+  access-controllers:
+    minItems: 1
+    maxItems: 2
 
   port:
     $ref: /schemas/graph.yaml#/$defs/port-base
@@ -58,9 +66,6 @@ properties:
           hsync-active: true
           vsync-active: true
 
-        required:
-          - pclk-sample
-
 required:
   - compatible
   - reg
@@ -74,15 +79,15 @@ allOf:
       properties:
         compatible:
           contains:
-            const: st,stm32mp13-dcmipp
+            enum:
+              - st,stm32mp13-dcmipp
     then:
       properties:
         clocks:
           maxItems: 1
 
         clock-names:
-          items:
-            - const: kclk
+          maxItems: 1
 
         port:
           properties:
@@ -90,6 +95,13 @@ allOf:
               properties:
                 bus-type:
                   enum: [5, 6]
+    else:
+      properties:
+        clocks:
+          minItems: 2
+
+        clock-names:
+          minItems: 2
 
 additionalProperties: false
 
