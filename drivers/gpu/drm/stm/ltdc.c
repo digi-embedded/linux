@@ -2249,6 +2249,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 	u32 bus_width_log2, lcr, gc2r, lxc1r;
 	const struct ltdc_plat_data *pdata = of_device_get_match_data(ddev->dev);
 	int ret, i;
+	bool is_layer_secured = false;
 
 	/*
 	 * at least 1 layer must be managed & the number of layers
@@ -2301,6 +2302,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 					 */
 					if (!strcmp("l3", fwl[i].entry)) {
 						ldev->caps.nb_layers--;
+						is_layer_secured = true;
 					} else {
 						stm32_firewall_release_access(fwl);
 						return ret;
@@ -2424,6 +2426,13 @@ static int ltdc_get_caps(struct drm_device *ddev)
 				ldev->caps.plane_scaling[i] = true;
 			else
 				ldev->caps.plane_scaling[i] = false;
+		}
+
+		if (of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc") ||
+		    of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+			/* Do not expose the crc to the user if the third layer is secure.*/
+			if (is_layer_secured)
+				ldev->caps.crc = false;
 		}
 		break;
 	default:
