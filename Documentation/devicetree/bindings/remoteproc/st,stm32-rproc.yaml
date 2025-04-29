@@ -238,7 +238,7 @@ examples:
             <0x30000000 0x40000>,
             <0x38000000 0x10000>;
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
-      st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+      st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
     };
 
 ...
