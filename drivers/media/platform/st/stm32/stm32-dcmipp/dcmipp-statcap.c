@@ -918,6 +918,7 @@ static void dcmipp_statcap_update_local_buf(struct dcmipp_statcap_device *vcap)
 	case AV_READ:
 		/* State used for the AVERAGE PRE capture mode */
 		dcmipp_statcap_read_avg_stats(vcap);
+		vcap->stat_ready = true;
 		break;
 
 	default:
@@ -942,7 +943,6 @@ static void dcmipp_statcap_update_local_buf(struct dcmipp_statcap_device *vcap)
 			vcap->capture_state = PHY_AV_RGB;
 		} else if (vcap->capture_state == PHY_AV_RGB) {
 			vcap->capture_state = AV_READ;
-			vcap->stat_ready = true;
 		}
 		break;
 	}
