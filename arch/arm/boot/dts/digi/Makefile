@@ -24,6 +24,7 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	ccmp13-dvk_pwm8.dtbo \
 	ccmp15-dvk_v1.dtbo \
 	ccmp13-dvk_v2.dtbo \
+	ccmp13-dvk_v3.dtbo \
 	ccmp15-dvk_v2.dtbo \
 	ccmp13_bt.dtbo \
 	ccmp15_bt.dtbo \
