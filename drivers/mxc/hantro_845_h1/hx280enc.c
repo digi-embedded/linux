@@ -461,7 +461,7 @@ static long hx280enc_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 
 	switch (_IOC_NR(cmd))	{
 	case _IOC_NR(HX280ENC_IOCGHWOFFSET):
-		__put_user(hx280enc_data.iobaseaddr, (unsigned long *) arg);
+		__put_user(hx280enc_data.iobaseaddr, (u32 __user *)arg);
 		break;
 	case _IOC_NR(HX280ENC_IOCGHWIOSIZE):
 		__put_user(hx280enc_data.iosize, (u32 __user *)arg);
