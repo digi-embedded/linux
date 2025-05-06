@@ -148,6 +148,12 @@ static const struct pci_epc_features stm32_pcie_epc_features = {
 	.force_core_init = true,
 	.core_init_notifier = true,
 	.msi_capable = true,
+	.msix_capable = false,
+	.bar_fixed_size[0] = SZ_1M,
+	.bar_fixed_size[1] = SZ_64K,
+	.bar_fixed_size[2] = SZ_1M,
+	.bar_fixed_size[3] = SZ_1M,
+	.reserved_bar = 1 << BAR_4 | 1 << BAR_5,
 	.align = SZ_64K,
 };
 
