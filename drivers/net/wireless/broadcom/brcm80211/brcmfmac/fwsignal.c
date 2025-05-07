@@ -72,6 +72,9 @@ enum brcmf_fws_tlv_type {
 };
 #undef BRCMF_FWS_TLV_DEF
 
+#define BRCMF_FWS_TYPE_FIFO_CREDITBACK_V2_LEN   12
+#define BRCMF_FIFO_CREDITBACK_TX_OFFSET         6
+
 /*
  * enum brcmf_fws_tlv_len - definition of tlv lengths.
  */
@@ -503,6 +506,7 @@ struct brcmf_fws_info {
 	unsigned long borrow_defer_timestamp;
 	bool bus_flow_blocked;
 	bool creditmap_received;
+	bool credit_recover;
 	u8 mode;
 	bool avoid_queueing;
 #if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
@@ -1530,8 +1534,81 @@ cont:
 	return 0;
 }
 
+static void brcmf_fws_credit_auto_recover(struct brcmf_fws_info *fws, u8 *data)
+{
+	int fifo, i;
+	u8 *fw_tx = data + BRCMF_FIFO_CREDITBACK_TX_OFFSET;
+	u8 *fw_back = data;
+	int borrowed = 0;
+	int loan = 0;
+	int missing = 0;
+	int host_record_credit;
+	int in_fw_credit;
+
+	brcmf_dbg(SDIO, "Enter: tx %pM back %pM\n", fw_tx, fw_back);
+	brcmf_dbg(SDIO, "Enter: credit [BK]:%d [BE]:%d [VI]:%d [VO]:%d [BCMC]:%d\n",
+		  fws->fifo_credit[0], fws->fifo_credit[1], fws->fifo_credit[2],
+		  fws->fifo_credit[3], fws->fifo_credit[4]);
+
+	/* must check from highest priority FIFO */
+	for (fifo = BRCMF_FWS_FIFO_COUNT - 1; fifo >= BRCMF_FWS_FIFO_AC_BK; fifo--) {
+		/* if no credit lost, continue to check next FIFO */
+		if (fws->init_fifo_credit[fifo] == fws->fifo_credit[fifo])
+			continue;
+
+		brcmf_dbg(SDIO, "FIFO %d init: %d current: %d\n",
+			  fifo, fws->init_fifo_credit[fifo], fws->fifo_credit[fifo]);
+
+		if (fifo <= BRCMF_FWS_FIFO_AC_VO) {
+			/* how many credit are borrowed from other FIFO */
+			for (i = 0; i <= BRCMF_FWS_FIFO_AC_VO; i++)
+				borrowed += fws->credits_borrowed[fifo][i];
+
+			/* how many credit are lend to other FIFO */
+			for (i = 0; i <= BRCMF_FWS_FIFO_AC_VO; i++)
+				loan += fws->credits_borrowed[i][fifo];
+
+			brcmf_dbg(SDIO, "borrowed: %d loan: %d\n", borrowed, loan);
+		}
+
+		/* calculate missed credit */
+		host_record_credit = fws->init_fifo_credit[fifo] -
+			fws->fifo_credit[fifo] + borrowed - loan;
+		in_fw_credit = fw_tx[fifo] - fw_back[fifo];
+		missing = host_record_credit - in_fw_credit;
+		brcmf_dbg(SDIO, "host %d fw %d missing: %d\n",
+			  host_record_credit, in_fw_credit, missing);
+
+		if (missing > 0)
+			brcmf_fws_return_credits(fws, fifo, missing);
+	}
+
+	brcmf_dbg(SDIO, "Leave: credit [BK]:%d [BE]:%d [VI]:%d [VO]:%d [BCMC]:%d\n",
+		  fws->fifo_credit[0], fws->fifo_credit[1], fws->fifo_credit[2],
+		  fws->fifo_credit[3], fws->fifo_credit[4]);
+}
+
+void brcmf_fws_set_credit_recover(struct brcmf_pub *drvr)
+{
+	struct brcmf_fws_info *fws = NULL;
+
+	if (!drvr)
+		return;
+
+	fws = drvr_to_fws(drvr);
+
+	if (!fws)
+		return;
+
+	brcmf_err("Trigger credit recover\n");
+
+	brcmf_fws_lock(fws);
+	fws->credit_recover = true;
+	brcmf_fws_unlock(fws);
+}
+
 static int brcmf_fws_fifocreditback_indicate(struct brcmf_fws_info *fws,
-					     u8 *data)
+					     s16 len, u8 *data)
 {
 	int i;
 
@@ -1547,6 +1624,13 @@ static int brcmf_fws_fifocreditback_indicate(struct brcmf_fws_info *fws,
 
 	brcmf_dbg(DATA, "map: credit %x delay %x\n", fws->fifo_credit_map,
 		  fws->fifo_delay_map);
+
+	/* when bus error happened, try to recover lost credit */
+	if (len == BRCMF_FWS_TYPE_FIFO_CREDITBACK_V2_LEN && fws->credit_recover) {
+		brcmf_err("Trigger credit recover\n");
+		brcmf_fws_credit_auto_recover(fws, data);
+		fws->credit_recover = false;
+	}
 	brcmf_fws_unlock(fws);
 	return BRCMF_FWS_RET_OK_SCHEDULE;
 }
@@ -1938,7 +2022,7 @@ void brcmf_fws_hdrpull(struct brcmf_if *ifp, s16 siglen, struct sk_buff *skb)
 			brcmf_fws_txstatus_indicate(fws, type, data);
 			break;
 		case BRCMF_FWS_TYPE_FIFO_CREDITBACK:
-			err = brcmf_fws_fifocreditback_indicate(fws, data);
+			err = brcmf_fws_fifocreditback_indicate(fws, len, data);
 			break;
 		case BRCMF_FWS_TYPE_RSSI:
 			brcmf_fws_rssi_indicate(fws, *data);
