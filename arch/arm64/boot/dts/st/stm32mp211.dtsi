@@ -166,7 +166,7 @@
 						reg = <VOLTD_SCMI_VDDIO3>;
 						regulator-name = "vddio3";
 					};
-					scmi_vdda18adc: regulator@7 {
+					scmi_vdda18adc: regulator@3 {
 						reg = <VOLTD_SCMI_ADC>;
 						regulator-name = "vdda18adc";
 					};
