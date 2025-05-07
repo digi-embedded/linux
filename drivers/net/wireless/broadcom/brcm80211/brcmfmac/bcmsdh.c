@@ -37,6 +37,7 @@
 #include "core.h"
 #include "common.h"
 #include "cfg80211.h"
+#include "fwsignal.h"
 
 #define SDIOH_API_ACCESS_RETRY_LIMIT	2
 
@@ -339,6 +340,9 @@ static int brcmf_sdiod_skbuff_read(struct brcmf_sdio_dev *sdiodev,
 
 	if (err == -ENOMEDIUM)
 		brcmf_sdiod_change_state(sdiodev, BRCMF_SDIOD_NOMEDIUM);
+
+	if (err)
+		brcmf_fws_set_credit_recover(sdiodev->bus_if->drvr);
 
 	return err;
 }
@@ -803,7 +807,7 @@ brcmf_sdiod_ramrw(struct brcmf_sdio_dev *sdiodev, bool write, u32 address,
 		}
 
 		if (err) {
-			brcmf_err("membytes transfer failed\n");
+			brcmf_err("membytes transfer failed write=%d err=%d\n", write, err);
 			break;
 		}
 		if (!write)
