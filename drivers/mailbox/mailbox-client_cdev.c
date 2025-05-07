@@ -82,7 +82,7 @@ static ssize_t mbox_cdev_read(struct file *filep, char *buffer, size_t len, loff
 {
 	struct mbox_cdev_ddata *mbxdev = cdev_to_mbxdev(filep->f_inode->i_cdev);
 
-	if (len > sizeof(mbxdev->resm_size))
+	if (len > mbxdev->resm_size)
 		return -EINVAL;
 
 	if (mbxdev->req_state == NO_REQ)
@@ -104,7 +104,7 @@ static ssize_t mbox_cdev_write(struct file *filep, const char *buffer, size_t le
 	struct mbox_cdev_ddata *mbxdev = cdev_to_mbxdev(filep->f_inode->i_cdev);
 	int ret;
 
-	if (len > sizeof(mbxdev->resm_size))
+	if (len > mbxdev->resm_size)
 		return -EINVAL;
 
 	if (mbxdev->req_state == REQ_SENT)
