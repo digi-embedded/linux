@@ -444,7 +444,6 @@
 		reg = <0x52>;
 		interrupt-parent = <&gpiof>;
 		interrupts = <4 IRQ_TYPE_EDGE_FALLING>; /* RTC_INT_N */
-		wakeup-source;
 	};
 };
 
