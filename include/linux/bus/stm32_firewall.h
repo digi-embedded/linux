@@ -72,12 +72,14 @@ void stm32_firewall_controller_unregister(struct stm32_firewall_controller *fire
 
 #else /* IS_ENABLED(CONFIG_STM32_FIREWALL) */
 
-int stm32_firewall_controller_register(struct stm32_firewall_controller *firewall_controller)
+static inline int
+stm32_firewall_controller_register(struct stm32_firewall_controller *firewall_controller)
 {
 	return -ENODEV;
 }
 
-void stm32_firewall_controller_unregister(struct stm32_firewall_controller *firewall_controller)
+static inline void
+stm32_firewall_controller_unregister(struct stm32_firewall_controller *firewall_controller)
 {
 }
 
