@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <dt-bindings/clock/stm32mp1-clks.h>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/rtc/rtc-stm32.h>
 
@@ -28,7 +29,7 @@
 				/* U-Boot will fill in the MAC address here */
 			};
 			aliases {
-				serial1 = "/soc/serial@5c000000";
+				serial1 = "/soc/bus@5c007000/serial@5c000000";
 			};
 		};
 	};
@@ -55,6 +56,7 @@
 			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&ccmp15_usart1_pins_c>, <&ccmp15_usart1_pins_z>;
 			pinctrl-1 = <&ccmp15_usart1_sleep_pins_c>, <&ccmp15_usart1_sleep_pins_z>;
+			clocks = <&scmi_clk CK_SCMI_USART1>;
 			uart-has-rtscts;
 			status = "okay";
 
