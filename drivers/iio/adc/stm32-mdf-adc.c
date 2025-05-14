@@ -1321,8 +1321,7 @@ static int stm32_mdf_adc_single_conv(struct iio_dev *indio_dev,
 	if (ret < 0)
 		return ret;
 
-	ret = regmap_update_bits(adc->regmap, MDF_DFLTIER_REG,
-				 MDF_DFLTIER_FTHIE_MASK, MDF_DFLTIER_FTHIE_MASK);
+	ret = regmap_set_bits(adc->regmap, MDF_DFLTIER_REG, MDF_DFLTIER_FTHIE_MASK);
 	if (ret < 0)
 		goto err_conv;
 
@@ -1339,7 +1338,7 @@ static int stm32_mdf_adc_single_conv(struct iio_dev *indio_dev,
 
 	timeout = wait_for_completion_interruptible_timeout(&adc->completion, STM32_MDF_TIMEOUT_MS);
 
-	regmap_update_bits(adc->regmap, MDF_DFLTIER_REG, MDF_DFLTIER_FTHIE_MASK, 0);
+	regmap_clear_bits(adc->regmap, MDF_DFLTIER_REG, MDF_DFLTIER_FTHIE_MASK);
 
 	if (timeout == 0) {
 		dev_err(&indio_dev->dev, "Timeout reached on channel [%d]", chan->channel);
