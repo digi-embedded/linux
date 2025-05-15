@@ -558,19 +558,6 @@ static int lvds_pixel_clk_enable(struct clk_hw *hw)
 	int ret;
 	u32 reg;
 
-	ret = clk_prepare_enable(lvds->pclk);
-	if (ret) {
-		DRM_ERROR("Failed to enable pclk: %d\n", ret);
-		return ret;
-	}
-
-	ret = clk_prepare_enable(lvds->pllref_clk);
-	if (ret) {
-		clk_disable_unprepare(lvds->pclk);
-		DRM_ERROR("Failed to enable pllref_clk: %d\n", ret);
-		return ret;
-	}
-
 	/* In case we are operating in dual link the second PHY is set before the primary PHY. */
 	if (lvds->secondary) {
 		phy = lvds->secondary;
@@ -637,9 +624,6 @@ static void lvds_pixel_clk_disable(struct clk_hw *hw)
 		lvds_clear(lvds, lvds->secondary->base + lvds->secondary->ofs.GCR,
 			   PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
 	}
-
-	clk_disable_unprepare(lvds->pllref_clk);
-	clk_disable_unprepare(lvds->pclk);
 }
 
 static unsigned long lvds_pixel_clk_recalc_rate(struct clk_hw *hw,
