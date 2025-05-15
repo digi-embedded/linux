@@ -82,19 +82,26 @@
 		simple-audio-card,format = "i2s";
 		simple-audio-card,bitclock-master = <&cpu_dai>;
 		simple-audio-card,frame-master = <&cpu_dai>;
-		routing =
-			"Headphone Jack", "HPL",
-			"Headphone Jack", "HPR",
-			"Ext Spk", "SPKL",
-			"Ext Spk", "SPKR",
-			"LineOut", "RECL",
-			"LineOut", "RECR",
-			"Mic1", "MIC1",
-			"Mic2", "MIC2",
-			"LineInA", "INA1",
-			"LineInA", "INA2",
-			"LineInB", "INB1",
-			"LineInB", "INB2";
+		simple-audio-card,routing =
+			"HPL", "HP Left Out",
+			"HPR", "HP Right Out",
+			"SPKL", "SPK Left Out",
+			"SPKR", "SPK Right Out",
+			"RECL", "REC Left Out",
+			"RECR", "REC Right Out",
+
+			"HP Left Out", "Left HP Mixer",
+			"HP Right Out", "Right HP Mixer",
+			"SPK Left Out", "Left SPK Mixer",
+			"SPK Right Out", "Right SPK Mixer",
+			"REC Left Out", "Left REC Mixer",
+			"REC Right Out", "Right REC Mixer",
+
+			"MIC2 Input", "MIC2",
+			"INA1 Input", "INA1",
+			"INA2 Input", "INA2",
+			"INB1 Input", "INB1",
+			"INB2 Input", "INB2";
 
 		cpu_dai: simple-audio-card,cpu {
 			sound-dai = <&i2s1>;
