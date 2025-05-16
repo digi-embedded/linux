@@ -184,7 +184,6 @@ struct dcmipp_pixelcap_device {
 
 	u32 pipe_id;
 
-	u32 cmier;
 	u32 cmsr2;
 
 	struct {
@@ -595,9 +594,8 @@ static int dcmipp_pixelcap_start_streaming(struct vb2_queue *vq,
 	dcmipp_start_capture(vcap, vcap->next);
 
 	/* Enable interruptions */
-	vcap->cmier |= DCMIPP_CMIER_PxALL(vcap->pipe_id);
 	spin_lock(&vcap->vdev.v4l2_dev->lock);
-	reg_set(vcap, DCMIPP_CMIER, vcap->cmier);
+	reg_set(vcap, DCMIPP_CMIER, DCMIPP_CMIER_PxALL(vcap->pipe_id));
 	spin_unlock(&vcap->vdev.v4l2_dev->lock);
 
 	vcap->state = DCMIPP_RUNNING;
@@ -638,7 +636,7 @@ static void dcmipp_pixelcap_stop_streaming(struct vb2_queue *vq)
 
 	/* Disable interruptions */
 	spin_lock(&vcap->vdev.v4l2_dev->lock);
-	reg_clear(vcap, DCMIPP_CMIER, vcap->cmier);
+	reg_clear(vcap, DCMIPP_CMIER, DCMIPP_CMIER_PxALL(vcap->pipe_id));
 	spin_unlock(&vcap->vdev.v4l2_dev->lock);
 
 	/* Stop capture */
@@ -967,7 +965,7 @@ static irqreturn_t dcmipp_pixelcap_irq_callback(int irq, void *arg)
 			container_of(arg, struct dcmipp_pixelcap_device, ved);
 	struct dcmipp_ent_device *ved = arg;
 
-	vcap->cmsr2 = ved->cmsr2 & vcap->cmier;
+	vcap->cmsr2 = ved->cmsr2 & DCMIPP_CMIER_PxALL(vcap->pipe_id);
 	if (!vcap->cmsr2)
 		return IRQ_HANDLED;
 
