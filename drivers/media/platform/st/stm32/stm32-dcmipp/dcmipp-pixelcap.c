@@ -654,6 +654,9 @@ static void dcmipp_pixelcap_stop_streaming(struct vb2_queue *vq)
 	/* Disable pipe */
 	reg_clear(vcap, DCMIPP_PxFSCR(vcap->pipe_id), DCMIPP_PxFSCR_PIPEN);
 
+	/* Clear any pending interrupts */
+	reg_write(vcap, DCMIPP_CMFCR, DCMIPP_CMIER_PxALL(vcap->pipe_id));
+
 	dcmipp_pipeline_s_stream(vcap, 0);
 
 	/* Stop the media pipeline */
