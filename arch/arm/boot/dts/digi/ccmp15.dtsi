@@ -186,6 +186,11 @@
 	status = "okay";
 };
 
+&cryp1 {
+	clocks = <&scmi_clk CK_SCMI_CRYP1>;
+	resets = <&scmi_reset RST_SCMI_CRYP1>;
+};
+
 &dts {
 	status = "okay";
 };
