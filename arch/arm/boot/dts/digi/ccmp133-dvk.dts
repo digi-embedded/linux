@@ -56,6 +56,19 @@
 			status = "okay";
 		};
 
+		/* Powers the CAN transceiver */
+		reg_5v_board: regulator@2 {
+			compatible = "regulator-fixed";
+			reg = <2>;
+			regulator-name = "5v_board";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			regulator-always-on;
+			gpio = <&gpiof 9 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			status = "okay";
+		};
+
 		/*
 		 * External regulator for ADC.
 		 * This regulator DOES NOT exist on the DVK. It is only
