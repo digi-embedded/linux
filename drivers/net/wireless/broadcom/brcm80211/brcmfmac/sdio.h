@@ -267,6 +267,7 @@ struct brcmf_sdio_dev {
 	struct brcmf_ulp fmac_ulp;
 	bool ulp;
 	bool redownload_fw;
+	bool ignore_bus_error;	/* Ignore SDIO Bus access error*/
 };
 
 /* sdio core registers */
