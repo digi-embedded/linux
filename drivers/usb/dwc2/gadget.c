@@ -5320,19 +5320,19 @@ int dwc2_hsotg_resume(struct dwc2_hsotg *hsotg)
 	if (!hsotg->gadget_off_for_suspend)
 		return 0;
 
+	spin_lock_irqsave(&hsotg->lock, flags);
+	dwc2_hsotg_core_init_disconnected(hsotg, false);
 	if (hsotg->driver) {
 		dev_info(hsotg->dev, "resuming usb gadget %s\n",
 			 hsotg->driver->driver.name);
 
-		spin_lock_irqsave(&hsotg->lock, flags);
-		dwc2_hsotg_core_init_disconnected(hsotg, false);
 		if (hsotg->enabled) {
 			/* Enable ACG feature in device mode,if supported */
 			dwc2_enable_acg(hsotg);
 			dwc2_hsotg_core_connect(hsotg);
 		}
-		spin_unlock_irqrestore(&hsotg->lock, flags);
 	}
+	spin_unlock_irqrestore(&hsotg->lock, flags);
 
 	return 0;
 }
