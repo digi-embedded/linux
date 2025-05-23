@@ -210,6 +210,19 @@ enum {
 #define BRCMF_EXTAUTH_FAIL	3
 #define BRCMF_EXTAUTH_SUCCESS	4
 
+/* mchan configuration (ap timeslot : sta timeslot)*/
+#define BRCMF_MCHAN_CONF_DEFAULT	0 /* mchan_algo=2 (25ms:25ms) */
+#define BRCMF_MCHAN_CONF_VEDIO		1 /* mchan_algo=5 (29ms:21ms) */
+#define BRCMF_MCHAN_CONF_AUDIO		2 /* mchan_algo=1, mchan_bw=32 (68ms:32ms) */
+/* mchan algo in dongle */
+#define BRCMF_MCHAN_DEFAULT_ALGO 0
+#define BRCMF_MCHAN_BANDWIDTH_ALGO 1
+#define BRCMF_MCHAN_SI_ALGO 2
+#define BRCMF_MCHAN_DYNAMIC_BW_ALGO 3
+#define BRCMF_MCHAN_ALTERNATE_SWITCHING 4
+#define BRCMF_MCHAN_ASYMMETRIC_SI_ALGO 5
+#define BRCMF_MCHAN_BANDWIDTH_VAL 32
+
 /* MAX_CHUNK_LEN is the maximum length for data passing to firmware in each
  * ioctl. It is relatively small because firmware has small maximum size input
  * playload restriction for ioctls.

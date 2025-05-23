@@ -1488,3 +1488,17 @@ int ifx_cfg80211_vndr_cmds_ssid_prot(struct wiphy *wiphy,
 	return ret;
 }
 
+int ifx_cfg80211_vndr_cmds_mchan_config(struct wiphy *wiphy,
+					struct wireless_dev *wdev,
+					const void *data, int len)
+{
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+	u8 val = *(u8 *)data;
+
+	brcmf_dbg(TRACE, "enter, config: %d\n", val);
+
+	if (val <= BRCMF_MCHAN_CONF_AUDIO)
+		cfg->mchan_conf = val;
+
+	return 0;
+}

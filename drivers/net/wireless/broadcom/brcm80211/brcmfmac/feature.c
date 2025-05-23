@@ -53,6 +53,7 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
 	{ BRCMF_FEAT_PROPTXSTATUS, "proptxstatus" },
 	{ BRCMF_FEAT_OWE, "owe" },
 	{ BRCMF_FEAT_GTKO, "gtko" },
+	{ BRCMF_FEAT_MCHAN_CONFIG, "mchan_config" },
 };
 
 #ifdef DEBUG
