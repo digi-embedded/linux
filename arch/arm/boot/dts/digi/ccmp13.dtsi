@@ -11,7 +11,6 @@
 
 #include "../st/stm32mp133.dtsi"
 #include "../st/stm32mp13xc.dtsi"
-#include "../st/stm32mp13xd.dtsi"
 #include "../st/stm32mp13-pinctrl.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
@@ -95,6 +94,22 @@
 	/* Digi hardware ID (HWID) stored in OTP59, OTP60, OTP61 */
 	hwid: hwid@ec {
 		reg = <0xec 0xc>;
+	};
+};
+
+&cpu_thermal {
+	trips {
+		cpu_alert: cpu-alert0 {
+			temperature = <100000>;
+			hysteresis = <10000>;
+			type = "passive";
+		};
+
+		cpu_crit: cpu-crit0 {
+			temperature = <110000>;
+			hysteresis = <1000>;
+			type = "critical";
+		};
 	};
 };
 
