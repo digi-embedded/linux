@@ -192,6 +192,14 @@ static int stm32_clkevent_lp_pm_runtime_get(struct clock_event_device *clkevt)
 	return 0;
 }
 
+static void stm32_clkevent_lp_pm_runtime_err(struct clock_event_device *clkevt)
+{
+	struct stm32_lp_private *priv = to_priv(clkevt);
+
+	if (clockevent_state_detached(clkevt) || clockevent_state_shutdown(clkevt))
+		pm_runtime_put(priv->dev);
+}
+
 static int stm32_clkevent_lp_set_periodic(struct clock_event_device *clkevt)
 {
 	struct stm32_lp_private *priv = to_priv(clkevt);
@@ -203,7 +211,7 @@ static int stm32_clkevent_lp_set_periodic(struct clock_event_device *clkevt)
 
 	ret = stm32_clkevent_lp_set_timer(priv->period, clkevt, true);
 	if (ret < 0)
-		pm_runtime_put(priv->dev);
+		stm32_clkevent_lp_pm_runtime_err(clkevt);
 
 	return ret;
 }
@@ -219,7 +227,7 @@ static int stm32_clkevent_lp_set_oneshot(struct clock_event_device *clkevt)
 
 	ret = stm32_clkevent_lp_set_timer(priv->period, clkevt, false);
 	if (ret < 0)
-		pm_runtime_put(priv->dev);
+		stm32_clkevent_lp_pm_runtime_err(clkevt);
 
 	return ret;
 }
