@@ -150,7 +150,8 @@ enum ifx_nl80211_vendor_subcmds {
 	SCMD(CMDSTR)		= 28,
 	/* Reserved 29 */
 	SCMD(SSID_PROT)		= 30,
-	SCMD(MAX)		= 31
+	SCMD(MCHAN_CONFIG)	= 31,
+	SCMD(MAX)		= 32
 };
 
 /* enum ifx_vendor_evts - IFX nl80211 vendor events
@@ -846,4 +847,7 @@ int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
 					  struct wireless_dev *wdev, const void  *data, int len);
 int ifx_cfg80211_vndr_cmds_ssid_prot(struct wiphy *wiphy,
 				     struct wireless_dev *wdev, const void *data, int len);
+int ifx_cfg80211_vndr_cmds_mchan_config(struct wiphy *wiphy,
+					struct wireless_dev *wdev, const void *data, int len);
+
 #endif /* IFX_VENDOR_H */

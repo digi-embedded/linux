@@ -8078,6 +8078,79 @@ brcmf_bss_connect_done(struct brcmf_cfg80211_info *cfg,
 	return 0;
 }
 
+s32 brcmf_mchan_config(struct brcmf_cfg80211_info *cfg)
+{
+	struct brcmf_pub *drvr = cfg->pub;
+	struct brcmf_if *ifp;
+	int ifidx = 0;
+	s32 err = 0;
+	struct brcmf_assoclist_le assoclist = {0};
+	u8 mac_addr[ETH_ALEN] = {0}, mac_null[ETH_ALEN] = {0};
+	u32 mchan_arg = 0;
+	bool staif_connected = false, apif_connected = false;
+
+	if (!brcmf_feat_is_enabled(drvr->iflist[0], BRCMF_FEAT_MCHAN_CONFIG))
+		return 0;
+
+	for (ifidx = 0; ifidx < BRCMF_MAX_IFS; ifidx++) {
+		ifp = drvr->iflist[ifidx];
+		if (ifp && ifp->vif) {
+			if (ifp->vif->wdev.iftype == NL80211_IFTYPE_STATION) {
+				err = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_BSSID, &mac_addr,
+							     sizeof(mac_addr));
+				if (err)
+					bphy_err(drvr, "BRCMF_C_GET_BSSID fail (%d)\n", err);
+				else if (memcmp(mac_null, mac_addr, ETH_ALEN))
+					staif_connected = true;
+			} else if (ifp->vif->wdev.iftype == NL80211_IFTYPE_AP) {
+				memset(&assoclist, 0, sizeof(assoclist));
+				assoclist.count = cpu_to_le32(BRCMF_MAX_ASSOCLIST);
+				err = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_ASSOCLIST,
+							     &assoclist,
+							     sizeof(assoclist));
+				if (err)
+					bphy_err(drvr, "BRCMF_C_GET_ASSOCLIST fail (%d)\n", err);
+				else if (assoclist.count > 0)
+					apif_connected = true;
+			}
+		}
+	}
+
+	if (staif_connected && apif_connected) {
+		brcmf_dbg(TRACE, "apsta case, set mchan config %d\n", cfg->mchan_conf);
+		switch (cfg->mchan_conf) {
+		case BRCMF_MCHAN_CONF_DEFAULT:
+			mchan_arg = BRCMF_MCHAN_SI_ALGO;
+			err = brcmf_fil_iovar_data_set(drvr->iflist[0], "mchan_algo",
+						       &mchan_arg, sizeof(mchan_arg));
+			break;
+		case BRCMF_MCHAN_CONF_VEDIO:
+			mchan_arg = BRCMF_MCHAN_ASYMMETRIC_SI_ALGO;
+			err = brcmf_fil_iovar_data_set(drvr->iflist[0], "mchan_algo",
+						       &mchan_arg, sizeof(mchan_arg));
+			break;
+		case BRCMF_MCHAN_CONF_AUDIO:
+			mchan_arg = BRCMF_MCHAN_BANDWIDTH_ALGO;
+			err = brcmf_fil_iovar_data_set(drvr->iflist[0], "mchan_algo",
+						       &mchan_arg, sizeof(mchan_arg));
+			if (err)
+				goto cmd_fail;
+			mchan_arg = BRCMF_MCHAN_BANDWIDTH_VAL;
+			err = brcmf_fil_iovar_data_set(drvr->iflist[0], "mchan_bw",
+						       &mchan_arg, sizeof(mchan_arg));
+			break;
+		default:
+			brcmf_dbg(TRACE, "unexpected mchan conf %d\n", cfg->mchan_conf);
+			break;
+		}
+cmd_fail:
+		if (err)
+			bphy_err(drvr, "cmd fail while set mchan config (%d)\n", err);
+	}
+
+	return 0;
+}
+
 static s32
 brcmf_notify_connect_status_ap(struct brcmf_cfg80211_info *cfg,
 			       struct net_device *ndev,
@@ -8151,6 +8224,7 @@ brcmf_notify_connect_status(struct brcmf_if *ifp,
 			brcmf_del_sta(ifp, e->addr);
 		}
 		err = brcmf_notify_connect_status_ap(cfg, ndev, e, data);
+		brcmf_mchan_config(cfg);
 	} else if (brcmf_is_linkup(ifp->vif, e)) {
 		brcmf_dbg(CONN, "Linkup\n");
 		if (brcmf_is_ibssmode(ifp->vif)) {
@@ -8171,6 +8245,7 @@ brcmf_notify_connect_status(struct brcmf_if *ifp,
 			}
 		}
 		brcmf_net_setcarrier(ifp, true);
+		brcmf_mchan_config(cfg);
 	} else if (brcmf_is_linkdown(ifp->vif, e)) {
 		brcmf_dbg(CONN, "Linkdown\n");
 		if (!brcmf_is_ibssmode(ifp->vif) &&
@@ -10809,6 +10884,7 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 	cfg->pub = drvr;
 	cfg->pm_state = BRCMF_CFG80211_PM_STATE_RESUMED;
 	cfg->num_softap = 0;
+	cfg->mchan_conf = BRCMF_MCHAN_CONF_DEFAULT;
 	init_vif_event(&cfg->vif_event);
 	INIT_LIST_HEAD(&cfg->vif_list);
 

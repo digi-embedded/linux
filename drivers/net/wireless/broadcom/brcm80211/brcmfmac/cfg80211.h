@@ -446,6 +446,7 @@ struct brcmf_cfg80211_info {
 	u8 pfn_enable;
 	u8 pfn_connection;
 	struct drv_config_pfn_params pfn_data;
+	u8 mchan_conf;
 };
 
 /**
