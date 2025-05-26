@@ -1055,9 +1055,9 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 	dma_cfg.dst_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
 	dma_cfg.src_addr = omi->regs_phys_base + OSPI_DR;
 	dma_cfg.dst_addr = omi->regs_phys_base + OSPI_DR;
-	dma_cfg.src_maxburst = 4;
-	dma_cfg.dst_maxburst = 4;
-	stm32_omi_dma_setup(omi, &dma_cfg);
+	ret = stm32_omi_dma_setup(omi, &dma_cfg);
+	if (ret)
+		return ret;
 
 	mutex_init(&ospi->lock);
 

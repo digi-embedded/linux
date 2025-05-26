@@ -149,10 +149,19 @@ static irqreturn_t stm32_omi_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-void stm32_omi_dma_setup(struct stm32_omi *omi,
-			 struct dma_slave_config *dma_cfg)
+int stm32_omi_dma_setup(struct stm32_omi *omi,
+			struct dma_slave_config *dma_cfg)
 {
+	struct dma_slave_caps caps;
+	int ret = 0;
+
 	if (dma_cfg && omi->dma_chrx) {
+		ret = dma_get_slave_caps(omi->dma_chrx, &caps);
+		if (ret)
+			return ret;
+
+		dma_cfg->src_maxburst = caps.max_burst / dma_cfg->src_addr_width;
+
 		if (dmaengine_slave_config(omi->dma_chrx, dma_cfg)) {
 			dev_err(omi->dev, "dma rx config failed\n");
 			dma_release_channel(omi->dma_chrx);
@@ -161,6 +170,12 @@ void stm32_omi_dma_setup(struct stm32_omi *omi,
 	}
 
 	if (dma_cfg && omi->dma_chtx) {
+		ret = dma_get_slave_caps(omi->dma_chtx, &caps);
+		if (ret)
+			return ret;
+
+		dma_cfg->dst_maxburst = caps.max_burst / dma_cfg->dst_addr_width;
+
 		if (dmaengine_slave_config(omi->dma_chtx, dma_cfg)) {
 			dev_err(omi->dev, "dma tx config failed\n");
 			dma_release_channel(omi->dma_chtx);
@@ -169,6 +184,8 @@ void stm32_omi_dma_setup(struct stm32_omi *omi,
 	}
 
 	init_completion(&omi->dma_completion);
+
+	return ret;
 }
 EXPORT_SYMBOL(stm32_omi_dma_setup);
 

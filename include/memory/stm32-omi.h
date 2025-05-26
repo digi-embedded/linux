@@ -193,8 +193,8 @@ int stm32_omi_dlyb_set_cr(struct stm32_omi *omi, u32 dlyb_cr);
 void stm32_omi_dlyb_get_cr(struct stm32_omi *omi, u32 *dlyb_cr);
 void stm32_omi_dlyb_stop(struct stm32_omi *omi);
 void stm32_omi_dma_callback(void *arg);
-void stm32_omi_dma_setup(struct stm32_omi *omi,
-			 struct dma_slave_config *dma_cfg);
+int stm32_omi_dma_setup(struct stm32_omi *omi,
+			struct dma_slave_config *dma_cfg);
 int stm32_omi_tx_poll(struct stm32_omi *omi, u8 *buf, u32 len, bool read);
 int stm32_omi_wait_cmd(struct stm32_omi *omi);
 int stm32_omi_wait_nobusy(struct stm32_omi *omi);
