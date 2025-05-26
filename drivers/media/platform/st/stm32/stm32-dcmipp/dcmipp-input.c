@@ -394,8 +394,22 @@ static int dcmipp_inp_configure_parallel(struct dcmipp_inp_device *inp,
 	val |= vpix->prcr_format << DCMIPP_PRCR_FORMAT_SHIFT;
 
 	/* swap cycles */
-	if (vpix->prcr_swapcycles)
-		val |= DCMIPP_PRCR_SWAPCYCLES;
+	/*
+	 * PPCR SWAPYUV is not available on STM32MP13 so behavior regarding
+	 * to SWAPCYCLES should be reversed compared to other platforms for
+	 * YUV422 format
+	 */
+	if (of_device_is_compatible(inp->dev->of_node, "st,stm32mp13-dcmipp") &&
+	    (src_fmt->code == MEDIA_BUS_FMT_YUYV8_2X8 ||
+	     src_fmt->code == MEDIA_BUS_FMT_YVYU8_2X8 ||
+	     src_fmt->code == MEDIA_BUS_FMT_UYVY8_2X8 ||
+	     src_fmt->code == MEDIA_BUS_FMT_VYUY8_2X8)) {
+		if (!vpix->prcr_swapcycles)
+			val |= DCMIPP_PRCR_SWAPCYCLES;
+	} else {
+		if (vpix->prcr_swapcycles)
+			val |= DCMIPP_PRCR_SWAPCYCLES;
+	}
 
 	reg_write(inp, DCMIPP_PRCR, val);
 
