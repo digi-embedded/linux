@@ -135,7 +135,7 @@
 	};
 
 	lvds: lvds@48060000 {
-		#clock-cells = <0>;
+		#clock-cells = <1>;
 		compatible = "st,stm32mp25-lvds";
 		reg = <0x48060000 0x2000>;
 		clocks = <&rcc CK_BUS_LVDS>, <&rcc CK_KER_LVDSPHY>, <&syscfg 0>;
