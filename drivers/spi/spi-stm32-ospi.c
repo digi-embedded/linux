@@ -144,7 +144,7 @@ static int stm32_ospi_tx(struct stm32_ospi *ospi, const struct spi_mem_op *op)
 {
 	struct stm32_omi *omi = ospi->omi;
 	struct stm32_ospi_flash *flash = &ospi->flash[ospi->last_cs];
-	u8 *buf;
+	void *buf;
 	u8 dummy = 0xff;
 	int ret;
 
@@ -162,7 +162,7 @@ static int stm32_ospi_tx(struct stm32_ospi *ospi, const struct spi_mem_op *op)
 	if (op->data.dir == SPI_MEM_DATA_IN)
 		buf = op->data.buf.in;
 	else
-		buf = (u8 *)op->data.buf.out;
+		buf = (void *)op->data.buf.out;
 
 	if (flash->octal_dtr && op->addr.val % 2) {
 		/* Read/write dummy byte */
