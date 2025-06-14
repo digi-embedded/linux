@@ -345,8 +345,8 @@ static int brcmf_sdiod_skbuff_read(struct brcmf_sdio_dev *sdiodev,
 	if (err == -ENOMEDIUM)
 		brcmf_sdiod_change_state(sdiodev, BRCMF_SDIOD_NOMEDIUM);
 
-	if (err)
-		brcmf_fws_set_credit_recover(sdiodev->bus_if->drvr);
+	if (err && sdiodev->func2->device == SDIO_DEVICE_ID_CYPRESS_55572)
+		brcmf_fws_recv_err(sdiodev->bus_if->drvr);
 
 	return err;
 }

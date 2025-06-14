@@ -507,6 +507,7 @@ struct brcmf_fws_info {
 	bool bus_flow_blocked;
 	bool creditmap_received;
 	bool credit_recover;
+	bool sdio_recv_error;
 	u8 mode;
 	bool avoid_queueing;
 #if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
@@ -743,6 +744,25 @@ static void brcmf_fws_macdesc_init(struct brcmf_fws_mac_descriptor *desc,
 	desc->ac_bitmap = 0xff; /* update this when handling APSD */
 	if (addr)
 		memcpy(&desc->ea[0], addr, ETH_ALEN);
+}
+
+static void brcmf_fws_macdesc_reset(struct brcmf_fws_mac_descriptor *entry)
+{
+	int i;
+
+	brcmf_fws_macdesc_init(entry, entry->ea, entry->interface_id);
+	entry->mac_handle = 0;
+	entry->suppressed = 0;
+	entry->transit_count = 0;
+	entry->suppr_transit_count = 0;
+	entry->generation = 0;
+
+	for (i = 0; i < BRCMF_FWS_FIFO_COUNT; i++)
+		entry->seq[i] = 0;
+
+	entry->send_tim_signal = 0;
+	entry->traffic_pending_bmp = 0;
+	entry->traffic_lastreported_bmp = 0;
 }
 
 static
@@ -1588,7 +1608,7 @@ static void brcmf_fws_credit_auto_recover(struct brcmf_fws_info *fws, u8 *data)
 		  fws->fifo_credit[3], fws->fifo_credit[4]);
 }
 
-void brcmf_fws_set_credit_recover(struct brcmf_pub *drvr)
+void brcmf_fws_recv_err(struct brcmf_pub *drvr)
 {
 	struct brcmf_fws_info *fws = NULL;
 
@@ -1600,10 +1620,11 @@ void brcmf_fws_set_credit_recover(struct brcmf_pub *drvr)
 	if (!fws)
 		return;
 
-	brcmf_err("Trigger credit recover\n");
+	brcmf_dbg(SDIO, "Enter\n");
 
 	brcmf_fws_lock(fws);
 	fws->credit_recover = true;
+	fws->sdio_recv_error = true;
 	brcmf_fws_unlock(fws);
 }
 
@@ -2671,4 +2692,41 @@ void brcmf_fws_bus_blocked(struct brcmf_pub *drvr, bool flow_blocked)
 		else
 			fws->stats.bus_flow_block++;
 	}
+}
+
+void brcmf_fws_wa_cleanup_by_ifidx(struct brcmf_pub *drvr, int ifidx)
+{
+	struct brcmf_fws_info *fws = drvr_to_fws(drvr);
+	struct brcmf_fws_mac_descriptor *entry;
+	struct brcmf_fws_mac_descriptor *table;
+	bool (*matchfn)(struct sk_buff *, void *) = brcmf_fws_ifidx_match;
+	int i;
+
+	if (!fws->sdio_recv_error)
+		return;
+
+	brcmf_dbg(SDIO, "Enter\n");
+
+	brcmf_fws_lock(fws);
+
+	fws->sdio_recv_error = false;
+
+	entry = &fws->desc.iface[ifidx];
+	brcmf_dbg(SDIO, "iface[%d] mac %pM if %d psq len %d\n",
+		  ifidx, entry->ea, entry->interface_id, entry->psq.len);
+
+	/* cleanup interface */
+	brcmf_fws_psq_flush(fws, &entry->psq, ifidx);
+	brcmf_fws_macdesc_reset(entry);
+
+	/* cleanup individual nodes */
+	table = &fws->desc.nodes[0];
+	for (i = 0; i < ARRAY_SIZE(fws->desc.nodes); i++)
+		brcmf_fws_macdesc_cleanup(fws, &table[i], ifidx);
+
+	/* cleanup txq and hanger */
+	brcmf_fws_bus_txq_cleanup(fws, matchfn, ifidx);
+	brcmf_fws_hanger_cleanup(fws, matchfn, ifidx);
+
+	brcmf_fws_unlock(fws);
 }

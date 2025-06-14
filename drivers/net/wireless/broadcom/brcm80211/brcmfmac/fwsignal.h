@@ -44,6 +44,7 @@ void brcmf_fws_bustxcomplete(struct brcmf_fws_info *fws, struct sk_buff *skb,
 			     bool success);
 void brcmf_fws_bus_blocked(struct brcmf_pub *drvr, bool flow_blocked);
 void brcmf_fws_rxreorder(struct brcmf_if *ifp, struct sk_buff *skb, bool inirq);
-void brcmf_fws_set_credit_recover(struct brcmf_pub *drvr);
+void brcmf_fws_recv_err(struct brcmf_pub *drvr);
+void brcmf_fws_wa_cleanup_by_ifidx(struct brcmf_pub *drvr, int ifidx);
 
 #endif /* FWSIGNAL_H_ */
