@@ -8270,6 +8270,7 @@ brcmf_notify_connect_status(struct brcmf_if *ifp,
 				complete(&cfg->vif_disabled);
 			brcmf_net_setcarrier(ifp, false);
 		}
+		brcmf_fws_wa_cleanup_by_ifidx(ifp->drvr, ifp->ifidx);
 	} else if (brcmf_is_nonetwork(cfg, e)) {
 		if (brcmf_is_ibssmode(ifp->vif))
 			clear_bit(BRCMF_VIF_STATUS_CONNECTING,
