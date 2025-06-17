@@ -997,7 +997,7 @@ dw_mipi_dsi_phy_141_get_timing(void *priv_data, unsigned int lane_mbps,
 	return 0;
 }
 
-#define CLK_TOLERANCE_HZ 50
+#define CLK_TOLERANCE_HZ 250000
 
 static enum drm_mode_status
 dw_mipi_dsi_stm_mode_valid(void *priv_data,
