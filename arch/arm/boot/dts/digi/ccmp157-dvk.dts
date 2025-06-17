@@ -69,6 +69,21 @@
 		status = "disabled";
 	};
 
+	hdmi-connector {
+		compatible = "hdmi-connector";
+		label = "hdmi";
+		type = "a";
+		hdmi-pwr-supply = <&reg_5v_board>;
+		hpd-gpios = <&gpiof 15 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+
+		port {
+			hdmi_connector_in: endpoint {
+				remote-endpoint = <&lt8912_out>;
+			};
+		};
+	};
+
 	usb_phy_tuning: usb-phy-tuning {
 		st,hs-dc-level = <2>;
 		st,fs-rftime-tuning;
@@ -404,19 +419,29 @@
 	/delete-property/dma-names;
 
 	lt_bridge: lt8912@48 {
-		compatible = "lontium,lt8912";
+		compatible = "lontium,lt8912b";
 		reg = <0x48>;
 		reset-gpios = <&gpioa 9 GPIO_ACTIVE_LOW>;
-		hpd-gpios = <&gpiof 15 GPIO_ACTIVE_HIGH>;
-		no-edid;
-		digi,dsi-lanes = <2>;
-		vdd1-supply = <&reg_5v_board>;
+		vdd-supply = <&reg_5v_board>;
 		status = "okay";
 
-		port {
-			lt8912_1_in: endpoint {
-				/* add lanes */
-				remote-endpoint = <&dsi_out>;
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				lt8912_1_in: endpoint {
+					data-lanes = <1 2>;
+					remote-endpoint = <&dsi_out>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				lt8912_out: endpoint {
+					remote-endpoint = <&hdmi_connector_in>;
+				};
 			};
 		};
 
