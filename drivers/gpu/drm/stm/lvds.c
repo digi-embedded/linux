@@ -1276,7 +1276,7 @@ static const struct of_device_id lvds_dt_ids[] = {
 MODULE_DEVICE_TABLE(of, lvds_dt_ids);
 
 static const struct dev_pm_ops lvds_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
 	SET_RUNTIME_PM_OPS(lvds_runtime_suspend, lvds_runtime_resume, NULL)
 };
 
