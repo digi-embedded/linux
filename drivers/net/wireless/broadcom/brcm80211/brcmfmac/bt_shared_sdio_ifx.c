@@ -593,7 +593,7 @@ u8 inf_bus_reg_readb(struct brcmf_bus *bus_if, u8 fn, u32 addr, int *err)
 	if (fn == SDIO_FUNC_0)
 		val = brcmf_sdiod_func0_rb(sdiodev, addr, err);
 	else
-		val = brcmf_sdiod_func_rb(func, addr, err);
+		val = brcmf_sdiod_func_rb(sdiodev, func, addr, err);
 	sdio_release_host(sdiodev->func1);
 
 	brcmf_dbg(SDIO, "F%d addr: 0x%08x, val: 0x%02x, err: %d\n", fn, addr, val, *err);
@@ -634,7 +634,7 @@ void inf_bus_reg_writeb(struct brcmf_bus *bus_if, u8 fn, u32 addr, u8 val, int *
 	if (fn == SDIO_FUNC_0)
 		brcmf_sdiod_func0_wb(sdiodev, addr, val, err);
 	else
-		brcmf_sdiod_func_wb(func, addr, val, err);
+		brcmf_sdiod_func_wb(sdiodev, func, addr, val, err);
 	sdio_release_host(sdiodev->func1);
 
 	brcmf_dbg(SDIO, "F%d addr: 0x%08x, val: 0x%02x, err: %d\n", fn, addr, val, *err);

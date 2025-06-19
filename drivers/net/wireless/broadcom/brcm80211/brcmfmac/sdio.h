@@ -369,30 +369,38 @@ void brcmf_sdiod_intr_unregister(struct brcmf_sdio_dev *sdiodev);
 
 /* SDIO device register access interface */
 /* Accessors for SDIO Function 0 */
-#define brcmf_sdiod_func0_rb(sdiodev, addr, r) \
+#define brcmf_sdiod_func0_rb_ext(sdiodev, addr, r) \
 	sdio_f0_readb((sdiodev)->func1, (addr), (r))
 
-#define brcmf_sdiod_func0_wb(sdiodev, addr, v, ret) \
+#define brcmf_sdiod_func0_wb_ext(sdiodev, addr, v, ret) \
 	sdio_f0_writeb((sdiodev)->func1, (v), (addr), (ret))
 
 /* Accessors for SDIO Function 1 */
-#define brcmf_sdiod_readb(sdiodev, addr, r) \
+#define brcmf_sdiod_readb_ext(sdiodev, addr, r) \
 	sdio_readb((sdiodev)->func1, (addr), (r))
 
-#define brcmf_sdiod_writeb(sdiodev, addr, v, ret) \
+#define brcmf_sdiod_writeb_ext(sdiodev, addr, v, ret) \
 	sdio_writeb((sdiodev)->func1, (v), (addr), (ret))
 
 /* Accessors for SDIO specific function number */
-#define brcmf_sdiod_func_rb(func, addr, r) \
+#define brcmf_sdiod_func_rb_ext(func, addr, r) \
 	sdio_readb((func), (addr), (r))
 
-#define brcmf_sdiod_func_wb(func, addr, v, ret) \
+#define brcmf_sdiod_func_wb_ext(func, addr, v, ret) \
 	sdio_writeb((func), (v), (addr), (ret))
 
+u8 brcmf_sdiod_func0_rb(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret);
+void brcmf_sdiod_func0_wb(struct brcmf_sdio_dev *sdiodev, u32 addr, u32 data,
+			  int *ret);
+u8 brcmf_sdiod_readb(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret);
+void brcmf_sdiod_writeb(struct brcmf_sdio_dev *sdiodev, u32 addr, u32 data,
+			int *ret);
+u8 brcmf_sdiod_func_rb(struct brcmf_sdio_dev *sdiodev, struct sdio_func *func, u32 addr, int *ret);
+void brcmf_sdiod_func_wb(struct brcmf_sdio_dev *sdiodev, struct sdio_func *func, u32 addr,
+			 u32 data, int *ret);
 u32 brcmf_sdiod_readl(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret);
 void brcmf_sdiod_writel(struct brcmf_sdio_dev *sdiodev, u32 addr, u32 data,
 			int *ret);
-
 /* Buffer transfer to/from device (client) core via cmd53.
  *   fn:       function number
  *   flags:    backplane width, address increment, sync/async
