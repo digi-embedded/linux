@@ -336,7 +336,6 @@ enum enum_gate_cfg {
 	GATE_MDF1,
 	GATE_MSI_KER,
 	GATE_OSPIIOM,
-	GATE_PCIE,
 	GATE_PKA,
 	GATE_RNG,
 	GATE_RTCC3,
@@ -443,6 +442,7 @@ enum enum_gate_cfg {
 	GATE_MSI,
 	GATE_OSPI1,
 	GATE_OSPI2,
+	GATE_PCIE,
 	GATE_PLL1,
 	GATE_PLL2,
 	GATE_PLL3,
@@ -553,7 +553,6 @@ static const struct stm32_gate_cfg stm32mp25_gates[GATE_NB] = {
 	GATE_CFG(GATE_MCO2,		RCC_MCO2CFGR,		8,	0),
 	GATE_CFG(GATE_MDF1,		RCC_MDF1CFGR,		1,	0),
 	GATE_CFG(GATE_OSPIIOM,		RCC_OSPIIOMCFGR,	1,	0),
-	GATE_CFG(GATE_PCIE,		RCC_PCIECFGR,		1,	0),
 	GATE_CFG(GATE_PKA,		RCC_PKACFGR,		1,	0),
 	GATE_CFG(GATE_RTCC3,		RCC_C3CFGR,		26,	0),
 	GATE_CFG(GATE_RNG,		RCC_RNGCFGR,		1,	0),
@@ -663,6 +662,7 @@ static const struct stm32_gate_cfg stm32mp25_gates[GATE_NB] = {
 	GATE_CFG(GATE_MSI_KER,		RCC_D3DCR,		1,	0),
 	GATE_CFG(GATE_OSPI1,		RCC_OSPI1CFGR,		1,	0),
 	GATE_CFG(GATE_OSPI2,		RCC_OSPI2CFGR,		1,	0),
+	GATE_CFG(GATE_PCIE,		RCC_PCIECFGR,		1,	0),
 	GATE_CFG(GATE_PLL1,		RCC_PLL2CFGR1,		8,	0),
 	GATE_CFG(GATE_PLL2,		RCC_PLL2CFGR1,		8,	0),
 	GATE_CFG(GATE_PLL3,		RCC_PLL3CFGR1,		8,	0),
@@ -1364,12 +1364,6 @@ static struct clk_stm32_gate ck_icn_p_ospiiom = {
 	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_ospiiom", ICN_LS_MCU, &clk_stm32_gate_ops, 0),
 };
 
-/* PCIE */
-static struct clk_stm32_gate ck_icn_p_pcie = {
-	.gate_id = GATE_PCIE,
-	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_pcie", ICN_LS_MCU, &clk_stm32_gate_ops, 0),
-};
-
 /* PKA */
 static struct clk_stm32_gate ck_icn_p_pka = {
 	.gate_id = GATE_PKA,
@@ -2028,7 +2022,6 @@ static int stm32mp25_check_security(struct device_node *np, void __iomem *base,
 static const struct clock_config stm32mp25_clock_cfg[] = {
 	STM32_GATE_CFG(CK_BUS_ETH1, ck_icn_p_eth1, SEC_RIFSC(60)),
 	STM32_GATE_CFG(CK_BUS_ETH2, ck_icn_p_eth2, SEC_RIFSC(61)),
-	STM32_GATE_CFG(CK_BUS_PCIE, ck_icn_p_pcie, SEC_RIFSC(68)),
 	STM32_GATE_CFG(CK_BUS_ETHSW, ck_icn_p_ethsw, SEC_RIFSC(70)),
 	STM32_GATE_CFG(CK_BUS_ADC12, ck_icn_p_adc12, SEC_RIFSC(58)),
 	STM32_GATE_CFG(CK_BUS_ADC3, ck_icn_p_adc3, SEC_RIFSC(59)),
