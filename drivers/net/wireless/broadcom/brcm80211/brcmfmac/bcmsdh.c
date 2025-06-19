@@ -262,6 +262,8 @@ u32 brcmf_sdiod_readl(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret)
 	u32 data = 0;
 	int retval;
 
+	brcmf_dbg(SDIOEXT, "addr 0x%x\n", addr);
+
 	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
 		if (!sdiodev->ignore_bus_error)
 			brcmf_err("ERROR: Read operation when bus is in sleep state\n");
@@ -294,6 +296,7 @@ void brcmf_sdiod_writel(struct brcmf_sdio_dev *sdiodev, u32 addr,
 {
 	int retval;
 
+	brcmf_dbg(SDIOEXT, "addr 0x%x val 0x%x\n", addr, data);
 	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
 		if (!sdiodev->ignore_bus_error)
 			brcmf_err("ERROR: Write operation when bus is in sleep state\n");

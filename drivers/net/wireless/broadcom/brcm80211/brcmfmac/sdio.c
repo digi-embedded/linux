@@ -359,7 +359,6 @@ static int brcmf_ulp_event_notify(struct brcmf_if *ifp,
 static void
 brcmf_sched_rxf(struct brcmf_sdio *bus, struct sk_buff *skb);
 
-
 #ifdef DEBUG
 /* Device console log buffer state */
 struct brcmf_console {
@@ -718,6 +717,97 @@ static const struct brcmf_firmware_mapping brcmf_sdio_fwnames[] = {
 
 #define TXCTL_CREDITS	2
 
+bool brcmf_sdio_bus_sleep_state(struct brcmf_sdio *bus)
+{
+	return bus->sleeping;
+}
+
+static inline bool brcmf_sdio_bus_access_allowed(u32 addr)
+{
+	return (addr == SBSDIO_FUNC1_SLEEPCSR) ? true : false;
+}
+
+u8 brcmf_sdiod_func0_rb(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x\n", addr);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus) || sdiodev->ignore_bus_error)
+		return brcmf_sdiod_func0_rb_ext(sdiodev, addr, ret);
+
+	brcmf_err(" Error Access Not allowed\n");
+	if (ret)
+		*ret = -EPERM;
+	return 0xFF;
+}
+
+void brcmf_sdiod_func0_wb(struct brcmf_sdio_dev *sdiodev, u32 addr, u32 data,
+			  int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x val 0x%x\n", addr, data);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus) || sdiodev->ignore_bus_error) {
+		brcmf_sdiod_func0_wb_ext(sdiodev, addr, data, ret);
+	} else {
+		brcmf_err(" Error Access Not allowed\n");
+		if (ret)
+			*ret = -EPERM;
+	}
+}
+
+u8 brcmf_sdiod_readb(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x\n", addr);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus) || brcmf_sdio_bus_access_allowed(addr))
+		return brcmf_sdiod_readb_ext(sdiodev, addr, ret);
+
+	brcmf_err(" Error Access Not allowed\n");
+	if (ret)
+		*ret = -EPERM;
+	return 0xFF;
+}
+
+void brcmf_sdiod_writeb(struct brcmf_sdio_dev *sdiodev, u32 addr, u32 data,
+			int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x val 0x%x\n", addr, data);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus) || brcmf_sdio_bus_access_allowed(addr)) {
+		brcmf_sdiod_writeb_ext(sdiodev, addr, data, ret);
+	} else {
+		brcmf_err(" Error Access Not allowed\n");
+		if (ret)
+			*ret = -EPERM;
+	}
+}
+
+u8 brcmf_sdiod_func_rb(struct brcmf_sdio_dev *sdiodev, struct sdio_func *func, u32 addr, int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x\n", addr);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus))
+		return brcmf_sdiod_func_rb_ext(func, addr, ret);
+
+	brcmf_err(" Error Access Not allowed\n");
+	if (ret)
+		*ret = -EPERM;
+	return 0xFF;
+}
+
+void brcmf_sdiod_func_wb(struct brcmf_sdio_dev *sdiodev, struct sdio_func *func, u32 addr,
+			 u32 data, int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x val 0x%x\n", addr, data);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
+		brcmf_sdiod_func_wb_ext(func, addr, data, ret);
+	} else {
+		brcmf_err(" Error Access Not allowed\n");
+		if (ret)
+			*ret = -EPERM;
+	}
+}
+
 static void pkt_align(struct sk_buff *p, int len, int align)
 {
 	uint datalign;
@@ -751,6 +841,7 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	int try_cnt = 0;
 	unsigned long kso_loop_time = 0;
 	struct timespec64 ts_start, ts_end, ts_delta;
+	struct brcmf_sdio_dev *sdiod = bus->sdiodev;
 
 	brcmf_dbg(SDIO, "Enter: on=%d\n", on);
 
@@ -844,12 +935,13 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 
 	if (bus->idleclock == BRCMF_IDLE_STOP) {
 		/* Change the bus width to 4-bit mode on kso 1 */
+		sdiod->ignore_bus_error = true;
 		brcmf_sdio_set_sdbus_clk_width(bus, SDIO_SDMODE_4BIT);
+		sdiod->ignore_bus_error = false;
 	}
 
 	/* New KSO Sequence for H1 DDR50 Mode*/
 	if (bus->h1_ddr50_mode) {
-		struct brcmf_sdio_dev *sdiod = bus->sdiodev;
 		u32 ret, chipid;
 
 		/* Set Flag to ignore SDIO Bus access error during KSO */
@@ -1241,11 +1333,6 @@ done:
 	brcmf_dbg(SDIO, "Exit: err=%d\n", err);
 	return err;
 
-}
-
-bool brcmf_sdio_bus_sleep_state(struct brcmf_sdio *bus)
-{
-	return bus->sleeping;
 }
 
 #ifdef DEBUG
