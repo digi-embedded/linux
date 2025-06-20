@@ -568,6 +568,9 @@ exit:
 	while ((pkt_next = __skb_dequeue(&local_list)) != NULL)
 		brcmu_pkt_buf_free_skb(pkt_next);
 
+	if (ret && sdiodev->func2->device == SDIO_DEVICE_ID_CYPRESS_55572)
+		brcmf_fws_recv_err(sdiodev->bus_if->drvr);
+
 	return ret;
 }
 

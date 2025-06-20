@@ -36,6 +36,7 @@ struct brcmf_proto {
 	void (*add_if)(struct brcmf_if *ifp);
 	void (*del_if)(struct brcmf_if *ifp);
 	void (*reset_if)(struct brcmf_if *ifp);
+	void (*cleanup_if)(struct brcmf_if *ifp);
 	int (*init_done)(struct brcmf_pub *drvr);
 	void (*debugfs_create)(struct brcmf_pub *drvr);
 	void *pd;
@@ -136,6 +137,14 @@ brcmf_proto_reset_if(struct brcmf_pub *drvr, struct brcmf_if *ifp)
 	if (!drvr->proto->reset_if)
 		return;
 	drvr->proto->reset_if(ifp);
+}
+
+static inline void
+brcmf_proto_cleanup_if(struct brcmf_pub *drvr, struct brcmf_if *ifp)
+{
+	if (!drvr->proto->cleanup_if)
+		return;
+	drvr->proto->cleanup_if(ifp);
 }
 
 static inline int

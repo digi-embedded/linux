@@ -481,6 +481,8 @@ struct brcmf_fws_stats {
 	u32 txs_host_tossed;
 	u32 bus_flow_block;
 	u32 fws_flow_block;
+	u32 cnt_recv_err;
+	u32 cnt_cleanup_if;
 };
 
 struct brcmf_fws_info {
@@ -1623,6 +1625,7 @@ void brcmf_fws_recv_err(struct brcmf_pub *drvr)
 	brcmf_dbg(SDIO, "Enter\n");
 
 	brcmf_fws_lock(fws);
+	fws->stats.cnt_recv_err++;
 	fws->credit_recover = true;
 	fws->sdio_recv_error = true;
 	brcmf_fws_unlock(fws);
@@ -2437,35 +2440,35 @@ static void brcmf_fws_dequeue_worker(struct work_struct *worker)
 }
 
 #ifdef DEBUG
+
 static int brcmf_debugfs_fws_stats_read(struct seq_file *seq, void *data)
 {
 	struct brcmf_bus *bus_if = dev_get_drvdata(seq->private);
-	struct brcmf_fws_stats *fwstats = &(drvr_to_fws(bus_if->drvr)->stats);
+	struct brcmf_fws_info *fws = drvr_to_fws(bus_if->drvr);
+	struct brcmf_fws_stats *fwstats = &fws->stats;
 
 	seq_printf(seq,
-		   "header_pulls:      %u\n"
-		   "header_only_pkt:   %u\n"
-		   "tlv_parse_failed:  %u\n"
-		   "tlv_invalid_type:  %u\n"
-		   "mac_update_fails:  %u\n"
-		   "ps_update_fails:   %u\n"
-		   "if_update_fails:   %u\n"
-		   "pkt2bus:           %u\n"
-		   "generic_error:     %u\n"
-		   "rollback_success:  %u\n"
-		   "rollback_failed:   %u\n"
-		   "delayq_full:       %u\n"
-		   "supprq_full:       %u\n"
-		   "txs_indicate:      %u\n"
-		   "txs_discard:       %u\n"
-		   "txs_suppr_core:    %u\n"
-		   "txs_suppr_ps:      %u\n"
-		   "txs_tossed:        %u\n"
-		   "txs_host_tossed:   %u\n"
-		   "bus_flow_block:    %u\n"
-		   "fws_flow_block:    %u\n"
-		   "send_pkts:         BK:%u BE:%u VO:%u VI:%u BCMC:%u\n"
-		   "requested_sent:    BK:%u BE:%u VO:%u VI:%u BCMC:%u\n",
+		   "header_pulls:    %8u\t"
+		   "header_only_pkt: %8u\n"
+		   "tlv_parse_failed:%8u\t"
+		   "tlv_invalid_type:%8u\n"
+		   "mac_update_fails:%8u\t"
+		   "ps_update_fails: %8u\t"
+		   "if_update_fails: %8u\n"
+		   "pkt2bus:         %8u\t"
+		   "generic_error:   %8u\n"
+		   "rollback_success:%8u\t"
+		   "rollback_failed: %8u\n"
+		   "delayq_full:     %8u\t"
+		   "supprq_full:     %8u\n"
+		   "txs_indicate:    %8u\t"
+		   "txs_discard:     %8u\n"
+		   "txs_suppr_core:  %8u\t"
+		   "txs_suppr_ps:    %8u\n"
+		   "txs_tossed:      %8u\t"
+		   "txs_host_tossed: %8u\n"
+		   "bus_flow_block:  %8u\t"
+		   "fws_flow_block:  %8u\n",
 		   fwstats->header_pulls,
 		   fwstats->header_only_pkt,
 		   fwstats->tlv_parse_failed,
@@ -2486,7 +2489,17 @@ static int brcmf_debugfs_fws_stats_read(struct seq_file *seq, void *data)
 		   fwstats->txs_tossed,
 		   fwstats->txs_host_tossed,
 		   fwstats->bus_flow_block,
-		   fwstats->fws_flow_block,
+		   fwstats->fws_flow_block);
+
+	seq_printf(seq,
+		   "receive error:   %8u\t"
+		   "cleanup if:      %8u\n\n",
+		   fwstats->cnt_recv_err,
+		   fwstats->cnt_cleanup_if);
+
+	seq_printf(seq,
+		   "send_pkts:         BK:%u BE:%u VO:%u VI:%u BCMC:%u\n"
+		   "requested_sent:    BK:%u BE:%u VO:%u VI:%u BCMC:%u\n\n",
 		   fwstats->send_pkts[0], fwstats->send_pkts[1],
 		   fwstats->send_pkts[2], fwstats->send_pkts[3],
 		   fwstats->send_pkts[4],
@@ -2694,12 +2707,13 @@ void brcmf_fws_bus_blocked(struct brcmf_pub *drvr, bool flow_blocked)
 	}
 }
 
-void brcmf_fws_wa_cleanup_by_ifidx(struct brcmf_pub *drvr, int ifidx)
+void brcmf_fws_cleanup_interface(struct brcmf_if *ifp)
 {
-	struct brcmf_fws_info *fws = drvr_to_fws(drvr);
+	struct brcmf_fws_info *fws = drvr_to_fws(ifp->drvr);
 	struct brcmf_fws_mac_descriptor *entry;
 	struct brcmf_fws_mac_descriptor *table;
 	bool (*matchfn)(struct sk_buff *, void *) = brcmf_fws_ifidx_match;
+	int ifidx = ifp->ifidx;
 	int i;
 
 	if (!fws->sdio_recv_error)
@@ -2709,6 +2723,7 @@ void brcmf_fws_wa_cleanup_by_ifidx(struct brcmf_pub *drvr, int ifidx)
 
 	brcmf_fws_lock(fws);
 
+	fws->stats.cnt_cleanup_if++;
 	fws->sdio_recv_error = false;
 
 	entry = &fws->desc.iface[ifidx];
