@@ -109,22 +109,16 @@ EXPORT_SYMBOL(stm32_omi_wait_nobusy);
 int stm32_omi_wait_cmd(struct stm32_omi *omi)
 {
 	void __iomem *regs_base = omi->regs_base;
-	u32 cr, sr;
+	u32 sr;
 	int err = 0;
 
-	if ((readl_relaxed(regs_base + OSPI_SR) & SR_TCF) ||
-	    omi->fmode == CR_FMODE_APM)
+	if (omi->fmode == CR_FMODE_APM)
 		goto out;
 
-	reinit_completion(&omi->data_completion);
-	cr = readl_relaxed(regs_base + OSPI_CR);
-	writel_relaxed(cr | CR_TCIE | CR_TEIE, regs_base + OSPI_CR);
+	err = readl_relaxed_poll_timeout_atomic(regs_base + OSPI_SR,
+						sr, (sr & (SR_TEF | SR_TCF)), 1,
+						STM32_WAIT_CMD_TIMEOUT_US);
 
-	if (!wait_for_completion_timeout(&omi->data_completion,
-				msecs_to_jiffies(STM32_COMP_TIMEOUT_MS)))
-		err = -ETIMEDOUT;
-
-	sr = readl_relaxed(regs_base + OSPI_SR);
 	if (sr & SR_TCF)
 		/* avoid false timeout */
 		err = 0;
@@ -159,20 +153,11 @@ static irqreturn_t stm32_omi_irq(int irq, void *dev_id)
 	cr = readl_relaxed(regs_base + OSPI_CR);
 	sr = readl_relaxed(regs_base + OSPI_SR);
 
-	if (cr & CR_SMIE && sr & SR_SMF) {
+	if (sr & SR_SMF) {
 		/* disable irq */
 		cr &= ~CR_SMIE;
 		writel_relaxed(cr, regs_base + OSPI_CR);
 		complete(&omi->match_completion);
-
-		return IRQ_HANDLED;
-	}
-
-	if (sr & (SR_TEF | SR_TCF)) {
-		/* disable irq */
-		cr &= ~CR_TCIE & ~CR_TEIE;
-		writel_relaxed(cr, regs_base + OSPI_CR);
-		complete(&omi->data_completion);
 	}
 
 	return IRQ_HANDLED;
@@ -623,7 +608,6 @@ static int stm32_omi_probe(struct platform_device *pdev)
 		dev_info(dev, "No memory-map region found\n");
 	}
 
-	init_completion(&omi->data_completion);
 	init_completion(&omi->match_completion);
 
 	vdev = platform_device_alloc(name, PLATFORM_DEVID_AUTO);

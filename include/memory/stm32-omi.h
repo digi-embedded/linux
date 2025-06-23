@@ -41,8 +41,6 @@
 #define CR_DMAEN		BIT(2)
 #define CR_TCEN			BIT(3)
 #define CR_FTHRES_SHIFT		8
-#define CR_TEIE			BIT(16)
-#define CR_TCIE			BIT(17)
 #define CR_SMIE			BIT(19)
 #define CR_APMS			BIT(22)
 #define CR_CSSEL		BIT(24)
@@ -147,6 +145,7 @@
 #define STM32_ABT_TIMEOUT_US		100000
 #define STM32_COMP_TIMEOUT_MS		5000
 #define STM32_BUSY_TIMEOUT_US		100000
+#define STM32_WAIT_CMD_TIMEOUT_US	5000
 #define STM32_DLYB_FREQ_THRESHOLD	50000000
 #define STM32_DLYBOS_TIMEOUT_MS		1000
 #define STM32_DLYBOS_DELAY_NB		24
@@ -158,7 +157,6 @@ struct stm32_omi {
 	struct reset_control *rstc;
 	struct regmap *regmap;
 
-	struct completion data_completion;
 	struct completion match_completion;
 
 	struct dma_chan *dma_chtx;
