@@ -667,6 +667,8 @@ static int stm32_pwm_probe(struct platform_device *pdev)
 			pm_runtime_get_noresume(dev);
 		pm_runtime_set_active(dev);
 		clk_enable(priv->clk);
+		if (ret)
+			return ret;
 	}
 
 	pm_runtime_set_autosuspend_delay(dev, STM32_SLEEP_DELAY_MS);
