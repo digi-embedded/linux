@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Digi International Inc.
+ * Copyright 2025 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,11 +22,11 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: Sony imx335 MIPI-CSI camera";
+			overlay-description = "DVK: OmniVision OV5640 MIPI-CSI camera";
 		};
 	};
 
-	/* Add Sony imx335 MIPI-CSI camera */
+	/* Add OmniVision OV5640 MIPI-CSI camera */
 	fragment@1 {
 		target = <&i2c1>;
 		__overlay__ {
@@ -34,16 +34,18 @@
 			#size-cells = <0>;
 
 			/* MIPI-CSI camera */
-			imx335: imx335@1a {
-				compatible = "sony,imx335";
-				reg = <0x1a>;
+			ov5640_mipi: ov5640_mipi@3c {
+				compatible = "ovti,ov5640";
+				reg = <0x3c>;
 				clocks = <&clk_ext_camera>;
-				reset-gpios = <&gpiog 7 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
-				powerdown-gpios = <&gpiof 3 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
+				clock-names = "xclk";
+				csi_id = <0>;
+				DOVDD-supply = <&reg_3v3_board>;
+				powerdown-gpios = <&gpiog 7 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>; /* CSI_RESET */
 				status = "okay";
 
 				port {
-					imx335_ep: endpoint {
+					ov5640_mipi_ep: endpoint {
 						remote-endpoint = <&csi_sink>;
 						clock-lanes = <0>;
 						data-lanes = <1 2>;
@@ -64,7 +66,7 @@
 				port@0 {
 					reg = <0>;
 					csi_sink: endpoint {
-						remote-endpoint = <&imx335_ep>;
+						remote-endpoint = <&ov5640_mipi_ep>;
 						data-lanes = <0 1>;
 						bus-type = <4>;
 					};
@@ -73,9 +75,9 @@
 		};
 	};
 
-	/* Disable OV5640 MIPI-CSI camera */
+	/* Disable Sony imx335 MIPI-CSI camera */
 	fragment@3 {
-		target = <&ov5640_mipi>;
+		target = <&imx335>;
 		__overlay__ {
 			status = "disabled";
 		};
