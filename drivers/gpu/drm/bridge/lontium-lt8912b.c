@@ -47,6 +47,7 @@ struct lt8912 {
 
 	u8 data_lanes;
 	bool is_power_on;
+	bool no_hpd;
 };
 
 static int lt8912_write_init_config(struct lt8912 *lt)
@@ -392,6 +393,9 @@ static enum drm_connector_status lt8912_check_cable_status(struct lt8912 *lt)
 	int ret;
 	unsigned int reg_val;
 
+	if (lt->no_hpd)
+		return connector_status_connected;
+
 	ret = regmap_read(lt->regmap[I2C_MAIN], 0xC1, &reg_val);
 	if (ret)
 		return connector_status_unknown;
@@ -718,6 +722,8 @@ static int lt8912_parse_dt(struct lt8912 *lt)
 	int ret;
 	int data_lanes;
 	struct device_node *port_node;
+
+	lt->no_hpd = of_property_read_bool(dev->of_node, "digi,no-hpd");
 
 	gp_reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(gp_reset)) {
