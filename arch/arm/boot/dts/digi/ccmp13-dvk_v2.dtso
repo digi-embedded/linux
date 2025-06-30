@@ -93,14 +93,14 @@
 
 	/* Ethernet PHYs are supplied by the main VDD power rail */
 	fragment@4 {
-		target = <&eth1>;
+		target = <&ethernet1>;
 		__overlay__ {
 			phy-supply = <&scmi_vdd>;
 		};
 	};
 
 	fragment@5 {
-		target = <&eth2>;
+		target = <&ethernet2>;
 		__overlay__ {
 			phy-supply = <&scmi_vdd>;
 		};
