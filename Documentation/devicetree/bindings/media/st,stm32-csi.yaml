@@ -32,6 +32,12 @@ properties:
   resets:
     maxItems: 1
 
+  vdd-supply:
+    description: Digital core power supply (0.91V)
+
+  vdda18-supply:
+    description: System analog power supply (1.8V)
+
   power-domains:
     maxItems: 1
 
