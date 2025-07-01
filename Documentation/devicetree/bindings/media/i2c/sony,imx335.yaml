@@ -45,6 +45,10 @@ properties:
     description: Reference to the GPIO connected to the XCLR pin, if any.
     maxItems: 1
 
+  powerdown-gpios:
+    description: GPIO allowing to control the power of the module.
+    maxItems: 1
+
   port:
     additionalProperties: false
     $ref: /schemas/graph.yaml#/$defs/port-base
