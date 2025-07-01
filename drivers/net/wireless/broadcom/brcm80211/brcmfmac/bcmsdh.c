@@ -283,6 +283,9 @@ u32 brcmf_sdiod_readl(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret)
 
 	data = sdio_readl(sdiodev->func1, addr, &retval);
 
+	if (retval)
+		data = 0;
+
 	brcmf_dbg(SDIO, "data 0x%08x\n", data);
 out:
 	if (ret)
