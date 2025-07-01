@@ -69,6 +69,11 @@ properties:
           hsync-active: true
           vsync-active: true
 
+          pclk-max-frequency:
+            $ref: /schemas/types.yaml#/definitions/uint32
+            description:
+              Maximum acceptable pixel clock frequency.
+
 required:
   - compatible
   - reg
