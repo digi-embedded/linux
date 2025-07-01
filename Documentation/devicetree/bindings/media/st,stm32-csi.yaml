@@ -62,14 +62,10 @@ properties:
 
             properties:
               data-lanes:
-                description:
-                  Indicate the number of data-lanes and their mapping.
-
+                minItems: 1
                 items:
-                  minItems: 1
-                  items:
-                    - const: 1
-                    - const: 2
+                  - const: 1
+                  - const: 2
 
             required:
               - data-lanes
