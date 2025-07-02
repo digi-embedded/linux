@@ -1,5 +1,5 @@
 /*
- * Copyright 2021, Digi International Inc.
+ * Copyright (C) 2021-2025, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -33,6 +33,7 @@
 #include "../freescale/imx8mm.dtsi"
 /* Digi ConnectCore 8M Mini */
 #include "ccimx8mm.dtsi"
+#include <dt-bindings/phy/phy-imx8-pcie.h>
 
 / {
 	model = "Digi International ConnectCore 8M Mini DVK.";
@@ -203,6 +204,23 @@
 			"Line In Jack", "INB2";
 		status = "okay";
 	};
+
+	hdmi-connector {
+		compatible = "hdmi-connector";
+		label = "hdmi";
+		type = "a";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_hdmi_hpd>;
+		hdmi-pwr-supply = <&reg_5v_board>;
+		hpd-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+
+		port {
+			hdmi_connector_in: endpoint {
+				remote-endpoint = <&lt8912_out>;
+			};
+		};
+	};
 };
 
 &csi1_bridge {
@@ -280,6 +298,20 @@
 };
 
 &gpu {
+	/*
+	 * Use a table to set a fixed amount of contiguous memory used by the GPU
+	 * per memory configuration. This way we leave plenty of room for the
+	 * other system features when the memory is limited. The table's rows must
+	 * be in increasing RAM order. The GPU CMA should always be smaller than the
+	 * total CMA (see the table in the "reserved-memory" node to see the total CMA
+	 * values per memory configuration).
+	 */
+	digi,contiguous-size-table = <
+		/* RAM         CMA*/
+		0x0 0x40000000 0x0 0x08000000	/* 1 GB variants   -> 128 MB of GPU CMA */
+		0x0 0x80000000 0x0 0x10000000	/* 2 GB variants   -> 256 MB of GPU CMA */
+		0x1 0x00000000 0x0 0x20000000	/* 4 GB variants   -> 512 MB of GPU CMA */
+	>;
 	status = "okay";
 };
 
@@ -422,21 +454,31 @@
 	};
 
 	lt_bridge: lt8912@48 {
-		compatible = "lontium,lt8912";
+		compatible = "lontium,lt8912b";
 		reg = <0x48>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_lt8912>, <&pinctrl_lt8912_hpd>;
+		pinctrl-0 = <&pinctrl_lt8912>;
 		reset-gpios = <&gpio3 7 GPIO_ACTIVE_LOW>;
-		hpd-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
-		digi,dsi-lanes = <4>;
-		vdd1-supply = <&reg_5v_board>;
-		no-edid;
+		vdd-supply = <&reg_3v3_ext>;
 		status = "okay";
 
-		port {
-			lt8912_1_in: endpoint {
-				/* add lanes */
-				remote-endpoint = <&mipi_dsi_hdmi_out>;
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				lt8912_1_in: endpoint {
+					data-lanes = <1 2 3 4>;
+					remote-endpoint = <&mipi_dsi_hdmi_out>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				lt8912_out: endpoint {
+					remote-endpoint = <&hdmi_connector_in>;
+				};
 			};
 		};
 
@@ -631,6 +673,13 @@
 	status = "disabled";
 };
 
+&pcie_phy {
+	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
+	fsl,clkreq-unsupported;
+	clocks = <&pcie0_refclk>;
+	status = "okay";
+};
+
 &pcie0{
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pcie0>;
@@ -639,17 +688,14 @@
 	wake-gpio = <&gpio3 21 GPIO_ACTIVE_LOW>;
 	clocks = <&clk IMX8MM_CLK_PCIE1_ROOT>,
 		 <&clk IMX8MM_CLK_PCIE1_AUX>,
-		 <&clk IMX8MM_CLK_PCIE1_PHY>,
 		 <&pcie0_refclk>;
-	clock-names = "pcie", "pcie_aux", "pcie_phy", "pcie_bus";
+	clock-names = "pcie", "pcie_aux", "pcie_bus";
 	assigned-clocks = <&clk IMX8MM_CLK_PCIE1_AUX>,
-			  <&clk IMX8MM_CLK_PCIE1_PHY>,
 			  <&clk IMX8MM_CLK_PCIE1_CTRL>;
-	assigned-clock-rates = <10000000>, <100000000>, <250000000>;
+	assigned-clock-rates = <10000000>, <250000000>;
 	assigned-clock-parents = <&clk IMX8MM_SYS_PLL2_50M>,
-				  <&clk IMX8MM_SYS_PLL2_100M>,
 				  <&clk IMX8MM_SYS_PLL2_250M>;
-	ext_osc = <1>;
+	vpcie-supply = <&reg_3v3_board>;
 	status = "okay";
 };
 
@@ -892,7 +938,7 @@
 		>;
 	};
 
-	pinctrl_lt8912_hpd: lt8912-hpd {
+	pinctrl_hdmi_hpd: hdmi_hpd_grp {
 		fsl,pins = <
 			/* Hotplug detect */
 			MX8MM_IOMUXC_NAND_DATA02_GPIO3_IO8	0x19

@@ -392,6 +392,9 @@ static enum drm_connector_status lt8912_check_cable_status(struct lt8912 *lt)
 	int ret;
 	unsigned int reg_val;
 
+	if (of_property_read_bool(lt->dev->of_node, "digi,no-hpd"))
+		return connector_status_connected;
+
 	ret = regmap_read(lt->regmap[I2C_MAIN], 0xC1, &reg_val);
 	if (ret)
 		return connector_status_unknown;

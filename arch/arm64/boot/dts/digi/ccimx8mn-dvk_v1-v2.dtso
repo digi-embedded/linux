@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Digi International Inc.
+ * Copyright (C) 2020-2025, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -27,19 +27,26 @@
 		};
 	};
 
+	/*
+	 * A hardware design issue on the DVK version <=2 makes the
+	 * hotplug detect line not usable.
+	 */
 	fragment@1 {
 		target = <&lt_bridge>;
 		__overlay__ {
-			/*
-			 * A hardware design issue on the DVK version <=2 makes the
-			 * hotplug detect line not usable.
-			 */
-			pinctrl-0 = <&pinctrl_lt8912>;
-			no-hpd;
+			digi,no-hpd;
 		};
 	};
 
 	fragment@2 {
+		target = <&hdmi_connector>;
+		__overlay__ {
+			pinctrl-0 = <>;
+			hpd-gpios = <>;
+		};
+	};
+
+	fragment@3 {
 		target = <&uart3>;
 		__overlay__ {
 			/*
@@ -56,7 +63,7 @@
 	};
 
 	/* Audio codec on DVK v1 and v2 was connected to I2C2 */
-	fragment@3 {
+	fragment@4 {
 		target = <&i2c2>;
 		__overlay__ {
 			#address-cells = <1>;
@@ -81,7 +88,7 @@
 		};
 	};
 
-	fragment@4 {
+	fragment@5 {
 		target = <&sound_max98089>;
 		__overlay__ {
 			audio-codec = <&max98089_v1v2>;
@@ -89,7 +96,7 @@
 	};
 
 	/* Disable the audio codec on I2C3 (default on DVK >= v3) */
-	fragment@5 {
+	fragment@6 {
 		target = <&max98089>;
 		__overlay__ {
 			status = "disabled";
