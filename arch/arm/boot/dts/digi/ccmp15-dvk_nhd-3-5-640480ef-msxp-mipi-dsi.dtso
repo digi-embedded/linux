@@ -22,63 +22,60 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: Sony imx335 MIPI-CSI camera";
+			overlay-description = "DVK: NHD-3.5-640480EF-MSXP MIPI display";
 		};
 	};
 
-	/* Add Sony imx335 MIPI-CSI camera */
+	/* Disable LT8912 */
 	fragment@1 {
-		target = <&i2c1>;
-		__overlay__ {
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			/* MIPI-CSI camera */
-			imx335: imx335@1a {
-				compatible = "sony,imx335";
-				reg = <0x1a>;
-				clocks = <&clk_ext_camera>;
-				reset-gpios = <&gpiog 7 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
-				powerdown-gpios = <&gpiof 3 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
-				status = "okay";
-
-				port {
-					imx335_ep: endpoint {
-						remote-endpoint = <&csi_sink>;
-						clock-lanes = <0>;
-						data-lanes = <1 2>;
-						link-frequencies = /bits/ 64 <594000000>;
-					};
-				};
-			};
-		};
-	};
-
-	/* Set CSI endpoint */
-	fragment@2 {
-		target = <&csi>;
-		__overlay__ {
-			ports {
-				#address-cells = <1>;
-				#size-cells = <0>;
-				port@0 {
-					reg = <0>;
-					csi_sink: endpoint {
-						remote-endpoint = <&imx335_ep>;
-						data-lanes = <0 1>;
-						bus-type = <4>;
-					};
-				};
-			};
-		};
-	};
-
-	/* Disable OV5640 MIPI-CSI camera */
-	fragment@3 {
-		target = <&ov5640_mipi>;
+		target = <&lt_bridge>;
 		__overlay__ {
 			status = "disabled";
 		};
 	};
 
+	/*
+	 * Disable PWM backlight
+	 * Provide Backlight from an external power source: 19.2V/40mA
+	 * Use BCKL_PWM line as the RESET line instead
+	 */
+	fragment@2 {
+		target = <&pwm2>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Add NHD-3.5-640480EF-MSXP MIPI display panel */
+	fragment@3 {
+		target = <&dsi>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ports {
+				port@1 {
+					dsi_out: endpoint {
+						remote-endpoint = <&panel_in>;
+					};
+				};
+			};
+
+			panel@0 {
+				compatible = "newhaven,nhd-3.5-640480ef-msxp";
+				reg = <0>;
+				VCC-supply = <&v3v3>;
+				IOVCC-supply = <&v3v3>;
+				reset-gpios = <&gpioa 15 GPIO_ACTIVE_HIGH>; /* BCKL_PWM */
+				dsi-lanes = <2>;
+				status = "okay";
+
+				port {
+					panel_in: endpoint {
+						remote-endpoint = <&dsi_out>;
+					};
+				};
+			};
+		};
+	};
 };

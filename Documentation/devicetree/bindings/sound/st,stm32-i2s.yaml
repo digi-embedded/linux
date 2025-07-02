@@ -61,6 +61,10 @@ properties:
     minItems: 1
     maxItems: 2
 
+  digi,i2s-master:
+    description: Configure the I2S interface as master.
+    type: boolean
+
 required:
   - compatible
   - "#sound-dai-cells"

@@ -475,31 +475,26 @@ dw_mipi_dsi_phy_141_get_lane_mbps(void *priv_data,
 static void dw_mipi_dsi_clk_disable(struct clk_hw *clk)
 {
 	struct dw_mipi_dsi_stm *dsi = clk_to_dw_mipi_dsi_stm(clk);
-	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
 
 	if (!dsi->probe_done)
 		return;
 
-	ret = clk_prepare_enable(dsi->pclk);
-	if (ret) {
-		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
-		return;
-	}
+	if (__clk_is_enabled(dsi->pclk)) {
+		if (dsi->hw_version == HWVER_141) {
+			/* Disable the DSI PLL */
+			dsi_clear(dsi, DSI_WRPCR2, WRPCR2_PLLEN);
+		} else {
+			/* Disable the DSI PLL */
+			dsi_clear(dsi, DSI_WRPCR, WRPCR_PLLEN);
 
-	if (dsi->hw_version == HWVER_141) {
-		/* Disable the DSI PLL */
-		dsi_clear(dsi, DSI_WRPCR2, WRPCR2_PLLEN);
+			/* Disable the regulator */
+			dsi_clear(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
+		}
 	} else {
-		/* Disable the DSI PLL */
-		dsi_clear(dsi, DSI_WRPCR, WRPCR_PLLEN);
-
-		/* Disable the regulator */
-		dsi_clear(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
+		DRM_DEBUG_DRIVER("Warning peripheral clock was not enabled!\n");
 	}
-
-	clk_disable_unprepare(dsi->pclk);
 }
 
 static int dw_mipi_dsi_clk_enable(struct clk_hw *clk)
@@ -738,16 +733,6 @@ static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 	return 0;
 }
 
-static void dw_mipi_dsi_clk_unregister(void *data)
-{
-	struct dw_mipi_dsi_stm *dsi = data;
-
-	DRM_DEBUG_DRIVER("\n");
-
-	of_clk_del_provider(dsi->dev->of_node);
-	clk_hw_unregister(&dsi->txbyte_clk);
-}
-
 static const struct clk_ops dw_mipi_dsi_stm_clk_ops = {
 	.enable = dw_mipi_dsi_clk_enable,
 	.disable = dw_mipi_dsi_clk_disable,
@@ -771,10 +756,9 @@ static struct clk_init_data cdata_init_141 = {
 	.num_parents = 1,
 };
 
-static int dw_mipi_dsi_clk_register(struct dw_mipi_dsi_stm *dsi,
-				    struct device *dev)
+static int dw_mipi_dsi_clk_register(struct dw_mipi_dsi_stm *dsi)
 {
-	struct device_node *node = dev->of_node;
+	struct device *dev = dsi->dev;
 	int ret;
 
 	DRM_DEBUG_DRIVER("Registering clk\n");
@@ -792,12 +776,22 @@ static int dw_mipi_dsi_clk_register(struct dw_mipi_dsi_stm *dsi,
 	if (ret)
 		return ret;
 
-	ret = of_clk_add_hw_provider(node, of_clk_hw_simple_get,
+	ret = of_clk_add_hw_provider(dev->of_node, of_clk_hw_simple_get,
 				     &dsi->txbyte_clk);
 	if (ret)
 		clk_hw_unregister(&dsi->txbyte_clk);
 
 	return ret;
+}
+
+static void dw_mipi_dsi_clk_unregister(struct dw_mipi_dsi_stm *dsi)
+{
+	struct device *dev = dsi->dev;
+
+	DRM_DEBUG_DRIVER("\n");
+
+	of_clk_del_provider(dev->of_node);
+	clk_hw_unregister(&dsi->txbyte_clk);
 }
 
 static int dw_mipi_dsi_phy_init(void *priv_data)
@@ -1003,7 +997,7 @@ dw_mipi_dsi_phy_141_get_timing(void *priv_data, unsigned int lane_mbps,
 	return 0;
 }
 
-#define CLK_TOLERANCE_HZ 50
+#define CLK_TOLERANCE_HZ 250000
 
 static enum drm_mode_status
 dw_mipi_dsi_stm_mode_valid(void *priv_data,
@@ -1251,14 +1245,9 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, dsi);
 
-	dsi->dsi = dw_mipi_dsi_probe(pdev, &dsi->pdata);
-	if (IS_ERR(dsi->dsi)) {
-		ret = PTR_ERR(dsi->dsi);
-		dev_err_probe(dev, ret, "Failed to initialize mipi dsi host\n");
-		goto err_dsi_probe;
-	}
+	dsi->dev = dev;
 
-	ret = dw_mipi_dsi_clk_register(dsi, dev);
+	ret = dw_mipi_dsi_clk_register(dsi);
 	if (ret) {
 		DRM_ERROR("Failed to register DSI pixel clock: %d\n", ret);
 		goto err_dsi_probe;
@@ -1268,6 +1257,13 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	/* No need to return since only MP25 has it */
 	if (IS_ERR(dsi->px_clk))
 		dev_err_probe(dev, PTR_ERR(dsi->px_clk), "Unable to get px_clk clock\n");
+
+	dsi->dsi = dw_mipi_dsi_probe(pdev, &dsi->pdata);
+	if (IS_ERR(dsi->dsi)) {
+		ret = PTR_ERR(dsi->dsi);
+		dev_err_probe(dev, ret, "Failed to initialize mipi dsi host\n");
+		goto err_dsi_probe;
+	}
 
 	dsi->probe_done = true;
 
@@ -1285,6 +1281,9 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 
 	clk_disable_unprepare(dsi->pclk);
 	regulator_disable(dsi->vdd_supply);
+
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-dsi"))
+		regulator_disable(dsi->vdda18_supply);
 
 	return 0;
 

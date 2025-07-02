@@ -15,6 +15,7 @@
 #define BRCMFMAC_ENABLE		1
 #define BRCMFMAC_AUTO		2
 
+#define BRCMF_DEFAULT_SDIO_IDLE_CONFIG		2
 /* Keeping these macro definition here because these are defined in mmc drivers.
  * So for 3rd party mmc, fmac build should not fail due to build error.
  */
@@ -26,6 +27,11 @@
 #define SDIO_SDMODE_1BIT	BIT(4)	/* Set 1-bit Bus mode */
 #define SDIO_SDMODE_4BIT	BIT(5)	/* Set 4-bit Bus mode */
 #endif /* !SDIO_IDLECLOCK_DIS */
+
+#ifndef unsafe_memcpy
+#define unsafe_memcpy(dst, src, bytes, justification)		\
+	memcpy(dst, src, bytes)
+#endif
 
 /* Definitions for the module global and device specific settings are defined
  * here. Two structs are used for them. brcmf_mp_global_t and brcmf_mp_device.
@@ -98,7 +104,7 @@ struct brcmf_mp_device {
 	} bus;
 	bool		pkt_prio;
 	int			idleclk_disable;
-	bool		idle_time_zero;
+	int		sdio_bus_idle_time;
 };
 
 /**

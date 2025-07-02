@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+/*
+ * Copyright 2024 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: version 1";
+		};
+	};
+
+	/*
+	 * Apply RTC calibration.
+	 * SOMs with HV=1 have a capacitance on the LSE oscillator lines
+	 * that results in a low input frequency (average 32765.42Hz).
+	 * As a consequence, the RTC count suffers an average drift of 78.65ppm
+	 * (~6.8 seconds/day)
+	 * Correct this with the RTC calibration register.
+	 */
+	fragment@1 {
+		target = <&rtc>;
+		__overlay__ {
+			digi,calib-calp;
+			digi,calib-calm = <0x1ad>;
+		};
+	};
+};

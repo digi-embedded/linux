@@ -344,7 +344,6 @@ struct rte_console {
 					 * when idle
 					 */
 #define BRCMF_IDLE_STOP		(-1)	/* Request SD clock be stopped */
-#define BRCMF_IDLE_INTERVAL	1
 
 #define KSO_WAIT_US 50
 #define KSO_MAX_SEQ_TIME_NS (1000000 * 10) /* Ideal time for kso sequence 10ms in ns*/
@@ -573,7 +572,6 @@ struct brcmf_sdio {
 	struct task_ctl	thr_rxf_ctl;
 	spinlock_t rxf_lock;	/* lock for rxf idx protection */
 	bool h1_ddr50_mode;	/* H1 DDR50 Mode enabled*/
-	bool ignore_bus_error;	/* Ignore SDIO Bus access error*/
 };
 
 /* clkstate */
@@ -771,9 +769,6 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	/* Change bus width to 1-bit mode before kso 0 */
 	if (!on && bus->idleclock == BRCMF_IDLE_STOP)
 		brcmf_sdio_set_sdbus_clk_width(bus, SDIO_SDMODE_1BIT);
-	else
-	/* Set Flag to ignore SDIO Bus access error during KSO */
-		bus->ignore_bus_error = true;
 
 	/* 1st KSO write goes to AOS wake up core if device is asleep  */
 	brcmf_sdiod_writeb(bus->sdiodev, SBSDIO_FUNC1_SLEEPCSR, wr_val, &err);
@@ -786,15 +781,15 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	if (!on) {
 		bus->sdiodev->sbwad_valid = 0;
 		return err;
-	} else {
-		/* device WAKEUP through KSO:
-		 * write bit 0 & read back until
-		 * both bits 0 (kso bit) & 1 (dev on status) are set
-		 */
-		cmp_val = SBSDIO_FUNC1_SLEEPCSR_KSO_MASK |
-			  SBSDIO_FUNC1_SLEEPCSR_DEVON_MASK;
-		bmask = cmp_val;
 	}
+
+	/* device WAKEUP through KSO:
+	 * write bit 0 & read back until
+	 * both bits 0 (kso bit) & 1 (dev on status) are set
+	 */
+	cmp_val = SBSDIO_FUNC1_SLEEPCSR_KSO_MASK |
+		SBSDIO_FUNC1_SLEEPCSR_DEVON_MASK;
+	bmask = cmp_val;
 
 	do {
 		/* reliable KSO bit set/clr:
@@ -848,25 +843,27 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 			  "kso_seq_time=%luns rd_val=0x%x err=%d\n",
 			   on, try_cnt, err_cnt, kso_loop_time, rd_val, err);
 
-	if (on && bus->idleclock == BRCMF_IDLE_STOP) {
+	if (bus->idleclock == BRCMF_IDLE_STOP) {
 		/* Change the bus width to 4-bit mode on kso 1 */
 		brcmf_sdio_set_sdbus_clk_width(bus, SDIO_SDMODE_4BIT);
-
-		/* New KSO Sequence for H1 DDR50 Mode*/
-		if (bus->h1_ddr50_mode) {
-			struct brcmf_sdio_dev *sdiod = bus->sdiodev;
-			u32 ret, chipid;
-
-			chipid = brcmf_sdiod_readl(sdiod,
-						   bus->ci->ccsec->bus_corebase + SD_REG(chipid),
-						   &ret);
-			brcmf_dbg(SDIO, "chipid: 0x%x ret = 0x%x\n", chipid, ret);
-		}
-
-		/* Clear Flag to ignore SDIO Bus access error during KSO */
-		bus->ignore_bus_error = false;
-		sdio_retune_release(bus->sdiodev->func1);
 	}
+
+	/* New KSO Sequence for H1 DDR50 Mode*/
+	if (bus->h1_ddr50_mode) {
+		struct brcmf_sdio_dev *sdiod = bus->sdiodev;
+		u32 ret, chipid;
+
+		/* Set Flag to ignore SDIO Bus access error during KSO */
+		sdiod->ignore_bus_error = true;
+		chipid = brcmf_sdiod_readl(sdiod,
+					   bus->ci->ccsec->bus_corebase + SD_REG(chipid),
+					   &ret);
+		/* Clear Flag to ignore SDIO Bus access error during KSO */
+		sdiod->ignore_bus_error = false;
+		brcmf_dbg(SDIO, "chipid: 0x%x ret = 0x%x\n", chipid, ret);
+	}
+
+	sdio_retune_release(bus->sdiodev->func1);
 
 	if (kso_loop_time > KSO_MAX_SEQ_TIME_NS)
 		brcmf_err("ERR: KSO=%d sequence took %luns > expected %uns try_cnt=%d\n"
@@ -1249,7 +1246,7 @@ done:
 
 bool brcmf_sdio_bus_sleep_state(struct brcmf_sdio *bus)
 {
-	return bus->sleeping && !bus->ignore_bus_error;
+	return bus->sleeping;
 }
 
 #ifdef DEBUG
@@ -4555,7 +4552,7 @@ static void brcmf_sdio_bus_watchdog(struct brcmf_sdio *bus)
 		if ((!bus->dpc_running) && (bus->idletime > 0) &&
 		    (bus->clkstate == CLK_AVAIL)) {
 			bus->idlecount++;
-			if (bus->idlecount > bus->idletime) {
+			if (bus->idlecount >= bus->idletime) {
 				brcmf_dbg(SDIO, "idle\n");
 				sdio_claim_host(bus->sdiodev->func1);
 #ifdef DEBUG
@@ -4921,17 +4918,9 @@ brcmf_sdio_buscore_sec_attach(void *ctx, struct brcmf_blhs **blhs, struct brcmf_
 	return 0;
 }
 
-static const struct brcmf_buscore_ops brcmf_sdio_buscore_ops = {
-	.prepare = brcmf_sdio_buscoreprep,
-	.activate = brcmf_sdio_buscore_activate,
-	.read32 = brcmf_sdio_buscore_read32,
-	.write32 = brcmf_sdio_buscore_write32,
-	.sec_attach = brcmf_sdio_buscore_sec_attach,
-};
-
 #define LOOP_TO_CHECK_FOR_BP_ENABLE                     50000      /* Wait for 500msec */
 
-int brcmf_get_intr_pending_data(void *ctx)
+static int brcmf_get_intr_pending_data(void *ctx)
 {
 	struct brcmf_sdio_dev *sdiodev = (struct brcmf_sdio_dev *)ctx;
 	int loop = 0, status = 0, err = 0;
@@ -4959,6 +4948,15 @@ int brcmf_get_intr_pending_data(void *ctx)
 
 	return 0;
 }
+
+static const struct brcmf_buscore_ops brcmf_sdio_buscore_ops = {
+	.prepare = brcmf_sdio_buscoreprep,
+	.activate = brcmf_sdio_buscore_activate,
+	.read32 = brcmf_sdio_buscore_read32,
+	.write32 = brcmf_sdio_buscore_write32,
+	.sec_attach = brcmf_sdio_buscore_sec_attach,
+	.get_intr_pend = brcmf_get_intr_pending_data
+};
 
 static bool
 brcmf_sdio_probe_attach(struct brcmf_sdio *bus)
@@ -5585,22 +5583,6 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 			bus->sdiodev->fmac_ulp.ulp_state = FMAC_ULP_IDLE;
 	}
 
-	if (sdiod->settings->idleclk_disable == BRCMFMAC_DISABLE) {
-		bus->idleclock = BRCMF_IDLE_ACTIVE;
-	} else if (sdiod->settings->idleclk_disable == BRCMFMAC_ENABLE) {
-		bus->idleclock = BRCMF_IDLE_STOP;
-	} else if (sdiod->settings->idleclk_disable == BRCMFMAC_AUTO) {
-		if (sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012 ||
-		    sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43022 ||
-		    sdiod->func1->device == SDIO_DEVICE_ID_CYPRESS_43022) {
-			bus->idleclock = BRCMF_IDLE_STOP;
-		} else {
-			bus->idleclock = BRCMF_IDLE_ACTIVE;
-		}
-	} else {
-		brcmf_err("unexpected idleclk_disable%d\n", sdiod->settings->idleclk_disable);
-	}
-
 	/* ready */
 	return;
 
@@ -5767,10 +5749,30 @@ struct brcmf_sdio *brcmf_sdio_probe(struct brcmf_sdio_dev *sdiodev)
 	/* ...and initialize clock/power states */
 	bus->clkstate = CLK_SDONLY;
 
-	if (sdiodev->settings->idle_time_zero)
-		bus->idletime = 0;
+	if (sdiodev->settings->idleclk_disable)
+		bus->idleclock = BRCMF_IDLE_STOP;
 	else
-		bus->idletime = BRCMF_IDLE_INTERVAL;
+		bus->idleclock = BRCMF_IDLE_ACTIVE;
+
+	brcmf_dbg(TRACE, "idle clock Disable %d\n", sdiodev->settings->idleclk_disable);
+
+	bus->idletime = sdiodev->settings->sdio_bus_idle_time;
+
+	if (sdiodev->settings->idleclk_disable == BRCMFMAC_DISABLE) {
+		bus->idleclock = BRCMF_IDLE_ACTIVE;
+	} else if (sdiodev->settings->idleclk_disable == BRCMFMAC_ENABLE) {
+		bus->idleclock = BRCMF_IDLE_STOP;
+	} else if (sdiodev->settings->idleclk_disable == BRCMFMAC_AUTO) {
+		if (sdiodev->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012 ||
+		    sdiodev->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43022 ||
+		    sdiodev->func1->device == SDIO_DEVICE_ID_CYPRESS_43022) {
+			bus->idleclock = BRCMF_IDLE_STOP;
+		} else {
+			bus->idleclock = BRCMF_IDLE_ACTIVE;
+		}
+	} else {
+		brcmf_err("unexpected idleclk_disable%d\n", sdiodev->settings->idleclk_disable);
+	}
 
 	/* SR state */
 	bus->sr_enabled = false;
@@ -5801,7 +5803,9 @@ fail:
 /* Detach and free everything */
 void brcmf_sdio_remove(struct brcmf_sdio *bus)
 {
+#if defined(CONFIG_BRCMFMAC_BT_SHARED_SDIO) || defined(CONFIG_INFFMAC_BT_SHARED_SDIO)
 	struct brcmf_bus *bus_if = bus->sdiodev->bus_if;
+#endif
 	u32 reg_val, read_reg;
 	int err = 0;
 

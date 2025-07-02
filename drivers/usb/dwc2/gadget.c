@@ -1735,9 +1735,6 @@ static struct dwc2_hsotg_req *get_ep_head(struct dwc2_hsotg_ep *hs_ep)
 					queue);
 }
 
-static void dwc2_hsotg_ep_stop_xfr(struct dwc2_hsotg *hsotg,
-				   struct dwc2_hsotg_ep *hs_ep);
-
 /**
  * dwc2_gadget_start_next_request - Starts next request from ep queue
  * @hs_ep: Endpoint structure
@@ -1757,14 +1754,8 @@ static void dwc2_gadget_start_next_request(struct dwc2_hsotg_ep *hs_ep)
 		dwc2_hsotg_start_req(hsotg, hs_ep, hs_req, false);
 		return;
 	}
-	if (!hs_ep->isochronous) {
-		if (hs_ep->index && !dir_in) {
-			/* No new request, stop xfer and NAK on this endpoint. */
-			dev_dbg(hsotg->dev, "No request, stop %s\n", hs_ep->ep.name);
-			dwc2_hsotg_ep_stop_xfr(hsotg, hs_ep);
-		}
+	if (!hs_ep->isochronous)
 		return;
-	}
 
 	if (dir_in) {
 		dev_dbg(hsotg->dev, "%s: No more ISOC-IN requests\n",
@@ -2945,6 +2936,9 @@ static void dwc2_gadget_handle_out_token_ep_disabled(struct dwc2_hsotg_ep *ep)
 
 }
 
+static void dwc2_hsotg_ep_stop_xfr(struct dwc2_hsotg *hsotg,
+				   struct dwc2_hsotg_ep *hs_ep);
+
 /**
  * dwc2_gadget_handle_nak - handle NAK interrupt
  * @hs_ep: The endpoint on which interrupt is asserted.
@@ -3037,6 +3031,20 @@ static void dwc2_gadget_handle_nak(struct dwc2_hsotg_ep *hs_ep)
 static void kill_all_requests(struct dwc2_hsotg *hsotg,
 			      struct dwc2_hsotg_ep *ep,
 			      int result);
+
+static void dwc2_gadget_setup_timeout(struct work_struct *work)
+{
+	struct dwc2_hsotg *hsotg = container_of(work, struct dwc2_hsotg, dw_gsetup.work);
+	unsigned long flags;
+
+	dev_dbg(hsotg->dev, "%s: DOEPINT0=0x%08x\n",  __func__, dwc2_readl(hsotg, DOEPINT(0)));
+
+	spin_lock_irqsave(&hsotg->lock, flags);
+	kill_all_requests(hsotg, hsotg->eps_out[0], -ESHUTDOWN);
+	dwc2_hsotg_enqueue_setup(hsotg);
+	spin_unlock_irqrestore(&hsotg->lock, flags);
+}
+
 /**
  * dwc2_hsotg_epint - handle an in/out endpoint interrupt
  * @hsotg: The driver state
@@ -3084,16 +3092,20 @@ static void dwc2_hsotg_epint(struct dwc2_hsotg *hsotg, unsigned int idx,
 
 		if (!(dwc2_readl(hsotg, epctl_reg) & DXEPCTL_EPENA)) {
 			/*
-			 * More than 3 setup packets have likely been missed.
-			 * This may happen when other packets has been stored
-			 * in the RxFifo on other endpoints accepting packet
-			 * without being enabled.
-			 * As the EP0 got disabled, complete cb will never be
-			 * called. So enforce here the EP0 remains active (re
-			 * enqueue setup) when later stuck packets gets pulled.
+			 * In DDMA mode, only the "SETUP Phase Done" can be asserted.
+			 * Setup timeout won't be asserted through DXEPINT_SETUP flag.
+			 *
+			 * An incomplete setup phase may be hit when packets have been stored
+			 * into the RxFifo on other endpoints accepting packet without proper
+			 * descriptor chain.
+			 * As the EP0 got disabled, and the DXEPINT_XFERCOMPL flag has been
+			 * cleared above, the complete cb will never be called, due to setup
+			 * timeout not detected.
+			 * So detect here a possible setup request timeout (50ms), to kill
+			 * incomplete setup data, and requeue proper setup descriptors.
 			 */
-			kill_all_requests(hsotg, hsotg->eps_out[0], -ESHUTDOWN);
-			dwc2_hsotg_enqueue_setup(hsotg);
+			queue_delayed_work(hsotg->wq_gadget, &hsotg->dw_gsetup,
+					   msecs_to_jiffies(50));
 		}
 	}
 
@@ -3143,6 +3155,9 @@ static void dwc2_hsotg_epint(struct dwc2_hsotg *hsotg, unsigned int idx,
 		dev_dbg(hsotg->dev, "%s: Setup/Timeout\n",  __func__);
 
 		if (using_dma(hsotg) && idx == 0) {
+			/* Safety check to cancel dw_gsetup setup timeout */
+			if (hsotg->ep0_state == DWC2_EP0_SETUP)
+				cancel_delayed_work(&hsotg->dw_gsetup);
 			/*
 			 * this is the notification we've received a
 			 * setup packet. In non-DMA mode we'd get this
@@ -4159,16 +4174,6 @@ static int dwc2_hsotg_ep_enable(struct usb_ep *ep,
 
 	case USB_ENDPOINT_XFER_BULK:
 		epctrl |= DXEPCTL_EPTYPE_BULK;
-		/*
-		 * By default the OUT packets are going to be acked and stored
-		 * in the RX FIFO, even though no request has been queued. That
-		 * can lead to fulfill the FIFO before any request has been
-		 * queued, resulting in a stuck endpoint where the FIFO can't
-		 * be emptied. So NAK the OUT packets until requests has been
-		 * queued.
-		 */
-		if (hs_ep->index && !dir_in)
-			epctrl |= DXEPCTL_SNAK;
 		break;
 
 	case USB_ENDPOINT_XFER_INT:
@@ -4613,6 +4618,8 @@ static int dwc2_hsotg_udc_start(struct usb_gadget *gadget,
 	gadget->sg_supported = using_desc_dma(hsotg);
 	dev_info(hsotg->dev, "bound driver %s\n", driver->driver.name);
 
+	device_set_wakeup_capable(&gadget->dev, true);
+
 	return 0;
 
 err:
@@ -4634,6 +4641,8 @@ static int dwc2_hsotg_udc_stop(struct usb_gadget *gadget)
 
 	if (!hsotg)
 		return -ENODEV;
+
+	device_set_wakeup_capable(&gadget->dev, false);
 
 	/* all endpoints should be shutdown */
 	for (ep = 1; ep < hsotg->num_of_eps; ep++) {
@@ -5001,6 +5010,17 @@ static void dwc2_hsotg_dump(struct dwc2_hsotg *hsotg)
 #endif
 }
 
+static void dwc2_gadget_remote_wkup_change(struct work_struct *work)
+{
+	struct dwc2_hsotg *hsotg = container_of(work, struct dwc2_hsotg, wf_gadget);
+	int ret;
+
+	dev_dbg(hsotg->dev, "lx_state: %d\n", hsotg->lx_state);
+	ret = device_set_wakeup_enable(&hsotg->gadget.dev, hsotg->lx_state == DWC2_L2);
+	if (ret)
+		dev_dbg(hsotg->dev, "device_set_wakeup_enable failed: %d\n", ret);
+}
+
 /**
  * dwc2_gadget_init - init function for gadget
  * @hsotg: Programming view of the DWC_otg controller
@@ -5078,6 +5098,14 @@ int dwc2_gadget_init(struct dwc2_hsotg *hsotg)
 		return -EINVAL;
 	}
 
+	hsotg->wq_gadget = alloc_ordered_workqueue("dwc2_gadget", 0);
+	if (!hsotg->wq_gadget) {
+		dev_err(hsotg->dev, "Failed to create workqueue\n");
+		return -ENOMEM;
+	}
+	INIT_WORK(&hsotg->wf_gadget, dwc2_gadget_remote_wkup_change);
+	INIT_DELAYED_WORK(&hsotg->dw_gsetup, dwc2_gadget_setup_timeout);
+
 	/* setup endpoint information */
 
 	INIT_LIST_HEAD(&hsotg->gadget.ep_list);
@@ -5089,6 +5117,7 @@ int dwc2_gadget_init(struct dwc2_hsotg *hsotg)
 						     GFP_KERNEL);
 	if (!hsotg->ctrl_req) {
 		dev_err(dev, "failed to allocate ctrl req\n");
+		destroy_workqueue(hsotg->wq_gadget);
 		return -ENOMEM;
 	}
 
@@ -5117,6 +5146,10 @@ int dwc2_hsotg_remove(struct dwc2_hsotg *hsotg)
 	usb_del_gadget_udc(&hsotg->gadget);
 	dwc2_hsotg_ep_free_request(&hsotg->eps_out[0]->ep, hsotg->ctrl_req);
 
+	if (!cancel_work_sync(&hsotg->wf_gadget))
+		flush_workqueue(hsotg->wq_gadget);
+	destroy_workqueue(hsotg->wq_gadget);
+
 	return 0;
 }
 
@@ -5124,8 +5157,12 @@ int dwc2_hsotg_suspend(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
 
-	if (hsotg->lx_state != DWC2_L0)
+	flush_workqueue(hsotg->wq_gadget);
+
+	if (hsotg->lx_state != DWC2_L0) {
+		hsotg->gadget_off_for_suspend = false;
 		return 0;
+	}
 
 	if (hsotg->driver) {
 		int ep;
@@ -5148,6 +5185,8 @@ int dwc2_hsotg_suspend(struct dwc2_hsotg *hsotg)
 		}
 	}
 
+	hsotg->gadget_off_for_suspend = true;
+
 	return 0;
 }
 
@@ -5155,7 +5194,7 @@ int dwc2_hsotg_resume(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
 
-	if (hsotg->lx_state == DWC2_L2)
+	if (!hsotg->gadget_off_for_suspend)
 		return 0;
 
 	if (hsotg->driver) {
@@ -5406,6 +5445,8 @@ int dwc2_gadget_enter_hibernation(struct dwc2_hsotg *hsotg)
 	hsotg->gr_backup.gpwrdn = dwc2_readl(hsotg, GPWRDN);
 	dev_dbg(hsotg->dev, "Hibernation completed\n");
 
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
+
 	return ret;
 }
 
@@ -5515,6 +5556,7 @@ int dwc2_gadget_exit_hibernation(struct dwc2_hsotg *hsotg,
 
 	hsotg->hibernated = 0;
 	hsotg->lx_state = DWC2_L0;
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
 	dev_dbg(hsotg->dev, "Hibernation recovery completes here\n");
 
 	return ret;
@@ -5575,6 +5617,7 @@ int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
 	/* Set in_ppd flag to 1 as here core enters suspend. */
 	hsotg->in_ppd = 1;
 	hsotg->lx_state = DWC2_L2;
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
 
 	dev_dbg(hsotg->dev, "Entering device partial power down completed.\n");
 
@@ -5643,6 +5686,7 @@ int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
 	/* Set in_ppd flag to 0 as here core exits from suspend. */
 	hsotg->in_ppd = 0;
 	hsotg->lx_state = DWC2_L0;
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
 
 	dev_dbg(hsotg->dev, "Exiting device partial Power Down completed.\n");
 	return ret;
@@ -5677,6 +5721,7 @@ void dwc2_gadget_enter_clock_gating(struct dwc2_hsotg *hsotg)
 
 	hsotg->lx_state = DWC2_L2;
 	hsotg->bus_suspended = true;
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
 }
 
 /*
@@ -5716,4 +5761,5 @@ void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg, int rem_wakeup)
 	/* Change to L0 state */
 	hsotg->lx_state = DWC2_L0;
 	hsotg->bus_suspended = false;
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
 }

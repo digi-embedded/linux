@@ -15,6 +15,9 @@
 #define BRCMF_AF_PARAM_V2_FW_MAJOR 13
 #define BRCMF_AF_PARAM_V2_FW_MINOR 2
 
+#define BRCMF_AUTH_STATUS_V2_FW_MAJOR 13
+#define BRCMF_AUTH_STATUS_V2_FW_MINOR 3
+
 /* ARP Offload feature flags for arp_ol iovar */
 #define BRCMF_ARP_OL_AGENT		0x00000001
 #define BRCMF_ARP_OL_SNOOP		0x00000002
@@ -206,6 +209,19 @@ enum {
 #define BRCMF_EXTAUTH_ABORT	2
 #define BRCMF_EXTAUTH_FAIL	3
 #define BRCMF_EXTAUTH_SUCCESS	4
+
+/* mchan configuration (ap timeslot : sta timeslot)*/
+#define BRCMF_MCHAN_CONF_DEFAULT	0 /* mchan_algo=2 (25ms:25ms) */
+#define BRCMF_MCHAN_CONF_VEDIO		1 /* mchan_algo=5 (29ms:21ms) */
+#define BRCMF_MCHAN_CONF_AUDIO		2 /* mchan_algo=1, mchan_bw=32 (68ms:32ms) */
+/* mchan algo in dongle */
+#define BRCMF_MCHAN_DEFAULT_ALGO 0
+#define BRCMF_MCHAN_BANDWIDTH_ALGO 1
+#define BRCMF_MCHAN_SI_ALGO 2
+#define BRCMF_MCHAN_DYNAMIC_BW_ALGO 3
+#define BRCMF_MCHAN_ALTERNATE_SWITCHING 4
+#define BRCMF_MCHAN_ASYMMETRIC_SI_ALGO 5
+#define BRCMF_MCHAN_BANDWIDTH_VAL 32
 
 /* MAX_CHUNK_LEN is the maximum length for data passing to firmware in each
  * ioctl. It is relatively small because firmware has small maximum size input
@@ -687,6 +703,17 @@ struct brcmf_auth_req_status_le {
 	__le32 ssid_len;
 	u8 ssid[IEEE80211_MAX_SSID_LEN];
 	u8 pmkid[WLAN_PMKID_LEN];
+};
+
+struct brcmf_auth_req_status_info_le_v2 {
+	__le16	version;
+	__le16	len;
+	__le16  flags;
+	u8 peer_mac[ETH_ALEN];/* peer mac address */
+	__le32 ssid_len;
+	u8 ssid[IEEE80211_MAX_SSID_LEN];
+	u8 pmkid[WLAN_PMKID_LEN];
+	struct brcmf_bss_info_le bss_info_le[];
 };
 
 /**
@@ -1333,6 +1360,84 @@ struct brcmf_ol_cfg_v1 {
 	} u;
 
 	u32 offload_skip;				/* Bitmap of offload to be skipped */
+};
+
+#define WL_ICMP_ECHO_REQ_VER		1
+
+#define ICMP_ECHO_REQ_IP_BOTH		0
+#define ICMP_ECHO_REQ_IP_V4		1
+#define ICMP_ECHO_REQ_IP_V6		2
+
+/* ICMP Echo Request Sub commands */
+enum {
+	WL_ICMP_ECHO_REQ_ENAB,
+	WL_ICMP_ECHO_REQ_ADD,
+	WL_ICMP_ECHO_REQ_DEL,
+	WL_ICMP_ECHO_REQ_START,
+	WL_ICMP_ECHO_REQ_STOP,
+	WL_ICMP_ECHO_REQ_INFO
+};
+
+struct ifx_icmp_echo_req_peer_ip {
+	u16 version;
+	u16 length;
+	u8 ip_ver;				/* IP Version IPv4:1 IPv6:2 */
+	u8 pad[3];
+	union {
+		struct ipv4_addr ipv4;		/* Peer IPV4 Address */
+		struct ipv6_addr ipv6;		/* Peer IPV6 Address */
+	} u;
+};
+
+struct ifx_icmp_echo_req_peer_config {
+	u16 version;
+	u16 length;
+	u8 ip_ver;				/* IP Version IPv4:1 IPv6:2 */
+	u8 pad[3];
+	u32 periodicity;			/* Periodicty of Ping in sec */
+	u32 duration;				/* Duration in sec  */
+	union {
+		struct ipv4_addr ipv4;		/* Peer IPv4 Address */
+		struct ipv6_addr ipv6;		/* Peer IPv6 Address */
+	} u;
+	u8 mac_addr[ETH_ALEN];			/* Peer Mac Address */
+};
+
+/* ICMP Echo Req IOVAR Struct */
+struct ifx_icmp_echo_req_cmd {
+	u16 version;
+	u16 length;
+	u8 cmd_type;				/* ICMP Echo Req Cmd Type */
+	u8 pad[3];
+	u8 data[];				/* Data Pointing to Sub cmd structure */
+};
+
+/* ICMP Echo Request IOVAR INFO Struct */
+struct ifx_icmp_echo_req_get_peer_info {
+	u32 state;					/* State of the Peer */
+	struct ifx_icmp_echo_req_peer_config config;	/* Configuration of Peer */
+};
+
+struct ifx_icmp_echo_req_get_info {
+	u16 version;
+	u16 length;
+	u8 enable;				/* Offload Enable */
+	u8 count;				/* Peer Count */
+	u8 pad[2];
+	u8 data[];				/* Data Pointing to get peer info structure */
+};
+
+struct ifx_icmp_echo_req_event {
+	u16 version;
+	u16 length;
+	u8 ip_ver;			/* Peer IP Version IPv4:1 IPv6:2 */
+	u8 reason;			/* Event reason */
+	u8 pad[2];
+	u32 echo_req_cnt;		/* ICMP Echo Req Count */
+	union {
+		struct ipv4_addr ipv4;	/* Peer IPV4 Address */
+		struct ipv6_addr ipv6;	/* Peer IPV6 Address */
+	} u;
 };
 
 #endif /* FWIL_TYPES_H_ */

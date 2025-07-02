@@ -113,6 +113,8 @@ struct bcm_iov_buf {
  *	String parsing and calling corresponding function handler for a specific command
  *	given by user.
  *
+ * @IFX_VENDOR_SCMD_SSID_PROT: Vendor command to enable/disable SSID protection
+ *
  * @IFX_VENDOR_SCMD_MAX: This acts as a the tail of cmds list.
  *      Make sure it located at the end of the list.
  */
@@ -146,7 +148,28 @@ enum ifx_nl80211_vendor_subcmds {
 	SCMD(HWCAPS)		= 26,
 	SCMD(WNM_WL_CAP)	= 27,
 	SCMD(CMDSTR)		= 28,
-	SCMD(MAX)		= 29
+	/* Reserved 29 */
+	SCMD(SSID_PROT)		= 30,
+	SCMD(MCHAN_CONFIG)	= 31,
+	SCMD(MAX)		= 32
+};
+
+/* enum ifx_vendor_evts - IFX nl80211 vendor events
+ *
+ * @IFX_VENDOR_EVTS_RSV0: Reserved Event
+ *
+ * @IFX_VENDOR_EVTS_RSV1: Reserved Event
+ *
+ * @IFX_VENDOR_EVTS_ICMP_ECHO_REQ: ICMP Echo Request Event
+ *
+ * @IFX_VENDOR_EVTS_LAST: This acts as a the tail of evts list.
+ *      Make sure it located at the end of the list.
+ */
+enum ifx_vendor_evts {
+	IFX_VENDOR_EVTS_RSV0,
+	IFX_VENDOR_EVTS_RSV1,
+	IFX_VENDOR_EVTS_ICMP_ECHO_REQ,
+	IFX_VENDOR_EVTS_LAST
 };
 
 /*
@@ -700,6 +723,19 @@ struct ifx_maxidle_wnm {
 	int protect;
 };
 
+enum ifx_vendor_attr_ssid_prot {
+	IFX_VENDOR_ATTR_SSID_PROT_UNSPEC,
+	IFX_VENDOR_ATTR_SSID_PROT_ENABLE,
+	IFX_VENDOR_ATTR_SSID_PROT_MAX
+};
+
+static const struct nla_policy
+ifx_vendor_attr_ssid_prot_policy[IFX_VENDOR_ATTR_SSID_PROT_MAX + 1] = {
+	[IFX_VENDOR_ATTR_SSID_PROT_UNSPEC] = {.type = NLA_U8},
+	[IFX_VENDOR_ATTR_SSID_PROT_ENABLE] = {.type = NLA_U8},
+	[IFX_VENDOR_ATTR_SSID_PROT_MAX] = {.type = NLA_U8},
+};
+
 #define WL_MKEEP_ALIVE_VERSION		1
 #define WL_MKEEP_ALIVE_IMMEDIATE	0x80000000
 
@@ -735,10 +771,9 @@ struct ifx_tko_enable {
 	u8 pad[3];		/* 4-byte struct alignment */
 };
 
-/* String based vendor commands infra
- */
+/* String based vendor commands infra */
 #define VNDR_CMD_STR_NUM	15
-#define VNDR_CMD_STR_MAX_LEN	20
+#define VNDR_CMD_STR_MAX_LEN	50
 #define VNDR_CMD_VAL_NUM	50
 #define VNDR_CMD_HASH_BITS	4
 
@@ -801,10 +836,18 @@ int ifx_vndr_cmdstr_mkeep_alive(struct wiphy *wiphy, struct wireless_dev *wdev,
 int ifx_vndr_cmdstr_tko(struct wiphy *wiphy, struct wireless_dev *wdev,
 			char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
 			long *cmd_val);
+int ifx_vndr_cmdstr_icmp_echo_req(struct wiphy *wiphy, struct wireless_dev *wdev,
+				  char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
+				  long *cmd_val);
 int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 			       const void *data, int len);
 int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
 				      struct wireless_dev *wdev, const void  *data, int len);
 int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
 					  struct wireless_dev *wdev, const void  *data, int len);
+int ifx_cfg80211_vndr_cmds_ssid_prot(struct wiphy *wiphy,
+				     struct wireless_dev *wdev, const void *data, int len);
+int ifx_cfg80211_vndr_cmds_mchan_config(struct wiphy *wiphy,
+					struct wireless_dev *wdev, const void *data, int len);
+
 #endif /* IFX_VENDOR_H */

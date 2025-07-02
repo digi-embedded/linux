@@ -14,6 +14,9 @@
 #include "p2p.h"
 #include "pno.h"
 
+/* Max length of Interworking element */
+#define BRCMF_IW_IES_MAX_BUF_LEN	8
+
 #define BRCMF_SCAN_IE_LEN_MAX		2048
 
 #define WL_NUM_SCAN_MAX			10
@@ -443,6 +446,7 @@ struct brcmf_cfg80211_info {
 	u8 pfn_enable;
 	u8 pfn_connection;
 	struct drv_config_pfn_params pfn_data;
+	u8 mchan_conf;
 };
 
 /**

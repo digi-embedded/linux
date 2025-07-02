@@ -1072,6 +1072,7 @@ struct dwc2_hsotg {
 	unsigned int reset_phy_on_wake:1;
 	unsigned int need_phy_for_wake:1;
 	unsigned int phy_off_for_suspend:1;
+	bool gadget_off_for_suspend;
 	u16 frame_number;
 
 	struct phy *phy;
@@ -1093,7 +1094,10 @@ struct dwc2_hsotg {
 	unsigned int srp_success:1;
 
 	struct workqueue_struct *wq_otg;
+	struct workqueue_struct *wq_gadget;
 	struct work_struct wf_otg;
+	struct work_struct wf_gadget;
+	struct delayed_work dw_gsetup;
 	struct timer_list wkp_timer;
 	enum dwc2_lx_state lx_state;
 	struct dwc2_gregs_backup gr_backup;

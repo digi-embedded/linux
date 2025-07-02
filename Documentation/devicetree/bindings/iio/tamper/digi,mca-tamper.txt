@@ -1,0 +1,35 @@
+* Digi ConnectCore SOMs Micro Controller Assist tamper support
+
+The MCA Tamper driver allows to detect tamper events.
+
+Required properties:
+- compatible: must be "digi,mca-tamper".
+
+Optional properties:
+- tamper-if-list: list of enabled tamper interfaces. Interfaces 0 and 1 are for
+		  digital signals while 2 and 3 are for analog comparison. Refer
+		  to the documentation for more information on how to use these
+		  features.
+
+Example:
+
+	mca_cc6ul: mca@7e {
+		mca_tamper: tamper {
+			compatible = "digi,mca-tamper";
+			digi,tamper-if-list = <0 1 2 3>;
+		};
+	};
+
+	mca_cc8x: mca@63 {
+		mca_tamper: tamper {
+			compatible = "digi,mca-tamper";
+			digi,tamper-if-list = <0 1 2 3>;
+		};
+	};
+
+	mca_cc8m: mca@63 {
+		mca_tamper: tamper {
+			compatible = "digi,mca-tamper";
+			digi,tamper-if-list = <0 1 2 3>;
+		};
+	};

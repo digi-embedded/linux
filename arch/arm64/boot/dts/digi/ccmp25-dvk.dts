@@ -278,7 +278,7 @@
 		port@0 {
 			reg = <0>;
 			csi_sink: endpoint {
-				remote-endpoint = <&ov5640_mipi_ep>;
+				remote-endpoint = <&imx335_ep>;
 				data-lanes = <0 1>;
 				bus-type = <4>;
 			};
@@ -419,18 +419,16 @@
 	};
 
 	/* MIPI-CSI camera */
-	ov5640_mipi: ov5640_mipi@3c {
-		compatible = "ovti,ov5640";
-		reg = <0x3c>;
+	imx335: imx335@1a {
+		compatible = "sony,imx335";
+		reg = <0x1a>;
 		clocks = <&clk_ext_camera>;
-		clock-names = "xclk";
-		csi_id = <0>;
-		DOVDD-supply = <&reg_3v3_board>;
-		powerdown-gpios = <&gpiog 7 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>; /* CSI_RESET */
+		reset-gpios = <&gpiog 7 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
+		powerdown-gpios = <&gpiof 3 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
 		status = "okay";
 
 		port {
-			ov5640_mipi_ep: endpoint {
+			imx335_ep: endpoint {
 				remote-endpoint = <&csi_sink>;
 				clock-lanes = <0>;
 				data-lanes = <1 2>;
@@ -444,7 +442,6 @@
 		reg = <0x52>;
 		interrupt-parent = <&gpiof>;
 		interrupts = <4 IRQ_TYPE_EDGE_FALLING>; /* RTC_INT_N */
-		wakeup-source;
 	};
 };
 

@@ -74,6 +74,7 @@ int smsc_phy_config_intr(struct phy_device *phydev)
 		if (rc)
 			return rc;
 
+		priv->intmask = MII_LAN83C185_ISF_INT_PHYLIB_EVENTS;
 		if (priv->wakeup_enable)
 			priv->intmask |= MII_LAN83C185_ISF_INT8;
 		rc = phy_write(phydev, MII_LAN83C185_IM, priv->intmask);
@@ -130,8 +131,12 @@ static int smsc_phy_config_wol(struct phy_device *phydev)
 	int i, wol_ctrl, wol_filter;
 	u16 pwd[3] = {0, 0, 0};
 
+	const u8 *mac_addr = NULL;
+	if(!phydev->attached_dev)
+		return -ENODEV;
+
 	/* Write @MAC in LAN8742_MMD3_MAC_ADDRA/B/C registers */
-	const u8 *mac_addr = phydev->attached_dev->dev_addr;
+	mac_addr = phydev->attached_dev->dev_addr;
 	/* Store the device address for the magic packet */
 	for (i = 0; i < ARRAY_SIZE(pwd); i++)
 		pwd[i] = mac_addr[5 - i * 2] << 8 | mac_addr[5 - (i * 2 + 1)];
@@ -257,6 +262,23 @@ static int lan95xx_config_aneg_ext(struct phy_device *phydev)
 	}
 
 	return lan87xx_config_aneg(phydev);
+}
+
+static int lan87xx_get_features(struct phy_device *phydev)
+{
+	int val;
+
+	/* Verify if PHY is ready to read registers */
+	val = phy_read(phydev, MII_BMSR);
+	if (val < 0)
+		return val;
+	if (val == 0x0000 || val == 0xffff) {
+		phydev_err(phydev, "PHY is not accessible\n");
+		return -EPROBE_DEFER;
+	}
+
+	/* Call PHY core function to read PHY abilities */
+	return genphy_read_abilities(phydev);
 }
 
 /*
@@ -582,6 +604,7 @@ static struct phy_driver smsc_phy_driver[] = {
 
 	/* PHY_BASIC_FEATURES */
 
+	.get_features 	= lan87xx_get_features,
 	.probe		= smsc_phy_probe,
 
 	/* basic functions */

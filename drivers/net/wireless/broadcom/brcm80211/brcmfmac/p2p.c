@@ -18,6 +18,7 @@
 #include "p2p.h"
 #include "cfg80211.h"
 #include "feature.h"
+#include "common.h"
 
 /* parameters used for p2p escan */
 #define P2PAPI_SCAN_NPROBES 1
@@ -1510,7 +1511,8 @@ int brcmf_p2p_notify_action_frame_rx(struct brcmf_if *ifp,
 			       ETH_ALEN);
 	memcpy(mgmt_frame->sa, e->addr, ETH_ALEN);
 	mgmt_frame->frame_control = cpu_to_le16(IEEE80211_STYPE_ACTION);
-	memcpy(mgmt_frame->u.body, frame, mgmt_frame_len);
+	unsafe_memcpy(&mgmt_frame->u, frame, mgmt_frame_len,
+		      /* alloc enough buf*/);
 	mgmt_frame_len += offsetof(struct ieee80211_mgmt, u.body);
 
 	freq = ieee80211_channel_to_frequency(ch.control_ch_num,
@@ -1589,7 +1591,7 @@ static s32 brcmf_p2p_tx_action_frame(struct brcmf_p2p_info *p2p,
 {
 	struct brcmf_pub *drvr = p2p->cfg->pub;
 	s32 err = 0;
-	struct brcmf_fil_af_params_v2_le af_params_v2;
+	struct brcmf_fil_af_params_v2_le *af_params_v2;
 
 	brcmf_dbg(TRACE, "Enter\n");
 
@@ -1599,15 +1601,23 @@ static s32 brcmf_p2p_tx_action_frame(struct brcmf_p2p_info *p2p,
 
 	if (drvr->wlc_ver.wlc_ver_major == BRCMF_AF_PARAM_V2_FW_MAJOR &&
 	    drvr->wlc_ver.wlc_ver_minor >= BRCMF_AF_PARAM_V2_FW_MINOR) {
-		/* set actframe iovar with af_params_v2 */
-		af_params_v2.band = nl80211_band_to_fwil(band);
-		af_params_v2.channel = af_params->channel;
-		af_params_v2.dwell_time = af_params->dwell_time;
-		memcpy(af_params_v2.bssid, af_params->bssid, ETH_ALEN);
-		af_params_v2.action_frame = af_params->action_frame;
+		af_params_v2 = kzalloc(sizeof(*af_params_v2), GFP_KERNEL);
+		if (!af_params_v2) {
+			err = -ENOMEM;
+			goto exit;
+		}
 
-		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", &af_params_v2,
-						sizeof(af_params_v2));
+		/* set actframe iovar with af_params_v2 */
+		af_params_v2->band = nl80211_band_to_fwil(band);
+		af_params_v2->channel = af_params->channel;
+		af_params_v2->dwell_time = af_params->dwell_time;
+		memcpy(af_params_v2->bssid, af_params->bssid, ETH_ALEN);
+		memcpy(&af_params_v2->action_frame, &af_params->action_frame,
+		       sizeof(af_params_v2->action_frame));
+
+		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", af_params_v2,
+						sizeof(*af_params_v2));
+		kfree(af_params_v2);
 	} else {
 		/* set actframe iovar with af_params */
 		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", af_params,

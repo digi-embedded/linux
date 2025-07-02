@@ -2169,6 +2169,25 @@ static bool ltdc_encoder_mode_fixup(struct drm_encoder *encoder,
 	struct drm_device *ddev = encoder->dev;
 	struct ltdc_device *ldev =  ddev->dev_private;
 	int rate = mode->clock * 1000;
+	int ret;
+
+	if (encoder->encoder_type == DRM_MODE_ENCODER_LVDS) {
+		if (ldev->lvds_clk) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->lvds_clk);
+			if (ret) {
+				DRM_ERROR("Could not set parent clock: %d\n", ret);
+				return false;
+			}
+		}
+	} else {
+		if (ldev->ltdc_clk) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
+			if (ret) {
+				DRM_ERROR("Could not set parent clock: %d\n", ret);
+				return false;
+			}
+		}
+	}
 
 	if (clk_set_rate(ldev->pixel_clk, rate) < 0) {
 		DRM_ERROR("Cannot set rate (%dHz) for pixel clk\n", rate);
@@ -2611,6 +2630,9 @@ void ltdc_unload(struct drm_device *ddev)
 	int nb_endpoints, i;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	if (pm_runtime_active(ddev->dev))
+		pm_runtime_put_sync_suspend(ddev->dev);
 
 	stm32_firewall_release_access(fwl);
 

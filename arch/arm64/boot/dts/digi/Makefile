@@ -3,7 +3,7 @@
 ccmp25-dtbs :=		ccmp25-dvk.dtb \
 			ccmp25-dvk_e55rb-i-mw346-c-mipi-dsi.dtbo \
 			ccmp25-dvk_g101evn010-lvds.dtbo \
-			ccmp25-dvk_imx335-mipi-csi.dtbo \
+			ccmp25-dvk_ov5640-mipi-csi.dtbo \
 			ccmp25-dvk_mikroe-accel2-click.dtbo \
 			ccmp25-dvk_mikroe-gyro-click.dtbo \
 			ccmp25-dvk_mikroe-i2c-to-spi-click.dtbo \
