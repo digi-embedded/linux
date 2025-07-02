@@ -2201,6 +2201,7 @@
 					 <&rcc CK_KER_CSIPHY>;
 				clock-names = "pclk", "txesc", "csi2phy";
 				access-controllers = <&rifsc 86>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
 
