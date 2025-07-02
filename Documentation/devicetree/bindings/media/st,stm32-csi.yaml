@@ -88,6 +88,7 @@ additionalProperties: false
 
 examples:
   - |
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/reset/st,stm32mp25-rcc.h>
     #include <dt-bindings/media/video-interfaces.h>
