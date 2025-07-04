@@ -378,9 +378,9 @@ static int hynix_nand_rr_init(struct nand_chip *chip)
 
 	/*
 	 * We only support read-retry for 1xnm NANDs, and those NANDs all
-	 * expose a valid JEDEC ID.
+	 * expose a valid JEDEC ID. SLC NANDs don't require read-retry.
 	 */
-	if (valid_jedecid) {
+	if (valid_jedecid && !nand_is_slc(chip)) {
 		u8 nand_tech = chip->id.data[5] >> 4;
 
 		/* 1xnm technology */
