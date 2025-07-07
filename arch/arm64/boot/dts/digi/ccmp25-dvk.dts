@@ -486,7 +486,7 @@
 		};
 
 		display-timings {
-			native-mode = <&timing1>;
+			native-mode = <&timing0>;
 
 			/* High Definition */
 			timing0: timing0 {
