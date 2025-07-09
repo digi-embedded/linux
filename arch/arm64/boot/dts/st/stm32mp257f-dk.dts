@@ -250,6 +250,10 @@
 	};
 };
 
+&dbg_bus {
+	status = "okay";
+};
+
 &dcmipp {
 	status = "okay";
 	port {
