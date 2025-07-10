@@ -143,7 +143,12 @@ static unsigned long clk_stm32mp2_ca35ss_recalc_rate(struct clk_hw *hw,
 						     unsigned long parent_rate)
 {
 	u32 rate = 0;
-	(void)smc_recalc_rate(&rate); /* TODO handle status */
+	u32 status;
+
+	status = smc_recalc_rate(&rate);
+	if (status != STM32_SMC_OK)
+		return 0;
+
 	return rate;
 }
 
@@ -187,7 +192,6 @@ static const struct clk_ops clk_stm32mp2_ca35ss_ops = {
 static int clk_stm32mp2_ca35ss_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct clk_hw_onecell_data *hw_data;
 	struct clk_init_data init = { NULL };
 	struct clk_hw *hw;
 	u32 status, rate;
@@ -198,12 +202,6 @@ static int clk_stm32mp2_ca35ss_probe(struct platform_device *pdev)
 		dev_err(dev, "Failed SMC call\n");
 		return -EPERM;
 	}
-
-	hw_data = devm_kzalloc(dev, struct_size(hw_data, hws, 1), GFP_KERNEL);
-	if (!hw_data)
-		return -ENOMEM;
-
-	hw_data->num = 1;
 
 	hw = devm_kzalloc(dev, sizeof(*hw), GFP_KERNEL);
 	if (!hw)
@@ -219,12 +217,7 @@ static int clk_stm32mp2_ca35ss_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	hw_data->hws[0] = hw;
-
-	platform_set_drvdata(pdev, hw_data);
-
-	ret = devm_of_clk_add_hw_provider(dev, of_clk_hw_onecell_get,
-					  hw);
+	ret = devm_of_clk_add_hw_provider(dev, of_clk_hw_simple_get, hw);
 	if (ret) {
 		dev_err(dev, "Failed to add clock provider\n");
 		clk_hw_unregister(hw);
