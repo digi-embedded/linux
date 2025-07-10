@@ -14,7 +14,6 @@
 #define MII_LAN83C185_ISF_INT5 (1<<5) /* Remote Fault Detected */
 #define MII_LAN83C185_ISF_INT6 (1<<6) /* Auto-Negotiation complete */
 #define MII_LAN83C185_ISF_INT7 (1<<7) /* ENERGYON */
-#define MII_LAN83C185_ISF_INT8 (1<<8) /* Wake on LAN */
 
 #define MII_LAN83C185_ISF_INT_ALL (0x0e)
 
@@ -28,25 +27,6 @@
 #define MII_LAN83C185_MODE_MASK      0xE0
 #define MII_LAN83C185_MODE_POWERDOWN 0xC0 /* Power Down mode */
 #define MII_LAN83C185_MODE_ALL       0xE0 /* All capable mode */
-
-/* MMD 3 Registers */
-#define	LAN8742_MMD3_WAKEUP_CTRL	(32784)
-#define	LAN8742_MMD3_WUCSR_LED2_AS_NPME BIT(12)
-#define	LAN8742_MMD3_WUCSR_WOL		BIT(8)
-#define	LAN8742_MMD3_WUCSR_PFDA_FR	BIT(7)
-#define	LAN8742_MMD3_WUCSR_WUFR		BIT(6)
-#define	LAN8742_MMD3_WUCSR_MPR		BIT(5)
-#define	LAN8742_MMD3_WUCSR_BCAST_FR	BIT(4)
-#define	LAN8742_MMD3_WUCSR_MPEN		BIT(1)
-
-#define	LAN8742_MMD3_WAKEUP_FILTER	(32785)
-#define	LAN8742_MMD3_WUF_CFGA_FE	BIT(15)
-#define	LAN8742_MMD3_WUF_CFGA_AME	BIT(10)
-
-#define	LAN8742_MMD3_MAC_ADDRA		(32865)
-#define	LAN8742_MMD3_MAC_ADDRB		(32866)
-#define	LAN8742_MMD3_MAC_ADDRC		(32867)
-#define	LAN8742_MMD3_PME_ASSERT_DELAY	(32868)
 
 int smsc_phy_config_intr(struct phy_device *phydev);
 irqreturn_t smsc_phy_handle_interrupt(struct phy_device *phydev);
