@@ -105,6 +105,7 @@ struct stm32_dwmac {
 	const struct stm32_ops *ops;
 	struct device *dev;
 	struct stm32_firewall firewall;
+	bool phy_wol;
 };
 
 struct stm32_syscfg_pmcsetr {
@@ -402,6 +403,8 @@ static int stm32_dwmac_parse_data(struct stm32_dwmac *dwmac,
 		dwmac->regulator = NULL;
 	}
 
+	dwmac->phy_wol = of_property_read_bool(np, "st,phy-wol");
+
 	return 0;
 }
 
@@ -544,6 +547,8 @@ static int stm32_dwmac_probe(struct platform_device *pdev)
 	}
 
 	plat_dat->bsp_priv = dwmac;
+	if (dwmac->phy_wol)
+		plat_dat->flags |= STMMAC_FLAG_USE_PHY_WOL;
 
 	ret = stm32_dwmac_init(plat_dat);
 	if (ret)
