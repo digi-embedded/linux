@@ -1073,6 +1073,7 @@ static int lvds_probe(struct platform_device *pdev)
 	struct reset_control *rstc;
 	struct stm_lvds *lvds;
 	int ret, dual_link;
+	u32 cr;
 
 	dev_dbg(dev, "Probing LVDS driver...\n");
 
@@ -1113,20 +1114,6 @@ static int lvds_probe(struct platform_device *pdev)
 	if (IS_ERR(lvds->vdda18_supply)) {
 		dev_err_probe(dev, ret, "Failed to request regulator\n");
 		return  PTR_ERR(lvds->vdda18_supply);
-	}
-
-	/* To obtain a continuous display after the probe, reset shouldn't be done */
-	if (!device_property_read_bool(dev, "default-on")) {
-		rstc = devm_reset_control_get_exclusive(dev, NULL);
-
-		if (IS_ERR(rstc)) {
-			ret = PTR_ERR(rstc);
-			return ret;
-		}
-
-		reset_control_assert(rstc);
-		usleep_range(10, 20);
-		reset_control_deassert(rstc);
 	}
 
 	port1 = of_graph_get_port_by_id(dev->of_node, 1);
@@ -1191,16 +1178,34 @@ static int lvds_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	ret = lvds_pixel_clk_register(lvds);
+	ret = clk_prepare_enable(lvds->pclk);
 	if (ret) {
-		DRM_ERROR("Failed to register LVDS pixel clock: %d\n", ret);
+		dev_err(dev, "%s: Failed to enable peripheral clk\n", __func__);
 		return ret;
 	}
 
-	ret = clk_prepare_enable(lvds->pclk);
+	rstc = devm_reset_control_get_exclusive(dev, NULL);
+
+	if (IS_ERR(rstc)) {
+		ret = PTR_ERR(rstc);
+		return ret;
+	}
+
+	/*
+	 * Check if the lvds has been activated by another software
+	 * component to determine if it needs to be reset.
+	 */
+	cr = lvds_read(lvds, LVDS_CR);
+
+	if (!(cr & CR_LVDSEN)) {
+		reset_control_assert(rstc);
+		usleep_range(10, 20);
+		reset_control_deassert(rstc);
+	}
+
+	ret = lvds_pixel_clk_register(lvds);
 	if (ret) {
-		lvds_pixel_clk_unregister(lvds);
-		dev_err(dev, "%s: Failed to enable peripheral clk\n", __func__);
+		dev_err(dev, "%s: Failed to register LVDS pixel clock\n", __func__);
 		return ret;
 	}
 
