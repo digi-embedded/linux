@@ -35,13 +35,13 @@
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_gem_atomic_helper.h>
 #include <drm/drm_gem_dma_helper.h>
+#include <drm/drm_managed.h>
 #include <drm/drm_of.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_vblank.h>
-#include <drm/drm_managed.h>
 
 #include <video/videomode.h>
 
@@ -1858,9 +1858,6 @@ static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 	/* Disable layer */
 	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, 0);
 
-	/* Set the transparency of the layer to the default value */
-	regmap_write_bits(ldev->regmap, LTDC_L1CACR + lofs, LXCACR_CONSTA, 0x00);
-
 	/* Reset the layer transparency to hide any related background color */
 	regmap_write_bits(ldev->regmap, LTDC_L1CACR + lofs, LXCACR_CONSTA, 0x00);
 
@@ -2041,7 +2038,7 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 	primary = ltdc_plane_create(ddev, DRM_PLANE_TYPE_PRIMARY, 0);
 	if (!primary) {
 		DRM_ERROR("Can not create primary plane\n");
-		return -EINVAL;
+		return -ENOMEM;
 	}
 
 	if (ldev->caps.dynamic_zorder)
@@ -2656,18 +2653,13 @@ int ltdc_load(struct drm_device *ddev)
 err:
 	of_reserved_mem_device_release(dev);
 
-	for (i = 0; i < nb_endpoints; i++)
-		drm_of_panel_bridge_remove(ddev->dev->of_node, 0, i);
-
 	return ret;
 }
 
 void ltdc_unload(struct drm_device *ddev)
 {
-	struct device *dev = ddev->dev;
 	struct ltdc_device *ldev = ddev->dev_private;
 	struct stm32_firewall *fwl = (struct stm32_firewall *)ldev->firewall;
-	int nb_endpoints, i;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -2675,11 +2667,6 @@ void ltdc_unload(struct drm_device *ddev)
 		pm_runtime_put_sync_suspend(ddev->dev);
 
 	stm32_firewall_release_access(fwl);
-
-	nb_endpoints = of_graph_get_endpoint_count(dev->of_node);
-
-	for (i = 0; i < nb_endpoints; i++)
-		drm_of_panel_bridge_remove(ddev->dev->of_node, 0, i);
 
 	pm_runtime_disable(ddev->dev);
 }
