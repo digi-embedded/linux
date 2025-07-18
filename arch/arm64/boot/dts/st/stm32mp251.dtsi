@@ -23,10 +23,8 @@
 			device_type = "cpu";
 			reg = <0>;
 			enable-method = "psci";
-			clocks = <&scmi_perf 0>;
-			clock-names = "cpu";
-			power-domains = <&cpu0_pd>;
-			power-domain-names = "psci";
+			power-domains = <&cpu0_pd>, <&scmi_perf 0>;
+			power-domain-names = "psci", "perf";
 			#cooling-cells = <2>;
 		};
 
@@ -148,7 +146,7 @@
 
 			scmi_perf: protocol@13 {
 				reg = <0x13>;
-				#clock-cells = <1>;
+				#power-domain-cells = <1>;
 			};
 
 			scmi_clk: protocol@14 {
