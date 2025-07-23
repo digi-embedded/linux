@@ -13,6 +13,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* STM32MP25 CPU */
+#include "../st/stm32mp255.dtsi"
+#include "../st/stm32mp25xf.dtsi"
+#include "../st/stm32mp25-pinctrl.dtsi"
+#include "../st/stm32mp25xxai-pinctrl.dtsi"
+
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/rtc/rtc-stm32.h>
 

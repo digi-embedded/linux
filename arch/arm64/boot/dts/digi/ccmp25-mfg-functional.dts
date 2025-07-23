@@ -16,11 +16,6 @@
 
 /dts-v1/;
 
-/* STM32MP25 CPU */
-#include "../st/stm32mp255.dtsi"
-#include "../st/stm32mp25xf.dtsi"
-#include "../st/stm32mp25-pinctrl.dtsi"
-#include "../st/stm32mp25xxai-pinctrl.dtsi"
 /* Digi ConnectCore MP25 (SOM) */
 #include "ccmp25.dtsi"
 
