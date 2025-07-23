@@ -15,7 +15,7 @@
 
 /* STM32MP25 CPU */
 #include "../st/stm32mp255.dtsi"
-#include "../st/stm32mp25xf.dtsi"
+#include "../st/stm32mp25xc.dtsi"
 #include "../st/stm32mp25-pinctrl.dtsi"
 #include "../st/stm32mp25xxai-pinctrl.dtsi"
 
