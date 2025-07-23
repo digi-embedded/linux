@@ -78,6 +78,7 @@
 	vmmc-supply = <&reg_rf_wl_en>;
 	vqmmc-supply = <&scmi_vddio1>;
 	cap-sdio-irq;
+	max-frequency = <2000000>;
 	status = "okay";
 
 	#address-cells = <1>;
