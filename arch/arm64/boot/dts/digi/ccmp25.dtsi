@@ -1,5 +1,5 @@
  /*
- * Copyright 2024, Digi International Inc.
+ * Copyright (C) 2024, 2025, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -331,35 +331,35 @@
 };
 
 &scmi_regu {
-	scmi_vddcore: regulator@11  {
+	scmi_vddcore: regulator@b {
 		reg = <VOLTD_SCMI_STPMIC2_BUCK2>;
 		regulator-name = "vddcore";
 	};
-	scmi_v1v8: regulator@14  {
+	scmi_v1v8: regulator@e {
 		reg = <VOLTD_SCMI_STPMIC2_BUCK5>;
 		regulator-name = "v1v8";
 	};
-	scmi_v3v3: regulator@16 {
+	scmi_v3v3: regulator@10 {
 		reg = <VOLTD_SCMI_STPMIC2_BUCK7>;
 		regulator-name = "v3v3";
 	};
-	scmi_vdd_emmc: regulator@18 {
+	scmi_vdd_emmc: regulator@12 {
 		reg = <VOLTD_SCMI_STPMIC2_LDO2>;
 		regulator-name = "vdd_emmc";
 	};
-	scmi_vdd3v3_usb: regulator@20 {
+	scmi_vdd3v3_usb: regulator@14 {
 		reg = <VOLTD_SCMI_STPMIC2_LDO4>;
 		regulator-name = "vdd3v3_usb";
 	};
-	scmi_ldo6: regulator@22 {
+	scmi_ldo6: regulator@16 {
 		reg = <VOLTD_SCMI_STPMIC2_LDO6>;
 		regulator-name = "ldo6";
 	};
-	scmi_ldo7: regulator@23 {
+	scmi_ldo7: regulator@17 {
 		reg = <VOLTD_SCMI_STPMIC2_LDO7>;
 		regulator-name = "ldo7";
 	};
-	scmi_ldo8_1v8_rf: regulator@24 {
+	scmi_ldo8_1v8_rf: regulator@18 {
 		reg = <VOLTD_SCMI_STPMIC2_LDO8>;
 		regulator-name = "ldo8_1v8_rf";
 	};
