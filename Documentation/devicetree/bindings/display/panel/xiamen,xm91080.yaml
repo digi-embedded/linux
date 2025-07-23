@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: GPL-2.0
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/display/panel/xiamen,xm91080.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Xiamen XM91080 based LCD panels
+
+maintainers:
+  - Gonzalo Ruiz <gonzalo.ruiz@digi.com>
+
+description: |
+  XM91080 designed for small and medium sizes of TFT LCD displays, is
+  capable of supporting up to 1080RGBx2400 in resolution. It provides
+  MIPI interface and is able to operate with either 2, 3 or 4 data lanes.
+
+  FocusLCDs E55RB-I-MW346-C is 1080x1920, 4-lane MIPI DSI LCD panel
+  which has built-in XM91080 chip.
+
+allOf:
+  - $ref: panel-common.yaml#
+
+properties:
+  compatible:
+    items:
+      - const: focus,e55rb-i-mw346-c
+
+  reg:
+    description: DSI virtual channel used by that screen
+    maxItems: 1
+
+  VCC-supply:
+    description: analog regulator for MIPI circuit
+
+  IOVCC-supply:
+    description: I/O system regulator
+
+  reset-gpios: true
+
+  backlight: true
+
+required:
+  - compatible
+  - reg
+  - VCC-supply
+  - IOVCC-supply
+  - reset-gpios
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/gpio/gpio.h>
+
+    dsi {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        panel@0 {
+            compatible = "focus,e55rb-i-mw346-c";
+            reg = <0>;
+            VCC-supply = <&reg_5v_board>;
+            IOVCC-supply = <&reg_3v3_board>;
+            reset-gpios = <&gpiod 7 GPIO_ACTIVE_HIGH>;
+        };
+    };

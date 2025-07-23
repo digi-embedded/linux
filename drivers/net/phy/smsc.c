@@ -74,6 +74,7 @@ int smsc_phy_config_intr(struct phy_device *phydev)
 		if (rc)
 			return rc;
 
+		priv->intmask = MII_LAN83C185_ISF_INT_PHYLIB_EVENTS;
 		if (priv->wakeup_enable)
 			priv->intmask |= MII_LAN83C185_ISF_INT8;
 		rc = phy_write(phydev, MII_LAN83C185_IM, priv->intmask);
@@ -261,6 +262,23 @@ static int lan95xx_config_aneg_ext(struct phy_device *phydev)
 	}
 
 	return lan87xx_config_aneg(phydev);
+}
+
+static int lan87xx_get_features(struct phy_device *phydev)
+{
+	int val;
+
+	/* Verify if PHY is ready to read registers */
+	val = phy_read(phydev, MII_BMSR);
+	if (val < 0)
+		return val;
+	if (val == 0x0000 || val == 0xffff) {
+		phydev_err(phydev, "PHY is not accessible\n");
+		return -EPROBE_DEFER;
+	}
+
+	/* Call PHY core function to read PHY abilities */
+	return genphy_read_abilities(phydev);
 }
 
 /*
@@ -586,6 +604,7 @@ static struct phy_driver smsc_phy_driver[] = {
 
 	/* PHY_BASIC_FEATURES */
 
+	.get_features 	= lan87xx_get_features,
 	.probe		= smsc_phy_probe,
 
 	/* basic functions */
