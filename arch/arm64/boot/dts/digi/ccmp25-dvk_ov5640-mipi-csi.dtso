@@ -67,7 +67,7 @@
 					reg = <0>;
 					csi_sink: endpoint {
 						remote-endpoint = <&ov5640_mipi_ep>;
-						data-lanes = <0 1>;
+						data-lanes = <1 2>;
 						bus-type = <4>;
 					};
 				};
