@@ -316,6 +316,15 @@
 	status = "okay";
 };
 
+/* use LPTIMER with tick broadcast for suspend mode */
+&lptimer3 {
+	clocks = <&rcc CK_LPTIM3_AM>;
+	status = "okay";
+	timer {
+		status = "okay";
+	};
+};
+
 &m0_rproc {
 	memory-region = <&cm0_cube_fw>, <&cm0_cube_data>;
 	clocks = <&rcc CK_CPU3>,
