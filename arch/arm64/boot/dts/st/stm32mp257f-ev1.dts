@@ -122,7 +122,6 @@
 		enable-gpios = <&gpiog 15 GPIO_ACTIVE_HIGH>;
 		backlight = <&panel_lvds_backlight>;
 		power-supply = <&scmi_v3v3>;
-		default-on;
 		status = "okay";
 
 		width-mm = <156>;
@@ -152,7 +151,6 @@
 		compatible = "gpio-backlight";
 		gpios = <&gpioi 5 GPIO_ACTIVE_HIGH>;
 		default-on;
-		default-brightness-level = <1>;
 		status = "okay";
 	};
 
@@ -497,7 +495,6 @@
 };
 
 &ltdc {
-	default-on;
 	rotation-memory = <&ltdc_sec_rotation>;
 	status = "okay";
 
@@ -518,7 +515,6 @@
 };
 
 &lvds {
-	default-on;
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
 	status = "okay";
