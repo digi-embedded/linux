@@ -491,10 +491,16 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
 	if (!ctx)
 		return -ENOMEM;
 
-	ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+	ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_ASIS);
 	if (IS_ERR(ctx->reset_gpio))
 		return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio),
 				     "Failed to get reset gpio\n");
+
+	if (ctx->reset_gpio) {
+		ret = gpiod_get_direction(ctx->reset_gpio);
+		if (ret != 0)
+			gpiod_direction_output(ctx->reset_gpio, 1);
+	}
 
 	mipi_dsi_set_drvdata(dsi, ctx);
 
