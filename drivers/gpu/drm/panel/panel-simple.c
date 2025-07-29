@@ -594,11 +594,8 @@ static int panel_simple_probe(struct device *dev, const struct panel_desc *desc)
 	if (IS_ERR(panel->supply))
 		return PTR_ERR(panel->supply);
 
-	if (device_property_read_bool(dev, "default-on"))
-		panel->enable_gpio = devm_gpiod_get_optional(dev, "enable", GPIOD_OUT_HIGH);
-	else
-		panel->enable_gpio = devm_gpiod_get_optional(dev, "enable", GPIOD_OUT_LOW);
-
+	panel->enable_gpio = devm_gpiod_get_optional(dev, "enable",
+						     GPIOD_OUT_LOW);
 	if (IS_ERR(panel->enable_gpio))
 		return dev_err_probe(dev, PTR_ERR(panel->enable_gpio),
 				     "failed to request GPIO\n");
@@ -696,14 +693,6 @@ static int panel_simple_probe(struct device *dev, const struct panel_desc *desc)
 	pm_runtime_use_autosuspend(dev);
 
 	drm_panel_init(&panel->base, dev, &panel_simple_funcs, connector_type);
-
-	if (device_property_read_bool(dev, "default-on")) {
-		err = pm_runtime_get_sync(dev);
-		if (err < 0)
-			goto disable_pm_runtime;
-
-		panel->prepared = true;
-	}
 
 	err = drm_panel_of_backlight(&panel->base);
 	if (err) {
