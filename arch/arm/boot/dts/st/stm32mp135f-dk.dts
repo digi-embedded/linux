@@ -115,7 +115,6 @@
 		backlight = <&panel_backlight>;
 		power-supply = <&scmi_v3v3_sw>;
 		data-mapping = "bgr666";
-		default-on;
 		status = "okay";
 
 		width-mm = <105>;
@@ -424,7 +423,6 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ltdc_pins_a>;
 	pinctrl-1 = <&ltdc_sleep_pins_a>;
-	default-on;
 	status = "okay";
 
 	port {

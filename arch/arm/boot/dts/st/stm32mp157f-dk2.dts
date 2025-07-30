@@ -59,7 +59,6 @@
 		reg = <0>;
 		reset-gpios = <&gpioe 4 GPIO_ACTIVE_LOW>;
 		power-supply = <&v3v3>;
-		default-on;
 		status = "okay";
 
 		port {
@@ -102,7 +101,6 @@
 };
 
 &ltdc {
-	default-on;
 	status = "okay";
 
 	port {
