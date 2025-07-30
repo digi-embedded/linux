@@ -89,6 +89,10 @@
 #define WRPCR2_CLR	BIT(24)		/* Clears the PLL shadow registers to their reset values */
 #define WRPCR2_FPLL	BIT(28)		/* Force PLL lock signal */
 
+#define DSI_PWR_UP	0x04
+#define RESET		0
+#define POWERUP		BIT(0)
+
 #define DSI_PTCR0	0x00B4		/* Host PHY test control register 0 */
 #define PTCR0_TRSEN	BIT(0)		/* Test-interface reset enable for the TDI bus */
 #define PTCR0_TCKEN	BIT(1)		/* Test-interface clock enable for the TDI bus */
@@ -1261,6 +1265,7 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	struct dw_mipi_dsi_stm *dsi;
 	const struct dw_mipi_dsi_plat_data *pdata = of_device_get_match_data(dev);
 	int ret;
+	u32 pwr;
 
 	dsi = devm_kzalloc(dev, sizeof(*dsi), GFP_KERNEL);
 	if (!dsi)
@@ -1391,10 +1396,11 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	dsi->probe_done = true;
 
 	/*
-	 * To obtain a continuous display after the probe, the txbyte clock must
-	 * remain activated
+	 * To obtain a continuous display after the probe,
+	 * the txbyte clock must remain enabled if the DSI bridge is powered on.
 	 */
-	if (device_property_read_bool(dev, "default-on")) {
+	pwr = dsi_read(dsi, DSI_PWR_UP);
+	if (pwr == POWERUP) {
 		ret = clk_prepare_enable(dsi->txbyte_clk.clk);
 		if (ret) {
 			DRM_ERROR("Failed to enable DSI pixel clock: %d\n", ret);
