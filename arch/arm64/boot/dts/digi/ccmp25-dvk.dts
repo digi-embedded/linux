@@ -219,15 +219,11 @@
 	};
 };
 
-/*
- * Internal VREFBUF is not supported yet.
- * VREF+ pad is not connected. External 1.8V must be supplied
- * at VREF+ pad for the ADC to work.
- * To supply a different reference voltage, edit the voltage
- * of the 'external_vref' regulator (Max is 1.8V).
- */
 &adc_12 {
+	/* External Vref (requires connecting external voltage to VREF+ pad) */
 	vref-supply = <&external_vref>;
+	/* Internal Vref (this outputs VREFBUF voltage at VREF+ pad) */
+	//vref-supply = <&scmi_vrefbuf>;
 	vdda-supply = <&scmi_vdda18adc>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&ccmp25_adc_pins>;
