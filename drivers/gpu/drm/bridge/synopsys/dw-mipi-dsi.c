@@ -1175,6 +1175,7 @@ __dw_mipi_dsi_probe(struct platform_device *pdev,
 	struct reset_control *apb_rst;
 	struct dw_mipi_dsi *dsi;
 	int ret;
+	u32 pwr;
 
 	dsi = devm_kzalloc(dev, sizeof(*dsi), GFP_KERNEL);
 	if (!dsi)
@@ -1209,7 +1210,12 @@ __dw_mipi_dsi_probe(struct platform_device *pdev,
 	 * Note that the reset was not defined in the initial device tree, so
 	 * we have to be prepared for it not being found.
 	 */
-	if (!device_property_read_bool(dev, "default-on")) {
+	pwr = dsi_read(dsi, DSI_PWR_UP);
+	/*
+	 * To obtain a continuous display after the probe,
+	 * do not reset the DSI bridge if it is powered on.
+	 */
+	if (pwr != POWERUP) {
 		apb_rst = devm_reset_control_get_optional_exclusive(dev, "apb");
 		if (IS_ERR(apb_rst)) {
 			ret = PTR_ERR(apb_rst);
