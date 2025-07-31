@@ -2652,18 +2652,11 @@ int ltdc_parse_device_tree(struct device *dev)
 int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 {
 	struct device_node *node;
-	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
 
-	ldev->pixel_clk = devm_clk_get(dev, "lcd");
-	if (IS_ERR(ldev->pixel_clk)) {
-		if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
-			DRM_ERROR("Unable to get lcd clock\n");
-		return PTR_ERR(ldev->pixel_clk);
-	}
-
-	if (of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc")) {
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc") ||
+	    of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
 		ldev->bus_clk = devm_clk_get(dev, "bus");
 		if (IS_ERR(ldev->bus_clk))
 			return dev_err_probe(dev, PTR_ERR(ldev->bus_clk),
@@ -2671,16 +2664,6 @@ int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 	}
 
 	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
-		ldev->bus_clk = devm_clk_get(dev, "bus");
-		if (IS_ERR(ldev->bus_clk))
-			return dev_err_probe(dev, PTR_ERR(ldev->bus_clk),
-					     "Unable to get bus clock\n");
-
-		ldev->ltdc_clk = devm_clk_get(dev, "ref");
-		if (IS_ERR(ldev->ltdc_clk))
-			return dev_err_probe(dev, PTR_ERR(ldev->ltdc_clk),
-					     "Unable to get ltdc clock\n");
-
 		/*
 		 * The lvds output clock is not available if the lvds is not probed.
 		 * This is a usual case, it is necessary to check the node to avoid
@@ -2698,16 +2681,23 @@ int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 			of_node_put(node);
 		}
 
-		/*
-		 * Parent of the pixel clock should default to the reference clock (rcc clock).
-		 * If the driver has already been started, this action is not necessary and
-		 *  may cause an issue on register reading/writing.
-		 */
-		if (!device_property_read_bool(dev, "default-on")) {
-			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
-			if (ret)
-				return dev_err_probe(dev, PTR_ERR(ldev->lvds_clk),
-						     "Could not set parent clock\n");
+		ldev->pixel_clk = devm_clk_get(dev, "ref");
+		if (IS_ERR(ldev->pixel_clk)) {
+			if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
+				DRM_ERROR("Unable to get lcd clock\n");
+			return PTR_ERR(ldev->pixel_clk);
+		}
+
+		ldev->ltdc_clk = devm_clk_get(dev, "lcd");
+		if (IS_ERR(ldev->ltdc_clk))
+			return dev_err_probe(dev, PTR_ERR(ldev->ltdc_clk),
+					     "Unable to get ltdc clock\n");
+	} else {
+		ldev->pixel_clk = devm_clk_get(dev, "lcd");
+		if (IS_ERR(ldev->pixel_clk)) {
+			if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
+				DRM_ERROR("Unable to get lcd clock\n");
+			return PTR_ERR(ldev->pixel_clk);
 		}
 	}
 
