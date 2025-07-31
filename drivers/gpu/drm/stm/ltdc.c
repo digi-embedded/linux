@@ -2428,8 +2428,7 @@ int ltdc_load(struct drm_device *ddev)
 	struct resource *res;
 	int irq, i, nb_endpoints;
 	int ret = -ENODEV;
-	u32 mbl;
-	bool def_value;
+	u32 mbl, gcr;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -2486,20 +2485,6 @@ int ltdc_load(struct drm_device *ddev)
 
 	mutex_init(&ldev->err_lock);
 
-	def_value = device_property_read_bool(dev, "default-on");
-
-	/*
-	 * To obtain a continuous display after the probe, the clocks must
-	 * remain activated and reset shouldn't be done
-	 */
-	if (!def_value) {
-		if (!IS_ERR(ldev->rstc)) {
-			reset_control_assert(ldev->rstc);
-			usleep_range(10, 20);
-			reset_control_deassert(ldev->rstc);
-		}
-	}
-
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	ldev->regs = devm_ioremap_resource(dev, res);
 	if (IS_ERR(ldev->regs)) {
@@ -2513,6 +2498,21 @@ int ltdc_load(struct drm_device *ddev)
 		DRM_ERROR("Unable to regmap ltdc registers\n");
 		ret = PTR_ERR(ldev->regmap);
 		goto err;
+	}
+
+	/*
+	 * To obtain a continuous display after the probe, the clocks must
+	 * remain activated and reset shouldn't be done
+	 */
+	regmap_read(ldev->regmap, LTDC_GCR, &gcr);
+
+	/* Check if the ltdc has been activated */
+	if (!(gcr & GCR_LTDCEN)) {
+		if (!IS_ERR(ldev->rstc)) {
+			reset_control_assert(ldev->rstc);
+			usleep_range(10, 20);
+			reset_control_deassert(ldev->rstc);
+		}
 	}
 
 	ret = ltdc_get_caps(ddev);
@@ -2573,7 +2573,8 @@ int ltdc_load(struct drm_device *ddev)
 	pm_runtime_set_active(ddev->dev);
 	pm_runtime_enable(ddev->dev);
 
-	if (def_value) {
+	/* Check if the ltdc has been activated */
+	if (gcr & GCR_LTDCEN) {
 		/* keep runtime active after the probe */
 		ret = pm_runtime_resume_and_get(ddev->dev);
 		if (ret) {
@@ -2583,6 +2584,18 @@ int ltdc_load(struct drm_device *ddev)
 	} else {
 		/* set to sleep state the pinctrl to stop data trasfert */
 		pinctrl_pm_select_sleep_state(ddev->dev);
+
+		/*
+		 * Parent of the pixel clock should default to the reference clock (rcc clock).
+		 * If the driver has already been started, this action is not necessary and
+		 *  may cause an issue on register reading/writing.
+		 */
+		if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
+			if (ret)
+				return dev_err_probe(dev, PTR_ERR(ldev->lvds_clk),
+						     "Could not set parent clock\n");
+		}
 	}
 
 	/* Get the secure rotation buffer memory resource */
