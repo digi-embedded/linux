@@ -41,6 +41,26 @@ static size_t tty_port_default_receive_buf(struct tty_port *port, const u8 *p,
 	return count;
 }
 
+static void tty_port_default_lookahead_buf(struct tty_port *port, const u8 *p,
+					   const u8 *f, size_t count)
+{
+	struct tty_struct *tty;
+	struct tty_ldisc *ld;
+
+	tty = READ_ONCE(port->itty);
+	if (!tty)
+		return;
+
+	ld = tty_ldisc_ref(tty);
+	if (!ld)
+		return;
+
+	if (ld->ops->lookahead_buf)
+		ld->ops->lookahead_buf(ld->tty, p, f, count);
+
+	tty_ldisc_deref(ld);
+}
+
 static void tty_port_default_wakeup(struct tty_port *port)
 {
 	struct tty_struct *tty = tty_port_tty_get(port);
@@ -53,6 +73,7 @@ static void tty_port_default_wakeup(struct tty_port *port)
 
 const struct tty_port_client_operations tty_port_default_client_ops = {
 	.receive_buf = tty_port_default_receive_buf,
+	.lookahead_buf = tty_port_default_lookahead_buf,
 	.write_wakeup = tty_port_default_wakeup,
 };
 EXPORT_SYMBOL_GPL(tty_port_default_client_ops);
