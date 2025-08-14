@@ -121,6 +121,14 @@
 			reg = <0xde000000 0x2000000>;
 			no-map;
 		};
+
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x8000000>;
+			alignment = <0x2000>;
+			linux,cma-default;
+		};
 	};
 
 	/* Wifi/Bluetooth regulators, disabled by default */
