@@ -58,16 +58,8 @@
 		};
 	};
 
-	/* Enable USB 3.0 Data switch */
-	fragment@3 {
-		target = <&usb3_data_switch>;
-		__overlay__ {
-			status = "okay";
-		};
-	};
-
 	/* Enable USB 3.0 PCIe combo PHY */
-	fragment@4 {
+	fragment@3 {
 		target = <&combophy>;
 		__overlay__ {
 			clocks = <&rcc CK_BUS_USB3PCIEPHY>, <&rcc CK_KER_USB3PCIEPHY>;
@@ -77,7 +69,7 @@
 	};
 
 	/* Enable USB 3.0 Dual-Role data port */
-	fragment@5 {
+	fragment@4 {
 		target = <&usb3dr>;
 		__overlay__ {
 				status = "okay";
@@ -85,7 +77,7 @@
 	};
 
 	/* Configure SuperSpeed (SS) USB 3.0 controller */
-	fragment@6 {
+	fragment@5 {
 		target = <&dwc3>;
 		__overlay__ {
 				/* Configure USB 3.0 speed */
