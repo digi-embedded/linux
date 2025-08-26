@@ -82,6 +82,7 @@ struct stm32_usb2phy {
 	struct clk *phyref;
 	struct regulator *vdd33, *vdda18;
 	enum phy_mode mode;
+	int submode;
 	u32 mask_trim1, value_trim1, mask_trim2, value_trim2;
 	bool is_init;
 	struct clk_hw clk48_hw;
@@ -472,6 +473,7 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 	}
 
 	phy_dev->mode = mode;
+	phy_dev->submode = submode;
 
 	return 0;
 }
@@ -489,7 +491,7 @@ static int stm32_usb2phy_init(struct phy *phy)
 	}
 
 	if (phy_dev->mode != PHY_MODE_INVALID) {
-		ret = stm32_usb2phy_set_mode(phy, phy_dev->mode, USB_ROLE_NONE);
+		ret = stm32_usb2phy_set_mode(phy, phy_dev->mode, phy_dev->submode);
 		if (ret) {
 			dev_err(dev, "can't set phy mode (%d)\n", ret);
 			goto error_disable;
