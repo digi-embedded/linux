@@ -1423,6 +1423,7 @@
 				bus-width = <8>;
 				fsl,tuning-start-tap = <1>;
 				fsl,tuning-step= <2>;
+				iommus = <&smmu 0x1>;
 				status = "disabled";
 			};
 
@@ -1440,6 +1441,7 @@
 				bus-width = <4>;
 				fsl,tuning-start-tap = <1>;
 				fsl,tuning-step= <2>;
+				iommus = <&smmu 0x2>;
 				status = "disabled";
 			};
 
@@ -1454,6 +1456,7 @@
 				bus-width = <4>;
 				fsl,tuning-start-tap = <1>;
 				fsl,tuning-step= <2>;
+				iommus = <&smmu 0x3>;
 				status = "disabled";
 			};
 		};
@@ -1933,6 +1936,20 @@
 			interrupt-names = "tx", "rx";
 			#mbox-cells = <2>;
 			status = "okay";
+		};
+
+		v2x_mu7: mailbox@47330000 {
+			compatible = "fsl,imx95-mu-v2x";
+			reg = <0x0 0x47330000 0x0 0x10000>;
+			interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
+			#mbox-cells = <2>;
+		};
+
+		v2x_mu8: mailbox@47340000 {
+			compatible = "fsl,imx95-mu-v2x";
+			reg = <0x0 0x47340000 0x0 0x10000>;
+			interrupts = <GIC_SPI 239 IRQ_TYPE_LEVEL_HIGH>;
+			#mbox-cells = <2>;
 		};
 
 		cameramix_csr: syscon@4ac10000 {
@@ -2768,8 +2785,6 @@
 				phy-names = "usb2-phy", "usb3-phy";
 				snps,gfladj-refclk-lpm-sel-quirk;
 				snps,parkmode-disable-ss-quirk;
-				snps,tx-max-burst = /bits/ 8 <4>;
-				snps,tx-thr-num-pkt = /bits/ 8 <1>;
 				iommus = <&smmu 0xe>;
 			};
 		};
@@ -2960,13 +2975,13 @@
 
 		mali: gpu@4d900000 {
 			compatible = "arm,mali-valhall", "nxp,imx95-mali";
-			reg = <0 0x4d900000 0 0x480000>, <0 0x4d810000 0 0x10000>;
-			reg-names = "gpu_base", "gpumix_blk_ctrl";
+			reg = <0 0x4d900000 0 0x480000>;
+			reg-names = "gpu_base";
 			interrupts = <GIC_SPI 288 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 289 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 290 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "gpu", "job", "mmu";
-			clocks = <&scmi_clk IMX95_CLK_GPU>;
+			clocks = <&scmi_clk IMX95_CLK_GPU_CGC>;
 			clock-names = "gpu";
 			power-domains = <&scmi_devpd IMX95_PD_GPU>, <&scmi_perf IMX95_PERF_GPU>;
 			power-domain-names = "gpumix", "gpuperf";
@@ -3118,6 +3133,14 @@
 				  <0x90 &its 0x65 0x1>, //ENETC2 VF0
 				  <0xa0 &its 0x66 0x1>, //ENETC2 VF1
 				  <0xc0 &its 0x67 0x1>; //NETC Timer
+			iommu-map = <0x0 &smmu 0x20 0x1>,
+				    <0x10 &smmu 0x21 0x1>,
+				    <0x20 &smmu 0x22 0x1>,
+				    <0x40 &smmu 0x23 0x1>,
+				    <0x80 &smmu 0x24 0x1>,
+				    <0x90 &smmu 0x25 0x1>,
+				    <0xa0 &smmu 0x26 0x1>,
+				    <0xc0 &smmu 0x27 0x1>;
 				  /* ENETC0~2 and Timer BAR0 - non-prefetchable memory */
 			ranges = <0x82000000 0x0 0x4cc00000  0x0 0x4cc00000  0x0 0xe0000
 				  /* Timer BAR2 - prefetchable memory */
@@ -3234,31 +3257,43 @@
 		compatible = "nxp,rpmsg-lifecycle";
 	};
 
-	ele_fw2: se-fw2 {
-		compatible = "fsl,imx95-se-fw";
+	ele_fw2: secure-enclave-0 {
+		compatible = "fsl,imx95-se";
 		mbox-names = "tx", "rx";
 		mboxes = <&elemu3 0 0>,
 			 <&elemu3 1 0>;
 	};
 
-	v2x_dbg: v2x-fw0 {
-		compatible = "fsl,imx95-se-fw";
+	v2x_dbg: secure-enclave-1 {
+		compatible = "fsl,imx95-se";
 		mbox-names = "tx", "rx";
 		mboxes = <&v2x_mu 0 0>,
 			<&v2x_mu 1 0>;
 	};
 
-	v2x_sv0: v2x-fw4 {
-		compatible = "fsl,imx95-se-fw";
+	v2x_sv0: secure-enclave-2 {
+		compatible = "fsl,imx95-se";
 		mbox-names = "tx", "rx";
 		mboxes = <&v2x_mu4 0 0>,
 			<&v2x_mu4 1 0>;
 	};
 
-	v2x_she: v2x-fw6 {
-		compatible = "fsl,imx95-se-fw";
+	v2x_she: secure-enclave-3 {
+		compatible = "fsl,imx95-se";
 		mbox-names = "tx", "rx";
 		mboxes = <&v2x_mu6 0 0>,
 			<&v2x_mu6 1 0>;
+	};
+
+	v2x_sg0: secure-enclave-4 {
+		 compatible = "fsl,imx95-se";
+		 mbox-names = "tx", "rx";
+		 mboxes = <&v2x_mu7 0 0>, <&v2x_mu7 1 0>;
+	};
+
+	v2x_sg1: secure-enclave-5 {
+		 compatible = "fsl,imx95-se";
+		 mbox-names = "tx", "rx";
+		 mboxes = <&v2x_mu8 0 0>, <&v2x_mu8 1 0>;
 	};
 };
