@@ -1417,7 +1417,7 @@ static u32 stm32_pconf_get_delay(struct stm32_gpio_bank *bank, int offset)
 static bool stm32_pconf_get(struct stm32_gpio_bank *bank,
 	unsigned int offset, bool dir)
 {
-	u32 val;
+	bool val;
 
 	if (dir)
 		val = !!(readl_relaxed(bank->base + STM32_GPIO_IDR) &
