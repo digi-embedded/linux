@@ -1078,9 +1078,6 @@ void stm32_pmx_get_mode(struct stm32_gpio_bank *bank, int pin, u32 *mode,
 	u32 val;
 	int alt_shift = (pin % 8) * 4;
 	int alt_offset = STM32_GPIO_AFRL + (pin / 8) * 4;
-	unsigned long flags;
-
-	spin_lock_irqsave(&bank->lock, flags);
 
 	val = readl_relaxed(bank->base + alt_offset);
 	val &= GENMASK(alt_shift + 3, alt_shift);
@@ -1089,8 +1086,6 @@ void stm32_pmx_get_mode(struct stm32_gpio_bank *bank, int pin, u32 *mode,
 	val = readl_relaxed(bank->base + STM32_GPIO_MODER);
 	val &= GENMASK(pin * 2 + 1, pin * 2);
 	*mode = val >> (pin * 2);
-
-	spin_unlock_irqrestore(&bank->lock, flags);
 }
 
 static int stm32_pmx_set_mux(struct pinctrl_dev *pctldev,
@@ -1219,15 +1214,10 @@ unlock:
 static u32 stm32_pconf_get_driving(struct stm32_gpio_bank *bank,
 	unsigned int offset)
 {
-	unsigned long flags;
 	u32 val;
-
-	spin_lock_irqsave(&bank->lock, flags);
 
 	val = readl_relaxed(bank->base + STM32_GPIO_TYPER);
 	val &= BIT(offset);
-
-	spin_unlock_irqrestore(&bank->lock, flags);
 
 	return (val >> offset);
 }
@@ -1270,15 +1260,10 @@ unlock:
 static u32 stm32_pconf_get_speed(struct stm32_gpio_bank *bank,
 	unsigned int offset)
 {
-	unsigned long flags;
 	u32 val;
-
-	spin_lock_irqsave(&bank->lock, flags);
 
 	val = readl_relaxed(bank->base + STM32_GPIO_SPEEDR);
 	val &= GENMASK(offset * 2 + 1, offset * 2);
-
-	spin_unlock_irqrestore(&bank->lock, flags);
 
 	return (val >> (offset * 2));
 }
@@ -1321,15 +1306,10 @@ unlock:
 static u32 stm32_pconf_get_bias(struct stm32_gpio_bank *bank,
 	unsigned int offset)
 {
-	unsigned long flags;
 	u32 val;
-
-	spin_lock_irqsave(&bank->lock, flags);
 
 	val = readl_relaxed(bank->base + STM32_GPIO_PUPDR);
 	val &= GENMASK(offset * 2 + 1, offset * 2);
-
-	spin_unlock_irqrestore(&bank->lock, flags);
 
 	return (val >> (offset * 2));
 }
@@ -1376,15 +1356,11 @@ static u32 stm32_pconf_get_advcfgr(struct stm32_gpio_bank *bank, int offset, u32
 {
 	int advcfgr_offset = STM32_GPIO_ADVCFGRL + (offset / 8) * 4;
 	int advcfgr_bit = bpos + (offset % 8) * 4;
-	unsigned long flags;
 	u32 val;
-
-	spin_lock_irqsave(&bank->lock, flags);
 
 	val = readl_relaxed(bank->base + advcfgr_offset);
 	val &= BIT(advcfgr_bit);
 
-	spin_unlock_irqrestore(&bank->lock, flags);
 	return (val >> advcfgr_bit);
 }
 
@@ -1430,25 +1406,18 @@ static u32 stm32_pconf_get_delay(struct stm32_gpio_bank *bank, int offset)
 {
 	int delay_offset = STM32_GPIO_DELAYRL + (offset / 8) * 4;
 	int delay_shift = (offset % 8) * 4;
-	unsigned long flags;
 	u32 val;
-
-	spin_lock_irqsave(&bank->lock, flags);
 
 	val = readl_relaxed(bank->base + delay_offset);
 	val &= GENMASK(delay_shift + 3, delay_shift);
 
-	spin_unlock_irqrestore(&bank->lock, flags);
 	return (val >> delay_shift);
 }
 
 static bool stm32_pconf_get(struct stm32_gpio_bank *bank,
 	unsigned int offset, bool dir)
 {
-	unsigned long flags;
 	u32 val;
-
-	spin_lock_irqsave(&bank->lock, flags);
 
 	if (dir)
 		val = !!(readl_relaxed(bank->base + STM32_GPIO_IDR) &
@@ -1456,8 +1425,6 @@ static bool stm32_pconf_get(struct stm32_gpio_bank *bank,
 	else
 		val = !!(readl_relaxed(bank->base + STM32_GPIO_ODR) &
 			 BIT(offset));
-
-	spin_unlock_irqrestore(&bank->lock, flags);
 
 	return val;
 }
