@@ -351,15 +351,18 @@ scmi_clock_get_duty_cycle(const struct scmi_protocol_handle *ph,
 
 	if (PROTOCOL_REV_MAJOR(ci->version) >= 0x3) {
 		struct scmi_msg_clock_config_get *cfg;
+		u32 flags;
 
 		ret = ph->xops->xfer_get_init(ph, CLOCK_CONFIG_GET,
 					      sizeof(*cfg), 0, &t);
 		if (ret)
 			return ret;
 
+		flags = FIELD_PREP(REGMASK_OEM_TYPE_GET, SCMI_CLOCK_CFG_DUTY_CYCLE);
+
 		cfg = t->tx.buf;
 		cfg->id = cpu_to_le32(clk_id);
-		cfg->flags = cpu_to_le32(REGMASK_OEM_TYPE_DUTY_CYCLE);
+		cfg->flags = cpu_to_le32(flags);
 	} else {
 #ifdef CONFIG_SCMI_STM32MP_OSTL_V5
 		ret = ph->xops->xfer_get_init(ph, CLOCK_OSTL_DUTY_CYCLE_GET,

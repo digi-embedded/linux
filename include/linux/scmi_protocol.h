@@ -71,6 +71,13 @@ struct scmi_handle;
 struct scmi_device;
 struct scmi_protocol_handle;
 
+enum scmi_clock_oem_config {
+	SCMI_CLOCK_CFG_DUTY_CYCLE = 0x1,
+	SCMI_CLOCK_CFG_PHASE,
+	SCMI_CLOCK_CFG_OEM_START = 0x80,
+	SCMI_CLOCK_CFG_OEM_END = 0xFF,
+};
+
 /**
  * struct scmi_clk_proto_ops - represents the various operations provided
  *	by SCMI Clock Protocol
