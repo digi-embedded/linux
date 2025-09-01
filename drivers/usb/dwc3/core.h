@@ -1535,7 +1535,7 @@ struct dwc3_gadget_ep_cmd_params {
 #define DWC3_HAS_OTG			BIT(3)
 
 /* prototypes */
-void dwc3_set_prtcap(struct dwc3 *dwc, u32 mode);
+void dwc3_set_prtcap(struct dwc3 *dwc, u32 mode, bool ignore_susphy);
 #define dwc3_set_mode(dwc3, mode) \
 	dwc3_set_mode_ext(dwc3, mode, USB_ROLE_NONE)
 void dwc3_set_mode_ext(struct dwc3 *dwc, u32 mode, int submode);

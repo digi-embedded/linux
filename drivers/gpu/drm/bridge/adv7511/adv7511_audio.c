@@ -249,6 +249,7 @@ static const struct hdmi_codec_pdata codec_data = {
 	.i2s = 1,
 	.no_i2s_capture = 1,
 	.spdif = 1,
+	.no_spdif_capture = 1,
 };
 
 int adv7511_audio_init(struct device *dev, struct adv7511 *adv7511)
