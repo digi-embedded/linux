@@ -544,6 +544,7 @@
 	pinctrl-1 = <&sdmmc2_b4_od_pins_a>;
 	pinctrl-2 = <&sdmmc2_b4_sleep_pins_a>;
 	st,neg-edge;
+	cap-power-off-card;
 	cap-sdio-irq;
 	bus-width = <4>;
 	vmmc-supply = <&scmi_v3v3>;

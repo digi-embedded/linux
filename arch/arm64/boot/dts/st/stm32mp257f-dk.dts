@@ -737,6 +737,7 @@
 	bus-width = <4>;
 	vmmc-supply = <&scmi_v3v3>;
 	mmc-pwrseq = <&wifi_pwrseq>;
+	cap-power-off-card;
 	cap-sdio-irq;
 	#address-cells = <1>;
 	#size-cells = <0>;
