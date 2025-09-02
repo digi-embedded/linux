@@ -103,10 +103,14 @@
 	pinctrl-0 =  <&pinctrl_hog>, <&pinctrl_expansion>;
 
 	imx6ul-ccimx6ul {
+		/*
+		 * Configure pads as GPIO function to have them work as ADC.
+		 * Preset ones are pads available on the expansion connector)
+		 */
 		pinctrl_adc1: adc1grp {
 			fsl,pins = <
 				/* GPIO1_4/ADC1_IN4 (pin 7 of the expansion header) */
-				MX6UL_PAD_GPIO1_IO04__GPIO1_IO04        0xb0
+				MX6UL_PAD_GPIO1_IO04__GPIO1_IO04	0x0
 			>;
 		};
 

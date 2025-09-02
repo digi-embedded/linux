@@ -279,14 +279,20 @@
 		pinctrl_adc1: adc1grp {
 			fsl,pins = <
 				/*
-				 * EXP_GPIO_1 -> GPIO1_5/ADC1_IN5, it also
-				 * requires disabling 'pwm4'
+				 * EXP_GPIO_1 -> GPIO1_5/ADC1_IN5
+				 * Commented out as it conflicts with 'pwm4'
+				 * which is enabled by default.
 				 */
-		//		MX6UL_PAD_GPIO1_IO05__GPIO1_IO05	0x1b0b0
-				/* EXP_GPIO_2 -> GPIO1_3/ADC1_IN3 */
-		//		MX6UL_PAD_GPIO1_IO03__GPIO1_IO03        0xb0
+		//		MX6UL_PAD_GPIO1_IO05__GPIO1_IO05	0x0
+				/* EXP_GPIO_2 -> GPIO1_3/ADC1_IN3
+				 * Commented out as it is configured as GPIO
+				 * but with different pad settings to be used
+				 * by APIX GPIO example application
+				 * (see pinctrl_gpio)
+				 */
+		//		MX6UL_PAD_GPIO1_IO03__GPIO1_IO03	0x0
 				/* EXP_GPIO_3 -> GPIO1_2/ADC1_IN2 */
-				MX6UL_PAD_GPIO1_IO02__GPIO1_IO02        0xb0
+				MX6UL_PAD_GPIO1_IO02__GPIO1_IO02	0x0
 			>;
 		};
 
@@ -294,16 +300,23 @@
 		pinctrl_gpio: gpiogrp {
 			fsl,pins = <
 				/*
-				 * Comment the pads you wish to use on any
-				 * device driver, and uncomment the ones you
-				 * want to use as GPIO (requires disabling the
-				 * driver that manages them).
+				 * Add here pinctrl for pads that need to be
+				 * configured as GPIO but are not linked to any
+				 * device driver.
 				 */
-				/* EXP_GPIO_1, configured on 'pinctrl_pwm4' */
+				/*
+				 * EXP_GPIO_1 on GPIO connector.
+				 * Commented out as it conflicts with 'pwm4'
+				 * which is enabled by default.
+				 */
 		//		MX6UL_PAD_GPIO1_IO05__GPIO1_IO05	0x1b0b0
-				/* EXP_GPIO_2 */
+				/* EXP_GPIO_2 on GPIO connector */
 				MX6UL_PAD_GPIO1_IO03__GPIO1_IO03	0x1b0b0
-				/* EXP_GPIO_3, configured on 'pinctrl_adc1' */
+				/* EXP_GPIO_3 on GPIO connector
+				 * Commented out as it is configured as GPIO
+				 * but with different pad settings to be used
+				 * as ADC input (see pinctrl_adc1)
+				 */
 		//		MX6UL_PAD_GPIO1_IO02__GPIO1_IO02	0x1b0b0
 			>;
 		};
