@@ -130,8 +130,8 @@ enum {
 	TIMG2,
 	PLL3,
 	DSI_TXBYTE,
-	HSE_KER,
 	HSI_KER,
+	HSE_KER,
 	MSI_KER,
 };
 
