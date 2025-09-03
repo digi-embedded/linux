@@ -26,7 +26,15 @@ properties:
 
   clocks:
     items:
-      description: PHY ref clock
+      - description: PHY core clock
+      - description: PHY clock in stop mode
+    minItems: 1
+
+  clock-names:
+    items:
+      - const: core
+      - const: stp
+    minItems: 1
 
   resets:
     items:
