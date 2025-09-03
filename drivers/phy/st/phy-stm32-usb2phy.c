@@ -82,6 +82,7 @@ struct stm32_usb2phy {
 	struct reset_control *rstc;
 	struct regulator *vbus;
 	struct clk *phyref;
+	struct clk *stp;
 	struct regulator *vdd33, *vdda18;
 	enum phy_mode mode;
 	int submode;
@@ -573,8 +574,19 @@ static int stm32_usb2phy_clkohci_prepare(struct clk_hw *hw)
 	const struct stm32mp2_usb2phy_hw_data *phy_data = phy_dev->hw_data;
 	int ret;
 
+	/*
+	 * CMN = 0: PLL remains active event in suspend or sleep.
+	 * So the clock needs to remain active even in stop mode.
+	 */
+	ret = clk_prepare_enable(phy_dev->stp);
+	if (ret)
+		return ret;
+
 	ret = regmap_clear_bits(phy_dev->regmap, phy_data->cr_offset,
 				SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
+
+	if (ret)
+		clk_disable_unprepare(phy_dev->stp);
 
 	return ret;
 }
@@ -585,6 +597,8 @@ static void stm32_usb2phy_clkohci_unprepare(struct clk_hw *hw)
 	const struct stm32mp2_usb2phy_hw_data *phy_data = phy_dev->hw_data;
 
 	regmap_set_bits(phy_dev->regmap, phy_data->cr_offset, SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
+
+	clk_disable_unprepare(phy_dev->stp);
 }
 
 static unsigned long stm32_usb2phy_clkohci_recalc_rate(struct clk_hw *hw,
@@ -846,9 +860,13 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 	if (IS_ERR(phy_dev->rstc))
 		return dev_err_probe(dev, PTR_ERR(phy_dev->rstc), "failed to get USB2PHY reset\n");
 
-	phy_dev->phyref = devm_clk_get(dev, NULL);
+	phy_dev->phyref = devm_clk_get(dev, "core");
 	if (IS_ERR(phy_dev->phyref))
 		return dev_err_probe(dev, PTR_ERR(phy_dev->phyref), "failed to get phyref clk\n");
+
+	phy_dev->stp = devm_clk_get_optional(dev, "stp");
+	if (IS_ERR(phy_dev->stp))
+		return dev_err_probe(dev, PTR_ERR(phy_dev->stp), "failed to get stp clk\n");
 
 	phy_dev->regmap = syscon_regmap_lookup_by_phandle(np, "st,syscfg");
 	if (IS_ERR(phy_dev->regmap))
