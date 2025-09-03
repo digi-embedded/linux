@@ -22,10 +22,12 @@
 #define SYSCFG_USBHARCR_OFFSET_AREN_MASK        BIT(0)
 
 struct stm32_usb2h_cfg {
+	bool keep_runtime_active;
 	bool has_addr_remapping;
 };
 
 static const struct stm32_usb2h_cfg stm32mp21_usb2h_cfg = {
+	.keep_runtime_active = true,
 	.has_addr_remapping = true,
 };
 
@@ -144,6 +146,16 @@ static int stm32_usbh_probe(struct platform_device *pdev)
 	ret = devm_pm_runtime_enable(dev);
 	if (ret)
 		return dev_err_probe(dev, ret, "Failed to enable pm runtime\n");
+
+	if (hwdata_cfg && hwdata_cfg->keep_runtime_active) {
+		/*
+		 * No RCC STPEN to maintain necessary clocks during stop mode.
+		 * So keep the PM domain active.
+		 */
+		ret = pm_runtime_resume_and_get(dev);
+		if (ret)
+			return dev_err_probe(dev, ret, "pm runtime resume failed\n");
+	}
 
 	/* Populate the ehci and ohci child nodes */
 	ret = devm_of_platform_populate(dev);
