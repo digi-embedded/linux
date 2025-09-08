@@ -3468,8 +3468,6 @@ void dwc2_hsotg_core_init_disconnected(struct dwc2_hsotg *hsotg,
 
 	dwc2_phy_init(hsotg, true);
 
-	dwc2_hsotg_init_fifo(hsotg);
-
 	if (!is_usb_reset)
 		dwc2_set_bit(hsotg, DCTL, DCTL_SFTDISCON);
 
@@ -3493,6 +3491,8 @@ void dwc2_hsotg_core_init_disconnected(struct dwc2_hsotg *hsotg,
 		dcfg |= DCFG_IPG_ISOC_SUPPORDED;
 
 	dwc2_writel(hsotg, dcfg,  DCFG);
+
+	dwc2_hsotg_init_fifo(hsotg);
 
 	/* Clear any pending OTG interrupts */
 	dwc2_writel(hsotg, 0xffffffff, GOTGINT);
