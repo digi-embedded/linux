@@ -3046,8 +3046,7 @@ static void dwc2_gadget_setup_timeout(struct work_struct *work)
 	dev_dbg(hsotg->dev, "%s: DOEPINT0=0x%08x\n",  __func__, dwc2_readl(hsotg, DOEPINT(0)));
 
 	spin_lock_irqsave(&hsotg->lock, flags);
-	kill_all_requests(hsotg, hsotg->eps_out[0], -ESHUTDOWN);
-	dwc2_hsotg_enqueue_setup(hsotg);
+	dwc2_hsotg_core_init_disconnected(hsotg, false);
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 }
 
