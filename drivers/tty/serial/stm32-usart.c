@@ -713,9 +713,9 @@ static void stm32_usart_rx_dma_complete(void *arg)
 
 	spin_lock_irqsave(&port->lock, flags);
 	size = stm32_usart_receive_chars(port, false);
-	uart_unlock_and_check_sysrq_irqrestore(port, flags);
 	if (size)
 		tty_flip_buffer_push(tport);
+	uart_unlock_and_check_sysrq_irqrestore(port, flags);
 	if (!stm32port->has_rtor)
 		mod_timer(&stm32port->rx_dma_timer,
 			  jiffies + msecs_to_jiffies(LPUART_RECEIVE_TIMEOUT_MS));
