@@ -188,6 +188,8 @@
 	wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		reset-gpios = <&gpiog 8 GPIO_ACTIVE_LOW>;
+		clocks = <&rtc>;
+		clock-names = "ext_clock";
 	};
 };
 
@@ -650,6 +652,7 @@
 };
 
 &rtc {
+	#clock-cells = <0>;
 	st,lsco = <RTC_OUT2_RMP>;
 	pinctrl-0 = <&rtc_out2_rmp_pins_a>;
 	pinctrl-names = "default";
@@ -784,6 +787,8 @@
 	bluetooth {
 		shutdown-gpios = <&gpiog 4 GPIO_ACTIVE_HIGH>;
 		compatible = "brcm,bcm43438-bt";
+		clocks = <&rtc>;
+		clock-names = "lpo";
 		max-speed = <2000000>;
 		vbat-supply = <&scmi_v3v3>;
 		vddio-supply = <&scmi_v3v3>;
