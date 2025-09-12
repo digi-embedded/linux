@@ -66,13 +66,6 @@ struct stm32_tamp_nvram_plat {
 	const struct reg_field *config_reg_fields;
 };
 
-static const struct regmap_config stm32mp_tamp_nvram_regmap_cfg = {
-	.reg_bits = 32,
-	.val_bits = 32,
-	.reg_stride = 4,
-
-};
-
 static const struct reg_field stm32mp1_tamp_nvram_zone_cfg_fields[NB_ZONES_STM32MP1 - 1] = {
 	[BKPREG_PROTECTION_ZONE_1] = REG_FIELD(_TAMP_SECCFGR, 0, 7),
 	[BKPREG_PROTECTION_ZONE_2] = REG_FIELD(_TAMP_SECCFGR, 16, 23),
@@ -103,20 +96,6 @@ static enum stm32_tamp_bkpreg_access stm32mp1_tamp_bkpreg_access[NB_ZONES_STM32M
 	[BKPREG_PROTECTION_ZONE_1] = BKP_NO,
 	[BKPREG_PROTECTION_ZONE_2] = BKP_READ,
 	[BKPREG_PROTECTION_ZONE_3] = BKP_READ_WRITE,
-};
-
-static const struct stm32_tamp_nvram_plat stm32mp1_tamp_nvram = {
-	.nb_zones = NB_ZONES_STM32MP1,
-	.nb_regs = NB_REGS_STM32MP1,
-	.bkpregs_regmap_cfg = &stm32mp_tamp_nvram_regmap_cfg,
-	.config_reg_fields = stm32mp1_tamp_nvram_zone_cfg_fields,
-};
-
-static const struct stm32_tamp_nvram_plat stm32mp25_tamp_nvram = {
-	.nb_zones = NB_ZONES_STM32MP2,
-	.nb_regs = NB_REGS_STM32MP2,
-	.bkpregs_regmap_cfg = &stm32mp_tamp_nvram_regmap_cfg,
-	.config_reg_fields = stm32mp25_tamp_nvram_zone_cfg_fields,
 };
 
 static int stm32_tamp_is_compartment_isolation_enabled_mp2X(struct stm32_tamp_nvram_priv *priv)
@@ -310,6 +289,64 @@ static bool stm32_tamp_nvram_rights(struct stm32_tamp_nvram_priv *priv, int reg,
 
 	return false;
 }
+
+static bool stm32_tamp_nvram_readable_bkpreg(struct device *dev, unsigned int reg)
+{
+	struct stm32_tamp_nvram_priv *priv = dev_get_drvdata(dev);
+
+	if (!priv)
+		return false;
+
+	if (!stm32_tamp_nvram_rights(priv, ALIGN_DOWN(reg, sizeof(u32)) / sizeof(u32), true))
+		return false;
+
+	return true;
+}
+
+static bool stm32_tamp_nvram_writeable_bkpreg(struct device *dev, unsigned int reg)
+{
+	struct stm32_tamp_nvram_priv *priv = dev_get_drvdata(dev);
+
+	if (!priv)
+		return false;
+
+	if (!stm32_tamp_nvram_rights(priv, ALIGN_DOWN(reg, sizeof(u32)) / sizeof(u32), false))
+		return false;
+
+	return true;
+}
+
+static const struct regmap_config stm32mp1_tamp_nvram_regmap_cfg = {
+	.reg_bits = 32,
+	.val_bits = 32,
+	.reg_stride = 4,
+	.readable_reg = stm32_tamp_nvram_readable_bkpreg,
+	.writeable_reg = stm32_tamp_nvram_writeable_bkpreg,
+	.max_register = 0x80,
+};
+
+static const struct regmap_config stm32mp2_tamp_nvram_regmap_cfg = {
+	.reg_bits = 32,
+	.val_bits = 32,
+	.reg_stride = 4,
+	.readable_reg = stm32_tamp_nvram_readable_bkpreg,
+	.writeable_reg = stm32_tamp_nvram_writeable_bkpreg,
+	.max_register = 0x200,
+};
+
+static const struct stm32_tamp_nvram_plat stm32mp1_tamp_nvram = {
+	.nb_zones = NB_ZONES_STM32MP1,
+	.nb_regs = NB_REGS_STM32MP1,
+	.bkpregs_regmap_cfg = &stm32mp1_tamp_nvram_regmap_cfg,
+	.config_reg_fields = stm32mp1_tamp_nvram_zone_cfg_fields,
+};
+
+static const struct stm32_tamp_nvram_plat stm32mp25_tamp_nvram = {
+	.nb_zones = NB_ZONES_STM32MP2,
+	.nb_regs = NB_REGS_STM32MP2,
+	.bkpregs_regmap_cfg = &stm32mp2_tamp_nvram_regmap_cfg,
+	.config_reg_fields = stm32mp25_tamp_nvram_zone_cfg_fields,
+};
 
 static int stm32_tamp_nvram_write_byte(struct stm32_tamp_nvram_priv *priv, u32 offset, u8 byte)
 {
@@ -534,9 +571,7 @@ static int stm32_tamp_nvram_probe(struct platform_device *pdev)
 		dev_err(dev, "Can't remap resource\n");
 		return PTR_ERR(base_addr);
 	}
-	priv->bkpregs_regmap = devm_regmap_init_mmio(dev,
-						     base_addr,
-						     priv->data->bkpregs_regmap_cfg);
+
 	priv->cfg.name = "stm32-tamp-nvram";
 	priv->cfg.word_size = 1;
 	priv->cfg.stride = 1;
@@ -653,6 +688,12 @@ static int stm32_tamp_nvram_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, priv);
+	priv->bkpregs_regmap = devm_regmap_init_mmio(dev, base_addr,
+						     priv->data->bkpregs_regmap_cfg);
+	if (IS_ERR(priv->bkpregs_regmap)) {
+		dev_err(dev, "failed to init regmap: %ld\n", PTR_ERR(priv->bkpregs_regmap));
+		return PTR_ERR(priv->bkpregs_regmap);
+	}
 
 	return PTR_ERR_OR_ZERO(devm_nvmem_register(dev, &priv->cfg));
 }
