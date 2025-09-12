@@ -483,6 +483,7 @@
 };
 
 &rtc {
+	#clock-cells = <0>;
 	st,lsco = <RTC_OUT1>;
 	pinctrl-0 = <&rtc_out1_pins_a>;
 	pinctrl-names = "default";
