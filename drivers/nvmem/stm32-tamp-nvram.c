@@ -321,7 +321,9 @@ static int stm32_tamp_nvram_write_byte(struct stm32_tamp_nvram_priv *priv, u32 o
 	if (!stm32_tamp_nvram_rights(priv, reg_idx, false))
 		return -EIO;
 
-	regmap_read(priv->bkpregs_regmap, offset_aligned, &read_value);
+	if (regmap_read(priv->bkpregs_regmap, offset_aligned, &read_value))
+		return -EIO;
+
 	to_be_writen_value = read_value & ~(0xFFUL << byte_in_word * 8);
 	to_be_writen_value |=  (u32)byte << (byte_in_word * 8);
 
@@ -338,7 +340,9 @@ static int stm32_tamp_nvram_read_byte(struct stm32_tamp_nvram_priv *priv, u32 of
 	if (!stm32_tamp_nvram_rights(priv, reg_idx, true))
 		return -EIO;
 
-	regmap_read(priv->bkpregs_regmap, offset_aligned, &read_value);
+	if (regmap_read(priv->bkpregs_regmap, offset_aligned, &read_value))
+		return -EIO;
+
 	*byte = (read_value >> (byte_in_word * 8)) & 0xFF;
 
 	return 0;
@@ -363,8 +367,8 @@ static int stm32_tamp_nvram_read(void *context, unsigned int offset, void *buf, 
 				dev_dbg(dev, "Backup register %u is not allowed to be read\n",
 					reg_idx);
 				temp_u32 = 0;
-			} else {
-				regmap_read(priv->bkpregs_regmap, i, &temp_u32);
+			} else if (regmap_read(priv->bkpregs_regmap, i, &temp_u32)) {
+				return -EIO;
 			}
 			memcpy(buf_u8, &temp_u32, sizeof(u32));
 			buf_u8 += sizeof(u32);
@@ -401,7 +405,8 @@ static int stm32_tamp_nvram_write(void *context, unsigned int offset, void *buf,
 		if (i + sizeof(u32) <= total && IS_ALIGNED(i, sizeof(u32))) {
 			if (stm32_tamp_nvram_rights(priv, reg_idx, false)) {
 				memcpy(&temp_u32, buf_u8, sizeof(u32));
-				regmap_write(priv->bkpregs_regmap, i, temp_u32);
+				if (regmap_write(priv->bkpregs_regmap, i, temp_u32))
+					return -EIO;
 			} else {
 				dev_dbg(dev, "Backup register %u is not allowed to be written",
 					reg_idx);
@@ -431,8 +436,8 @@ static int *stm32_tamp_nvram_get_backup_zones(struct stm32_tamp_nvram_priv *priv
 	u32 offset_field;
 
 	idx_bkpreg_zones_end = devm_kcalloc(dev,
-					    sizeof(*idx_bkpreg_zones_end),
 					    nb_zones,
+					    sizeof(*idx_bkpreg_zones_end),
 					    GFP_KERNEL);
 	if (!idx_bkpreg_zones_end) {
 		dev_err(dev, "Can't allocate registers zones\n");
