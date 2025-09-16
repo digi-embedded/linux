@@ -705,18 +705,18 @@
 		};
 	};
 
-	pinctrl_pcie_reg: pciereggrp {
-		fsl,pins = <
-			MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
-		>;
-	};
-
 	pcie {
 		pinctrl_pcie: pcie {
 			fsl,pins = <
 				MX6QDL_PAD_SD3_DAT3__GPIO7_IO07 0x80000000
 				MX6QDL_PAD_GPIO_4__GPIO1_IO04   0x80000000
 				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
+			>;
+		};
+
+		pinctrl_pcie_reg: pciereggrp {
+			fsl,pins = <
+				MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
 			>;
 		};
 	};
