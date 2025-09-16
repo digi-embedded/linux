@@ -3,6 +3,7 @@
  * GPIO Driver for Dialog DA9063 PMICs.
  *
  * Copyright(c) 2012 Dialog Semiconductor Ltd.
+ * Copyright (C) 2025, Digi International Inc.
  *
  * Author: David Dajun Chen <dchen@diasemi.com>
  */
@@ -187,6 +188,7 @@ static int da9063_gpio_probe(struct platform_device *pdev)
 		return -EPROBE_DEFER;
 
 	gpio->gp = reference_gp;
+	gpio->gp.parent = &pdev->dev;
 
 	ret = devm_gpiochip_add_data(&pdev->dev, &gpio->gp, gpio);
 	if (ret < 0) {
