@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Digi International, Inc.
+ * Copyright (C) 2015-2025, Digi International Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -13,11 +13,16 @@
 #include "imx6qdl-ccimx6.dtsi"
 
 / {
+	usdhc1_wifi_pwrseq: usdhc1-wifi-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		post-power-on-delay-ms = <5>;
+		reset-gpios = <&gpio_extender 3 GPIO_ACTIVE_LOW>; /* WLAN_PWD */
+	};
+
 	wireless {
 		compatible = "atheros,ath6kl";
 		ath6kl-p2p-enable;
 		ath6kl-softmac-enable;
-		digi,pwrdown-gpios = <&gpio_extender 3 0>;
 		/* U-Boot will fill in the MAC address here */
 	};
 };
@@ -34,4 +39,11 @@
 			};
 		};
 	};
+};
+
+/* USDHC1 (Wireless) */
+&usdhc1 {
+	no-1-8-v;
+	mmc-pwrseq = <&usdhc1_wifi_pwrseq>;
+	status = "okay";
 };
