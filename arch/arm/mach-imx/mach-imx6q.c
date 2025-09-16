@@ -2,6 +2,7 @@
 /*
  * Copyright 2011-2013 Freescale Semiconductor, Inc.
  * Copyright 2011 Linaro Ltd.
+ * Copyright (C) 2025, Digi International Inc.
  */
 
 #include <linux/clk.h>
@@ -206,6 +207,7 @@ static void imx6q_wifi_init (void)
 	struct device_node *np;
 	unsigned int pwrdown_gpio, pwrdown_delay;
 	struct gpio_desc *pwr_desc;
+	int err;
 
 	np = of_find_node_by_path("/wireless");
 	if (!np)
@@ -218,6 +220,17 @@ static void imx6q_wifi_init (void)
 	/* Read the power down gpio */
 	pwr_desc = fwnode_gpiod_get_index(of_fwnode_handle(np), "digi,pwrdown", 0,
 			GPIOD_OUT_HIGH, "pwrdown-gpio");
+
+	if (IS_ERR(pwr_desc)) {
+		err = PTR_ERR(pwr_desc);
+		if (err == -ENOENT) {
+			pr_info("%s: Unable to find digi,pwrdown gpio", __func__);
+		} else {
+			pr_err("%s: failed to get digi,pwrdown gpio (%d)", __func__, err);
+		}
+		pwr_desc = NULL;
+	}
+
 	if (pwr_desc) {
 		pwrdown_gpio = gpiod_to_irq(pwr_desc);
 		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
