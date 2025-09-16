@@ -7,8 +7,6 @@
 
 #include <linux/clk.h>
 #include <linux/irqchip.h>
-#include <linux/of_gpio.h>
-#include <linux/gpio/consumer.h>
 #include <linux/of_platform.h>
 #include <linux/pci.h>
 #include <linux/phy.h>
@@ -22,8 +20,6 @@
 #include "common.h"
 #include "cpuidle.h"
 #include "hardware.h"
-
-extern int digi_get_board_version(void);
 
 /* For imx6q sabrelite board: set KSZ9021RN RGMII pad skew */
 static int ksz9021rn_phy_fixup(struct phy_device *phydev)
@@ -201,62 +197,6 @@ static void __init imx6q_axi_init(void)
 		pr_warn("failed to find fsl,imx6q-iomuxc-gpr regmap\n");
 	}
 }
-
-static void imx6q_wifi_init (void)
-{
-	struct device_node *np;
-	unsigned int pwrdown_gpio, pwrdown_delay;
-	struct gpio_desc *pwr_desc;
-	int err;
-
-	np = of_find_node_by_path("/wireless");
-	if (!np)
-		return;
-
-	if (of_property_read_u32(np, "digi,pwrdown_delay",
-			&pwrdown_delay) < 0)
-		pwrdown_delay = 5;
-
-	/* Read the power down gpio */
-	pwr_desc = fwnode_gpiod_get_index(of_fwnode_handle(np), "digi,pwrdown", 0,
-			GPIOD_OUT_HIGH, "pwrdown-gpio");
-
-	if (IS_ERR(pwr_desc)) {
-		err = PTR_ERR(pwr_desc);
-		if (err == -ENOENT) {
-			pr_info("%s: Unable to find digi,pwrdown gpio", __func__);
-		} else {
-			pr_err("%s: failed to get digi,pwrdown gpio (%d)", __func__, err);
-		}
-		pwr_desc = NULL;
-	}
-
-	if (pwr_desc) {
-		pwrdown_gpio = gpiod_to_irq(pwr_desc);
-		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
-			"wifi_chip_pwd_l")) {
-			/* Start with Power pin low, then set high to power Wifi */
-			gpio_set_value_cansleep(pwrdown_gpio, 0);
-			mdelay(pwrdown_delay);
-			gpio_set_value_cansleep(pwrdown_gpio, 1);
-			mdelay(pwrdown_delay);
-			/*
-			 * Free the Wifi chip PWD pin to allow controlling
-			 * it from user space
-			 */
-			gpio_free(pwrdown_gpio);
-		}
-	}
-	of_node_put(np);
-}
-
-static int __init imx6q_som_init (void)
-{
-	imx6q_wifi_init();
-
-	return 0;
-}
-device_initcall(imx6q_som_init);
 
 static void __init imx6q_init_machine(void)
 {
