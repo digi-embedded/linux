@@ -26,16 +26,6 @@
 		mxcfb3 = &mxcfb4;
 	};
 
-	5v_reg {
-		compatible = "regulator-fixed";
-		gpio = <&gpio_extender 7 0>;
-		regulator-name = "gpio-ext-reg";
-		regulator-always-on;
-		enable-active-high;
-		regulator-min-microvolt = <5000000>;
-		regulator-max-microvolt = <5000000>;
-	};
-
 	/* SGTL5000 codec is powered by 3V3 BUCK_PERI, but controlled
 	 * by GPIO2_25 via a FET transistor
 	 */
@@ -56,6 +46,31 @@
 		regulator-state-disk {
 			regulator-off-in-suspend;
 		};
+	};
+
+	reg_3v3_pcie: fixedregulator@1 {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pcie_reg>;
+		regulator-name = "PCIe_VCC";
+		regulator-always-on;
+		startup-delay-us = <100000>;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio6 10 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		status = "okay";
+	};
+
+	reg_5v_board: fixedregulator@2 {
+		compatible = "regulator-fixed";
+		regulator-name = "5v_board";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-always-on;
+		gpio = <&gpio_extender 7 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		status = "okay";
 	};
 
 	/* Parallel display */
@@ -117,20 +132,6 @@
 		int_clk = <0>;
 		late_init = <0>;
 		status = "disabled";
-	};
-
-	reg_3v3_pcie: fixedregulator@1 {
-		compatible = "regulator-fixed";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_pcie_reg>;
-		regulator-name = "PCIe_VCC";
-		regulator-always-on;
-		startup-delay-us = <100000>;
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&gpio6 10 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		status = "okay";
 	};
 
 	sound_sgtl5000: sound-sgtl5000 {
