@@ -32,7 +32,7 @@
 	};
 
 	chosen {
-		stdout-path = &lpuart1;
+		stdout-path = &lpuart6;
 		#address-cells = <2>;
 		#size-cells = <2>;
 		/* will be updated by U-boot when booting Xen */
@@ -499,13 +499,6 @@
 	};
 };
 
-&lpuart1 {
-	/* console */
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart1>;
-	status = "okay";
-};
-
 &lpuart5 {
 	/* BT */
 	pinctrl-names = "default";
@@ -517,6 +510,13 @@
 		/* U-blox 88Q9098 module use the 3Mbps by default */
 		fw-init-baudrate = <3000000>;
 	};
+};
+
+&lpuart6 {
+	/* console */
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart6>;
+	status = "okay";
 };
 
 &lpspi7 {
@@ -739,19 +739,19 @@
 		>;
 	};
 
-	pinctrl_uart1: uart1grp {
-		fsl,pins = <
-			IMX95_PAD_UART1_RXD__AONMIX_TOP_LPUART1_RX      0x31e
-			IMX95_PAD_UART1_TXD__AONMIX_TOP_LPUART1_TX      0x31e
-		>;
-	};
-
 	pinctrl_uart5: uart5grp {
 		fsl,pins = <
 			IMX95_PAD_DAP_TDO_TRACESWO__LPUART5_TX			0x31e
 			IMX95_PAD_DAP_TDI__LPUART5_RX				0x31e
 			IMX95_PAD_DAP_TMS_SWDIO__LPUART5_RTS_B			0x31e
 			IMX95_PAD_DAP_TCLK_SWCLK__LPUART5_CTS_B			0x31e
+		>;
+	};
+
+	pinctrl_uart6: uart6grp {
+		fsl,pins = <
+			IMX95_PAD_GPIO_IO05__LPUART6_RX			0x31e
+			IMX95_PAD_GPIO_IO04__LPUART6_TX			0x31e
 		>;
 	};
 
