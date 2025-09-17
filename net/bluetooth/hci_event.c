@@ -3978,6 +3978,8 @@ unlock:
 	return rp->status;
 }
 
+#define HCI_MIN_LE_SUPPORTED_STATES_SIZE	5
+
 #define HCI_CC_VL(_op, _func, _min, _max) \
 { \
 	.op = _op, \
@@ -4105,8 +4107,8 @@ static const struct hci_cc {
 		      hci_cc_le_add_to_accept_list),
 	HCI_CC_STATUS(HCI_OP_LE_DEL_FROM_ACCEPT_LIST,
 		      hci_cc_le_del_from_accept_list),
-	HCI_CC(HCI_OP_LE_READ_SUPPORTED_STATES, hci_cc_le_read_supported_states,
-	       sizeof(struct hci_rp_le_read_supported_states)),
+	HCI_CC_VL(HCI_OP_LE_READ_SUPPORTED_STATES, hci_cc_le_read_supported_states,
+		  HCI_MIN_LE_SUPPORTED_STATES_SIZE, sizeof(struct hci_rp_le_read_supported_states)),
 	HCI_CC(HCI_OP_LE_READ_DEF_DATA_LEN, hci_cc_le_read_def_data_len,
 	       sizeof(struct hci_rp_le_read_def_data_len)),
 	HCI_CC_STATUS(HCI_OP_LE_WRITE_DEF_DATA_LEN,
