@@ -1,5 +1,5 @@
 /*
- * Copyright 2017, Digi International Inc.
+ * Copyright (C) 2017-2025, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -36,6 +36,13 @@
 
 	memory: memory {
 		/* U-boot to fill memory details here */
+	};
+
+	reserved-memory {
+		linux,cma {
+			/* CMA allowed range: 512MB from 0x10000000 */
+			alloc-ranges = <0x10000000 0x20000000>;
+		};
 	};
 };
 
