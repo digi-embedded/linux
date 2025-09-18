@@ -599,14 +599,6 @@
 	};
 };
 
-&scmi_misc {
-	wakeup-sources = <BRD_SM_CTRL_SD3_WAKE		1
-			  BRD_SM_CTRL_PCIE1_WAKE	1
-			  BRD_SM_CTRL_BT_WAKE		1
-			  BRD_SM_CTRL_PCIE2_WAKE	1
-			  BRD_SM_CTRL_BUTTON		1>;
-};
-
 &scmi_iomuxc {
 	pinctrl_tpm3: tpm3grp {
 		fsl,pins = <
