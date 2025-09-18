@@ -198,12 +198,6 @@
 	status = "okay";
 };
 
-&tpm3 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_tpm3>;
-	status = "okay";
-};
-
 &tpm6 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_tpm6>;
@@ -462,12 +456,12 @@
 	status = "okay";
 };
 
-&lpspi7 {
+&lpspi8 {
 	fsl,spi-num-chipselects = <1>;
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_lpspi7>;
-	pinctrl-1 = <&pinctrl_lpspi7>;
-	cs-gpios = <&gpio2 4 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&pinctrl_lpspi8>;
+	pinctrl-1 = <&pinctrl_lpspi8>;
+	cs-gpios = <&gpio2 12 GPIO_ACTIVE_LOW>;
 	status = "okay";
 
 	spidev0: spi@0 {
@@ -579,12 +573,6 @@
 };
 
 &scmi_iomuxc {
-	pinctrl_tpm3: tpm3grp {
-		fsl,pins = <
-			IMX95_PAD_GPIO_IO12__TPM3_CH2			0x51e
-		>;
-	};
-
 	pinctrl_tpm6: tpm6grp {
 		fsl,pins = <
 			IMX95_PAD_GPIO_IO19__TPM6_CH2			0x51e
@@ -679,12 +667,12 @@
 		>;
 	};
 
-	pinctrl_lpspi7: lpspi7grp {
+	pinctrl_lpspi8: lpspi8grp {
 		fsl,pins = <
-			IMX95_PAD_GPIO_IO04__GPIO2_IO_BIT4	0x3fe
-			IMX95_PAD_GPIO_IO05__LPSPI7_SIN		0x3fe
-			IMX95_PAD_GPIO_IO06__LPSPI7_SOUT	0x3fe
-			IMX95_PAD_GPIO_IO07__LPSPI7_SCK		0x3fe
+			IMX95_PAD_GPIO_IO12__GPIO2_IO_BIT12	0x3fe
+			IMX95_PAD_GPIO_IO13__LPSPI8_SIN		0x3fe
+			IMX95_PAD_GPIO_IO14__LPSPI8_SOUT	0x3fe
+			IMX95_PAD_GPIO_IO15__LPSPI8_SCK		0x3fe
 		>;
 	};
 
