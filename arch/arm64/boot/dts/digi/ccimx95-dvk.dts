@@ -70,40 +70,26 @@
 
 	reg_can1_stby: regulator-can1-stby {
 		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_reg_can1_stby>;
 		regulator-name = "can1-stby";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-		gpio = <&i2c6_gpio_expander_21 5 GPIO_ACTIVE_HIGH>;
+		gpio = <&gpio1 11 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
-		vin-supply = <&reg_can1_en>;
-	};
-
-	reg_can1_en: regulator-can1-en {
-		compatible = "regulator-fixed";
-		regulator-name = "can1-en";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&i2c6_gpio_expander_21 6 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
+		vin-supply = <&reg_5v_dvk>;
 	};
 
 	reg_can2_stby: regulator-can2-stby {
 		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_reg_can2_stby>;
 		regulator-name = "can2-stby";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-		gpio = <&i2c4_gpio_expander_21 3 GPIO_ACTIVE_HIGH>;
+		gpio = <&gpio1 13 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
-		vin-supply = <&reg_can2_en>;
-	};
-
-	reg_can2_en: regulator-can2-en {
-		compatible = "regulator-fixed";
-		regulator-name = "can2-en";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&i2c4_gpio_expander_21 4 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
+		vin-supply = <&reg_5v_dvk>;
 	};
 
 	reg_usdhc2_vmmc: regulator-usdhc2 {
@@ -206,7 +192,6 @@
 	status = "okay";
 };
 
-/* pin conflict with PDM */
 &flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
@@ -788,6 +773,18 @@
 		fsl,pins = <
 			/* 5V_DVK_PWR_ON */
 			IMX95_PAD_SAI1_RXD0__AONMIX_TOP_GPIO1_IO_BIT14		0x31e
+		>;
+	};
+
+	pinctrl_reg_can1_stby: regcan1stbygrp {
+		fsl,pins = <
+			IMX95_PAD_SAI1_TXFS__AONMIX_TOP_GPIO1_IO_BIT11		0x31e
+		>;
+	};
+
+	pinctrl_reg_can2_stby: regcan2stbygrp {
+		fsl,pins = <
+			IMX95_PAD_SAI1_TXD0__AONMIX_TOP_GPIO1_IO_BIT13		0x31e
 		>;
 	};
 
