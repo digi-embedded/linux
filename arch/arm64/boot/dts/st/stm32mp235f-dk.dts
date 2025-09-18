@@ -14,7 +14,7 @@
 #include "stm32mp23xf.dtsi"
 #include "stm32mp25-pinctrl.dtsi"
 #include "stm32mp25xxak-pinctrl.dtsi"
-#include "stm32mp235f-dk-ca35tdcid-resmem.dtsi"
+#include "stm32mp235f-dk-resmem.dtsi"
 
 / {
 	model = "STMicroelectronics STM32MP235F-DK Discovery Board";

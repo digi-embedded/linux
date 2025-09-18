@@ -14,7 +14,7 @@
 #include "stm32mp21xf.dtsi"
 #include "stm32mp21-pinctrl.dtsi"
 #include "stm32mp21xxan-pinctrl.dtsi"
-#include "stm32mp215f-dk-ca35tdcid-resmem.dtsi"
+#include "stm32mp215f-dk-resmem.dtsi"
 
 / {
 	model = "STMicroelectronics STM32MP215F-DK Discovery Board";
