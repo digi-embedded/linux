@@ -463,19 +463,6 @@
 	};
 };
 
-&lpuart5 {
-	/* BT */
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart5>;
-	status = "okay";
-
-	bluetooth {
-		compatible = "nxp,88w8987-bt";
-		/* U-blox 88Q9098 module use the 3Mbps by default */
-		fw-init-baudrate = <3000000>;
-	};
-};
-
 &lpuart6 {
 	/* console */
 	pinctrl-names = "default";
@@ -678,15 +665,6 @@
 		fsl,pins = <
 			IMX95_PAD_GPIO_IO08__LPI2C7_SDA			0x40000b9e
 			IMX95_PAD_GPIO_IO09__LPI2C7_SCL			0x40000b9e
-		>;
-	};
-
-	pinctrl_uart5: uart5grp {
-		fsl,pins = <
-			IMX95_PAD_DAP_TDO_TRACESWO__LPUART5_TX			0x31e
-			IMX95_PAD_DAP_TDI__LPUART5_RX				0x31e
-			IMX95_PAD_DAP_TMS_SWDIO__LPUART5_RTS_B			0x31e
-			IMX95_PAD_DAP_TCLK_SWCLK__LPUART5_CTS_B			0x31e
 		>;
 	};
 
