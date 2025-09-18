@@ -35,6 +35,16 @@
 		stdout-path = &lpuart6;
 	};
 
+	reg_5v_dvk: regulator-5v-dvk {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_reg_5v_dvk>;
+		regulator-max-microvolt = <5000000>;
+		regulator-min-microvolt = <5000000>;
+		regulator-name = "5V_DVK";
+		gpio = <&gpio1 14 GPIO_ACTIVE_HIGH>;
+	};
+
 	reg_audio_pwr: regulator-audio-pwr {
 		compatible = "regulator-fixed";
 		regulator-name = "audio-pwr";
@@ -124,15 +134,6 @@
 		regulator-name = "vref_1v8";
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
-	};
-
-	reg_usb_vbus: regulator-vbus {
-		compatible = "regulator-fixed";
-		regulator-name = "USB_VBUS";
-		regulator-min-microvolt = <5000000>;
-		regulator-max-microvolt = <5000000>;
-		gpio = <&i2c7_pcal6524 3 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
 	};
 
 	reg_m2_pwr: regulator-m2-pwr {
@@ -531,7 +532,7 @@
 
 &usb2 {
 	dr_mode = "host";
-	vbus-supply = <&reg_usb_vbus>;
+	vbus-supply = <&reg_5v_dvk>;
 	disable-over-current;
 	status = "okay";
 };
@@ -780,6 +781,13 @@
 	pinctrl_ptn5110: ptn5110grp {
 		fsl,pins = <
 			IMX95_PAD_I2C2_SDA__AONMIX_TOP_GPIO1_IO_BIT3			0x31e
+		>;
+	};
+
+	pinctrl_reg_5v_dvk: reg5vgrp {
+		fsl,pins = <
+			/* 5V_DVK_PWR_ON */
+			IMX95_PAD_SAI1_RXD0__AONMIX_TOP_GPIO1_IO_BIT14		0x31e
 		>;
 	};
 
