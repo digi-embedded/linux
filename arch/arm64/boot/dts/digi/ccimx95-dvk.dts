@@ -185,13 +185,6 @@
 	status = "okay";
 };
 
-&tpm6 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_tpm6>;
-	pwm-rst;
-	status = "okay";
-};
-
 &flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
@@ -559,12 +552,6 @@
 };
 
 &scmi_iomuxc {
-	pinctrl_tpm6: tpm6grp {
-		fsl,pins = <
-			IMX95_PAD_GPIO_IO19__TPM6_CH2			0x51e
-		>;
-	};
-
 	pinctrl_flexcan1: flexcan1grp {
 		fsl,pins = <
 			IMX95_PAD_PDM_CLK__AONMIX_TOP_CAN1_TX		0x39e
