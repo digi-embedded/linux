@@ -289,3 +289,9 @@
 		>;
 	};
 };
+
+/* Errata: DMA does not work on LPUART1 */
+&lpuart1 {
+	/delete-property/dmas;
+	/delete-property/dma-names;
+};
