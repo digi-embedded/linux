@@ -72,6 +72,9 @@ ccimx93-dtbs := 	ccimx93-dvk.dtb \
 			$(ccimx9_dvk_overlays) \
 			$(ccimx9_som_overlays)
 
+ccimx95-dtbs := 	ccimx95-dvk.dtb \
+			$(ccimx9_som_overlays)
+
 dtb-$(CONFIG_ARCH_MXC) += ccimx8mm.dtb \
 			  ccimx8mm-mfg-functional.dtb \
 			  ccimx8mm-mfg-functional-wb.dtb \
@@ -91,4 +94,4 @@ dtb-$(CONFIG_ARCH_MXC) += ccimx8mm.dtb \
 			  ccimx93.dtb \
 			  ccimx93-mfg-functional.dtb \
 			  ccimx93-mfg-functional-wb.dtb \
-			  ccimx95-dvk.dtb
+			  ccimx95.dtb
