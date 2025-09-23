@@ -35,6 +35,17 @@
 		stdout-path = &lpuart6;
 	};
 
+	reg_3v3_dvk: regulator-3v3-dvk {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_reg_3v3_dvk>;
+		regulator-max-microvolt = <3300000>;
+		regulator-min-microvolt = <3300000>;
+		regulator-name = "3V3_DVK";
+		gpio = <&gpio5 14 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
 	reg_5v_dvk: regulator-5v-dvk {
 		compatible = "regulator-fixed";
 		pinctrl-names = "default";
@@ -43,6 +54,7 @@
 		regulator-min-microvolt = <5000000>;
 		regulator-name = "5V_DVK";
 		gpio = <&gpio1 14 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
 	};
 
 	reg_audio_pwr: regulator-audio-pwr {
@@ -713,12 +725,6 @@
 		>;
 	};
 
-	pinctrl_i2c2_pcal6524: i2c2pcal6524grp {
-		fsl,pins = <
-			IMX95_PAD_GPIO_IO34__GPIO5_IO_BIT14			0x31e
-		>;
-	};
-
 	pinctrl_i2c4_pcal6408: i2c4pcal6498grp {
 		fsl,pins = <
 			IMX95_PAD_GPIO_IO18__GPIO2_IO_BIT18			0x31e
@@ -753,6 +759,13 @@
 	pinctrl_ptn5110: ptn5110grp {
 		fsl,pins = <
 			IMX95_PAD_I2C2_SDA__AONMIX_TOP_GPIO1_IO_BIT3			0x31e
+		>;
+	};
+
+	pinctrl_reg_3v3_dvk: reg3v3grp {
+		fsl,pins = <
+			/* 3V3_BOARD_EN */
+			IMX95_PAD_GPIO_IO34__GPIO5_IO_BIT14			0x31e
 		>;
 	};
 
