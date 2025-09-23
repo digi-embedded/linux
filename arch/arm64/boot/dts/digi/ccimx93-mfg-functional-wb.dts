@@ -1,5 +1,5 @@
 /*
- * Copyright 2023, Digi International Inc.
+ * Copyright 2023-2025, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,15 +24,29 @@
 	bluetooth {
 		/* U-Boot will fill in the MAC address here */
 	};
+
+	/* WLAN PWR control */
+	wlan_pwrseq: wlan_pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_wlan_pdn>;
+		/* WLAN_PDn */
+		reset-gpios = <&gpio2 7 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
 };
 
 /* Enable USDHC3 (Wireless) */
 &usdhc3 {
-	status = "okay";
-};
-
-/* Enable WLAN PWR control */
-&wlan_pwrseq {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz", "sleep";
+	pinctrl-0 = <&pinctrl_usdhc3>;
+	pinctrl-1 = <&pinctrl_usdhc3_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc3_200mhz>;
+	pinctrl-3 = <&pinctrl_usdhc3>;
+	mmc-pwrseq = <&wlan_pwrseq>;
+	bus-width = <4>;
+	non-removable;
+	wakeup-source;
 	status = "okay";
 };
 
