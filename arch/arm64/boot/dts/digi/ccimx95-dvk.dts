@@ -116,41 +116,11 @@
 		enable-active-high;
 	};
 
-	reg_pcie0: regulator-pcie {
-		compatible = "regulator-fixed";
-		regulator-name = "PCIE_WLAN_EN";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		vin-supply = <&reg_m2_pwr>;
-		gpio = <&i2c7_pcal6524 6 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		regulator-always-on;
-	};
-
 	reg_vref_1v8: regulator-adc-vref {
 		compatible = "regulator-fixed";
 		regulator-name = "vref_1v8";
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
-	};
-
-	reg_m2_pwr: regulator-m2-pwr {
-		compatible = "regulator-fixed";
-		regulator-name = "M.2-power";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&i2c7_pcal6524 20 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-	};
-
-	reg_slot_pwr: regulator-slot-pwr {
-		compatible = "regulator-fixed";
-		regulator-name = "PCIe slot-power";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&i2c7_pcal6524 14 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		regulator-always-on;
 	};
 
 	sound-wm8962 {
@@ -640,18 +610,6 @@
 		>;
 	};
 
-	pinctrl_pcie0: pcie0grp {
-		fsl,pins = <
-			IMX95_PAD_GPIO_IO32__HSIOMIX_TOP_PCIE1_CLKREQ_B		0x40000b1e
-		>;
-	};
-
-	pinctrl_pcie1: pcie1grp {
-		fsl,pins = <
-			IMX95_PAD_GPIO_IO35__HSIOMIX_TOP_PCIE2_CLKREQ_B		0x40000b1e
-		>;
-	};
-
 	pinctrl_lpspi8: lpspi8grp {
 		fsl,pins = <
 			IMX95_PAD_GPIO_IO12__GPIO2_IO_BIT12	0x3fe
@@ -864,28 +822,21 @@
 };
 
 &pcie0 {
-	pinctrl-0 = <&pinctrl_pcie0>;
-	pinctrl-names = "default";
-	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_OUTPUT>;
-	reset-gpio = <&i2c7_pcal6524 5 GPIO_ACTIVE_LOW>;
-	vpcie-supply = <&reg_pcie0>;
+	vpcie-supply = <&reg_3v3_dvk>;
 	status = "okay";
 };
 
+/*
+ * Disabled by default. To enable it, on the DVK, 0-ohm selection resistors must
+ * be swapped from PCIE0 lines to the PCIE1 lines.
+ */
 &pcie1 {
-	pinctrl-0 = <&pinctrl_pcie1>;
-	pinctrl-names = "default";
-	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_OUTPUT>;
-	reset-gpio = <&i2c7_pcal6524 16 GPIO_ACTIVE_LOW>;
-	vpcie-supply = <&reg_slot_pwr>;
-	status = "okay";
+	vpcie-supply = <&reg_3v3_dvk>;
+	status = "disabled";
 };
 
 &pcie1_ep {
-	pinctrl-0 = <&pinctrl_pcie1>;
-	pinctrl-names = "default";
-	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_OUTPUT>;
-	vpcie-supply = <&reg_slot_pwr>;
+	vpcie-supply = <&reg_3v3_dvk>;
 	status = "disabled";
 };
 
