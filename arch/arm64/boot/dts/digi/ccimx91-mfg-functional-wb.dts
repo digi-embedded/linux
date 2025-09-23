@@ -52,6 +52,8 @@
 
 /* Enable LPUART1 (Bluetooth) */
 &lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart1>;
 	status = "okay";
 
 	bluetooth {
