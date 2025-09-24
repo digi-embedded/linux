@@ -72,18 +72,6 @@
 		vin-supply = <&reg_5v_dvk>;
 	};
 
-	reg_usdhc2_vmmc: regulator-usdhc2 {
-		compatible = "regulator-fixed";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_reg_usdhc2_vmmc>;
-		regulator-name = "VDD_SD2_3V3";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&gpio3 7 GPIO_ACTIVE_HIGH>;
-		off-on-delay-us = <12000>;
-		enable-active-high;
-	};
-
 	reg_vref_1v8: regulator-adc-vref {
 		compatible = "regulator-fixed";
 		regulator-name = "vref_1v8";
@@ -243,7 +231,6 @@
 	pinctrl-3 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
 	cd-gpios = <&gpio3 00 GPIO_ACTIVE_LOW>;
 	fsl,cd-gpio-wakeup-disable;
-	vmmc-supply = <&reg_usdhc2_vmmc>;
 	bus-width = <4>;
 	status = "okay";
 };
@@ -503,12 +490,6 @@
 		fsl,pins = <
 			IMX95_PAD_GPIO_IO22__SPDIF_IN				0x31e
 			IMX95_PAD_GPIO_IO23__SPDIF_OUT				0x31e
-		>;
-	};
-
-	pinctrl_reg_usdhc2_vmmc: regusdhc2vmmcgrp {
-		fsl,pins = <
-			IMX95_PAD_SD2_RESET_B__GPIO3_IO_BIT7			0x31e
 		>;
 	};
 
