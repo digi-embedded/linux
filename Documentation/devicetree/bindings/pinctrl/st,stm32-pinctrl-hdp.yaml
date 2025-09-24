@@ -35,6 +35,10 @@ properties:
           - description: The mask to use when writing to the register.
           - description: The value to write in the register.
 
+  access-controllers:
+    minItems: 1
+    maxItems: 2
+
 patternProperties:
   '-pins$':
     type: object
