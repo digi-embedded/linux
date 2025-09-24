@@ -123,22 +123,12 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_flexspi1>;
 	pinctrl-1 = <&pinctrl_flexspi1>;
-	status = "okay";
+	status = "disabled";
 
 	/* TODO: switch to use reset-gpios */
 	//reset-gpios = <&gpio5 11 GPIO_ACTIVE_LOW>;
 
 	pinctrl-assert-gpios = <&gpio5 11 GPIO_ACTIVE_HIGH>;
-
-	mt35xu01gbba: flash@0 {
-		reg = <0>;
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "jedec,spi-nor";
-		spi-max-frequency = <200000000>;
-		spi-tx-bus-width = <8>;
-		spi-rx-bus-width = <8>;
-	};
 };
 
 &lpi2c3 {
