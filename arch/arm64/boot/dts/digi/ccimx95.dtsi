@@ -72,6 +72,11 @@
 	};
 };
 
+/* Enable GPIO1 to be used in Linux (not reserved by SM) */
+&gpio1 {
+	status = "okay";
+};
+
 /* Messaging Units for inter-processors communication */
 &mu7 {
 	status = "okay";
