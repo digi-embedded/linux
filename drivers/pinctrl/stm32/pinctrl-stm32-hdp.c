@@ -4,6 +4,7 @@
  * Author: Clément Le Goffic <clement.legoffic@foss.st.com> for STMicroelectronics.
  */
 #include <linux/bits.h>
+#include <linux/bus/stm32_firewall_device.h>
 #include <linux/clk.h>
 #include <linux/gpio/driver.h>
 #include <linux/io.h>
@@ -196,6 +197,7 @@ static const struct of_device_id stm32_hdp_of_match[] = {
 	},
 	{}
 };
+MODULE_DEVICE_TABLE(of, stm32_hdp_of_match);
 
 static int stm32_hdp_syscfg_setup(struct stm32_hdp *hdp)
 {
@@ -222,40 +224,93 @@ static int stm32_hdp_syscfg_setup(struct stm32_hdp *hdp)
 
 static int stm32_hdp_probe(struct platform_device *pdev)
 {
+	struct stm32_firewall *firewall = NULL;
 	struct device *dev = &pdev->dev;
 	struct stm32_hdp *hdp;
+	int nb_firewall;
 	u8 version;
 	int err;
+	int i;
+
+	nb_firewall = of_count_phandle_with_args(pdev->dev.of_node, "access-controllers",
+						 "#access-controller-cells");
+	if (IS_ENABLED(CONFIG_STM32_FIREWALL) && nb_firewall != -ENOENT) {
+		if (nb_firewall <= 0)
+			return -EINVAL;
+
+		firewall = kcalloc(nb_firewall, sizeof(*firewall), GFP_KERNEL);
+		if (!firewall)
+			return -ENOMEM;
+
+		/* Get stm32 firewall information */
+		err = stm32_firewall_get_firewall(dev->of_node, firewall, nb_firewall);
+		if (err) {
+			dev_err(dev, "Failed to get firewall controller, err: %d\n", err);
+			kfree(firewall);
+			return err;
+		}
+
+		for (i = 0; i < nb_firewall; i++) {
+			err = stm32_firewall_grant_access_by_id(firewall + i,
+								firewall[i].firewall_id);
+			if (err) {
+				while (i) {
+					u32 id;
+
+					i--;
+					id = firewall[i].firewall_id;
+					stm32_firewall_release_access_by_id(firewall + i, id);
+				}
+				kfree(firewall);
+				if (err == -EACCES) {
+					dev_info(dev, "No firewall access\n");
+					return -ENODEV;
+				}
+
+				return err;
+			}
+		}
+	}
+
 
 	hdp = devm_kzalloc(dev, sizeof(*hdp), GFP_KERNEL);
-	if (!hdp)
-		return -ENOMEM;
+	if (!hdp) {
+		err = -ENOMEM;
+		goto release_firewall;
+	}
 	hdp->dev = dev;
 
 	platform_set_drvdata(pdev, hdp);
 
 	hdp->base = devm_platform_ioremap_resource(pdev, 0);
-	if (IS_ERR(hdp->base))
-		return PTR_ERR(hdp->base);
+	if (IS_ERR(hdp->base)) {
+		err = PTR_ERR(hdp->base);
+		goto release_firewall;
+	}
 
 	err = stm32_hdp_syscfg_setup(hdp);
-	if (err)
-		return dev_err_probe(dev, err, "Failed to setup and configure syscfg register");
+	if (err) {
+		dev_err(dev, "Failed to setup and configure syscfg register, err %d", err);
+		goto release_firewall;
+	}
 
 	hdp->clk = devm_clk_get_enabled(dev, NULL);
-	if (IS_ERR(hdp->clk))
-		return dev_err_probe(dev, PTR_ERR(hdp->clk), "No HDP clock provided\n");
+	if (IS_ERR(hdp->clk)) {
+		err = PTR_ERR(hdp->clk);
+		dev_err(dev, "HDP clock management error: %d", err);
+		goto release_firewall;
+	}
 
 	err = devm_pinctrl_register_and_init(dev, &stm32_hdp_pdesc, hdp, &hdp->pctl_dev);
 	if (err) {
 		dev_err(dev, "pinctrl register failed\n");
-		return err;
+		goto release_firewall;
 	}
 
 	err = pinctrl_enable(hdp->pctl_dev);
 	if (err) {
 		dev_err(dev, "pinctrl enable failed\n");
-		return err;
+		goto release_firewall;
 	}
 
 	hdp->gpio_chip.label	     = "stm32-hdp";
@@ -271,7 +326,7 @@ static int stm32_hdp_probe(struct platform_device *pdev)
 	err = devm_gpiochip_add_data(dev, &hdp->gpio_chip, hdp);
 	if (err) {
 		dev_err(dev, "Failed to add gpiochip\n");
-		return err;
+		goto release_firewall;
 	}
 
 	writel_relaxed(HDP_CTRL_ENABLE, hdp->base + HDP_CTRL);
@@ -279,7 +334,20 @@ static int stm32_hdp_probe(struct platform_device *pdev)
 	version = readl_relaxed(hdp->base + HDP_VERR);
 	dev_dbg(dev, "STM32 HDP version %u.%u initialized\n", version >> 4, version & 0x0F);
 
+	kfree(firewall);
+
 	return 0;
+
+release_firewall:
+	if (IS_ENABLED(CONFIG_STM32_FIREWALL)) {
+		for (i = 0; i < nb_firewall; i++)
+			stm32_firewall_release_access_by_id(firewall + i,
+							    firewall[i].firewall_id);
+	}
+
+	kfree(firewall);
+
+	return err;
 }
 
 static int stm32_hdp_remove(struct platform_device *pdev)
