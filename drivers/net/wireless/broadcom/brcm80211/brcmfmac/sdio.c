@@ -155,6 +155,9 @@ struct rte_console {
 
 #define BRCMF_FIRSTREAD	(1 << 6)
 
+#define MAX_INIT_RETRY_CNT	3
+static unsigned char global_init_retry = 0;
+
 /* SBSDIO_DEVICE_CTL */
 
 /* 1: device will assert busy signal when receiving CMD53 */
@@ -5674,6 +5677,25 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 	return;
 
 free:
+
+	if (global_init_retry < MAX_INIT_RETRY_CNT) {
+		global_init_retry++;
+		brcmf_err("global_init_retry:%d\n", global_init_retry);
+
+		/* start by unregistering irqs */
+		brcmf_sdiod_intr_unregister(bus->sdiodev);
+
+		brcmf_sdiod_remove(bus->sdiodev);
+
+		/* reset the adapter */
+		sdio_claim_host(bus->sdiodev->func1);
+		mmc_hw_reset(bus->sdiodev->func1->card);
+		sdio_release_host(bus->sdiodev->func1);
+
+		brcmf_bus_change_state(bus->sdiodev->bus_if, BRCMF_BUS_DOWN);
+		return;
+	}
+
 	brcmf_free(sdiod->dev);
 claim:
 	sdio_claim_host(sdiod->func1);
@@ -5683,6 +5705,7 @@ release:
 	sdio_release_host(sdiod->func1);
 fail:
 	brcmf_dbg(TRACE, "failed: dev=%s, err=%d\n", dev_name(dev), err);
+
 	device_release_driver(&sdiod->func2->dev);
 	device_release_driver(dev);
 }
