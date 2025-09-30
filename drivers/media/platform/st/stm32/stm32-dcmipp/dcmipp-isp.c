@@ -518,8 +518,19 @@ static void dcmipp_isp_config_decimation(struct dcmipp_isp_device *isp,
 
 /* Histogram block - only available starting from stm32mp21 */
 #define DCMIPP_P1HSCR			0x8b0
-/* 4 Comp / 64 bins per comp / 1 region / decimated by 2*/
-#define DCMIPP_P1HSCR_DEFAULT		0x08411000
+/*
+ * Adopt a default Histogram configuration allowing to always work
+ * independently from the input format and resolution
+ * That is:
+ *   - after demosaicing
+ *   - 4 components
+ *   - 1 region only (full frame, rounded to decimation factors)
+ *   - 64 bins per comp (closest and lower to 320 / 4)
+ *   - Decimation, need a total of 5Mpix / 65536, that is around 76
+ *     - H decimation by 16
+ *     - V decimation by 8
+ */
+#define DCMIPP_P1HSCR_DEFAULT		0x08434006
 
 #define DCMIPP_P1HSSTR			0x8b4
 #define DCMIPP_P1HSSTR_START(x, y)	((x) | ((y) << 16))
@@ -539,10 +550,11 @@ static void dcmipp_isp_config_histo(struct dcmipp_isp_device *isp,
 	 * valid settings
 	 */
 	reg_write(isp, DCMIPP_P1HSCR, DCMIPP_P1HSCR_DEFAULT);
-	reg_write(isp, DCMIPP_P1HSSTR,
-		  DCMIPP_P1HSSTR_START(compose->width / 4, compose->height / 4));
+	reg_write(isp, DCMIPP_P1HSSTR, DCMIPP_P1HSSTR_START(0, 0));
+	/* Size (horizontal / vertical) must be multiple of the decimation */
 	reg_write(isp, DCMIPP_P1HSSZR,
-		  DCMIPP_P1HSSZR_SIZE(compose->width / 2, compose->height / 2));
+		  DCMIPP_P1HSSZR_SIZE((compose->width / 16) & ~0xf,
+				      (compose->height / 8) & ~0x07));
 }
 
 static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
