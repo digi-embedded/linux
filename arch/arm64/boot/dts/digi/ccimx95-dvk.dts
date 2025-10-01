@@ -78,6 +78,25 @@
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
 	};
+
+	sound_max98089: sound-max98089 {
+		compatible = "fsl,imx-audio-max98088";
+		model = "max98088-audio";
+		audio-cpu = <&sai3>;
+		audio-codec = <&max98089>;
+		audio-routing =
+			"Headphone Jack", "HPL",
+			"Headphone Jack", "HPR",
+			"Ext Spk", "SPKL",
+			"Ext Spk", "SPKR",
+			"Line Out Jack", "RECL",
+			"Line Out Jack", "RECR",
+			"Mic Jack", "MIC2",
+			"Line In Jack", "INA1",
+			"Line In Jack", "INA2",
+			"Line In Jack", "INB1",
+			"Line In Jack", "INB2";
+	};
 };
 
 &adc1 {
@@ -176,6 +195,13 @@
 	pinctrl-0 = <&pinctrl_lpi2c4>;
 	pinctrl-1 = <&pinctrl_lpi2c4>;
 	status = "okay";
+
+	max98089: codec@10 {
+		compatible = "maxim,max98089";
+		reg = <0x10>;
+		clocks = <&scmi_clk IMX95_CLK_SAI3>;
+		clock-names = "mclk";
+	};
 };
 
 &lpuart6 {
