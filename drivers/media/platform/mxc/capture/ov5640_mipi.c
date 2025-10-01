@@ -28,6 +28,7 @@
 #include <linux/clk.h>
 #include <linux/of_device.h>
 #include <linux/i2c.h>
+#include <linux/gpio/consumer.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
 #include <linux/of_gpio.h>
@@ -111,7 +112,8 @@ struct ov5640_mode_info {
  * Maintains the information on the current state of the sesor.
  */
 static struct sensor_data ov5640_data;
-static int pwn_gpio, rst_gpio, pwr_on_state;
+static int pwr_on_state = 1;
+static struct gpio_desc *pwn_gpio, *rst_gpio;
 
 static struct reg_value ov5640_init_setting_30fps_VGA[] = {
 
@@ -728,46 +730,46 @@ static s32 update_device_addr(struct sensor_data *sensor)
 
 static void ov5640_standby(s32 enable)
 {
-	if (!gpio_is_valid(pwn_gpio))
+	if (!pwn_gpio)
 		return;
 
 	if (enable)
-		gpio_set_value_cansleep(pwn_gpio, pwr_on_state);
+		gpiod_set_value_cansleep(pwn_gpio, pwr_on_state);
 	else
-		gpio_set_value_cansleep(pwn_gpio, !pwr_on_state);
+		gpiod_set_value_cansleep(pwn_gpio, !pwr_on_state);
 
 	msleep(100);
 }
 
 static void ov5640_reset(void)
 {
-	if (!gpio_is_valid(pwn_gpio) && !gpio_is_valid(rst_gpio))
+	if (!pwn_gpio && !rst_gpio)
 		return;
 
 	mxc_camera_common_lock();
 
-	if (gpio_is_valid(rst_gpio))
-		gpio_set_value_cansleep(rst_gpio, 1);
+	if (rst_gpio)
+		gpiod_set_value_cansleep(rst_gpio, 1);
 
-	if (gpio_is_valid(pwn_gpio)) {
-		gpio_set_value_cansleep(pwn_gpio, pwr_on_state);
+	if (pwn_gpio) {
+		gpiod_set_value_cansleep(pwn_gpio, pwr_on_state);
 		msleep(5);
-		gpio_set_value_cansleep(pwn_gpio, !pwr_on_state);
+		gpiod_set_value_cansleep(pwn_gpio, !pwr_on_state);
 		msleep(5);
 	}
 
-	if (gpio_is_valid(rst_gpio)) {
-		gpio_set_value_cansleep(rst_gpio, 0);
+	if (rst_gpio) {
+		gpiod_set_value_cansleep(rst_gpio, 0);
 		msleep(1);
-		gpio_set_value_cansleep(rst_gpio, 1);
+		gpiod_set_value_cansleep(rst_gpio, 1);
 		msleep(20);
 	}
 
 	update_device_addr(&ov5640_data);
 	mxc_camera_common_unlock();
 
-	if (gpio_is_valid(pwn_gpio))
-		gpio_set_value_cansleep(pwn_gpio, pwr_on_state);
+	if (pwn_gpio)
+		gpiod_set_value_cansleep(pwn_gpio, pwr_on_state);
 }
 
 static int ov5640_power_on(struct device *dev)
@@ -2038,8 +2040,8 @@ static int ioctl_dev_exit(struct v4l2_int_device *s)
  * This structure defines all the ioctls for this module and links them to the
  * enumeration.
  */
-+#pragma GCC diagnostic push
-+#pragma GCC diagnostic ignored "-Wcast-function-type"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
 static struct v4l2_int_ioctl_desc ov5640_ioctl_desc[] = {
 	{vidioc_int_dev_init_num, (v4l2_int_ioctl_func *) ioctl_dev_init},
 	{vidioc_int_dev_exit_num, ioctl_dev_exit},
@@ -2093,11 +2095,10 @@ static int ov5640_probe(struct i2c_client *client)
 {
 	struct pinctrl *pinctrl;
 	struct device *dev = &client->dev;
-	int retval, i, n_alt_pwn_gpios;
+	int retval;
 	u8 chip_id_high, chip_id_low;
 	struct regmap *gpr;
-	int *alt_pwn_gpios = NULL;
-	enum of_gpio_flags pwn_flags;
+	struct gpio_descs *alt_pwn; /* array of descriptors */
 
 	pinctrl = devm_pinctrl_get_select_default(dev);
 	if (IS_ERR(pinctrl)) {
@@ -2106,53 +2107,33 @@ static int ov5640_probe(struct i2c_client *client)
 	}
 
 	/* request power down pin */
-	pwn_gpio = of_get_named_gpio_flags(dev->of_node, "pwn-gpios", 0, &pwn_flags);
-	pwr_on_state = !(pwn_flags & OF_GPIO_ACTIVE_LOW);
-	if (!gpio_is_valid(pwn_gpio)) {
+	pwn_gpio = devm_gpiod_get_optional(dev, "pwn", GPIOD_OUT_HIGH);
+	if (!pwn_gpio) {
 		dev_warn(dev, "no sensor pwdn pin available");
-	} else {
-		retval = devm_gpio_request_one(dev, pwn_gpio,
-			pwr_on_state ? GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW,
-			 "ov5640_mipi_pwdn");
-		if (retval < 0)
-			return retval;
+	} else if (IS_ERR(pwn_gpio)){
+		dev_dbg(dev, "error while getting pwn gpio: %d\n", retval);
+		return PTR_ERR(rst_gpio);
 	}
 
-	n_alt_pwn_gpios = of_gpio_named_count(dev->of_node,
-		"digi,alt-pwn-gpios");
-	if (n_alt_pwn_gpios) {
-		alt_pwn_gpios =
-			kmalloc(sizeof(*alt_pwn_gpios) * n_alt_pwn_gpios,
-				GFP_KERNEL);
-		if (!alt_pwn_gpios)
-			return -ENOMEM;
-
-		for (i = 0; i < n_alt_pwn_gpios; i++) {
-			alt_pwn_gpios[i] = of_get_named_gpio(dev->of_node,
-				"digi,alt-pwn-gpios", i);
-			if (gpio_is_valid(alt_pwn_gpios[i])) {
-				/* Keep the alternative power pin down to
-				 * disable the alternative camera with the same
-				 * default slave address*/
-				retval = devm_gpio_request_one(dev,
-					alt_pwn_gpios[i],
-					GPIOF_OUT_INIT_HIGH,
-					"ov5640_mipi_alt_pwdn");
-				if (retval < 0)
-					return retval;
-			}
-		}
+	/* request the whole array and set initial logical value HIGH */
+	alt_pwn = devm_gpiod_get_array_optional(dev, "digi,alt-pwn", GPIOD_OUT_HIGH);
+	/* keep alternative camera “disabled”: set logical 1 on each line */
+	if (IS_ERR(alt_pwn)) {
+		dev_dbg(dev, "error while getting digi,alt-pwn gpios: %d\n", retval);
+		return PTR_ERR(alt_pwn);
+	}
+	if (alt_pwn) {
+		for (int i = 0; i < alt_pwn->ndescs; i++)
+			gpiod_set_value_cansleep(alt_pwn->desc[i], 1);
 	}
 
 	/* request reset pin */
-	rst_gpio = of_get_named_gpio(dev->of_node, "rst-gpios", 0);
-	if (!gpio_is_valid(rst_gpio)) {
+	rst_gpio = devm_gpiod_get_optional(dev, "rst", GPIOD_OUT_HIGH);
+	if (!rst_gpio) {
 		dev_warn(dev, "no sensor reset pin available");
-	} else {
-		retval = devm_gpio_request_one(dev, rst_gpio,
-			GPIOF_OUT_INIT_HIGH, "ov5640_mipi_reset");
-		if (retval < 0)
-			return retval;
+	} else if (IS_ERR(rst_gpio)){
+		dev_dbg(dev, "error while getting rst gpio: %d\n", retval);
+		return PTR_ERR(rst_gpio);
 	}
 
 	/* Set initial values for the sensor struct. */
@@ -2256,11 +2237,12 @@ static int ov5640_probe(struct i2c_client *client)
 
 	clk_disable_unprepare(ov5640_data.sensor_clk);
 
-	for (i = 0; i < n_alt_pwn_gpios; i++) {
-		if (gpio_is_valid(alt_pwn_gpios[i]))
-			devm_gpio_free(dev, alt_pwn_gpios[i]);
-	}
-	kfree(alt_pwn_gpios);
+	if (alt_pwn) {
+                for (int i = 0; i < alt_pwn->ndescs; i++)
+                        gpiod_set_value_cansleep(alt_pwn->desc[i], 0);
+        }
+	/* now release so the system/other drivers can use them */
+	gpiod_put_array(alt_pwn);
 
 	pr_info("camera ov5640_mipi is found\n");
 	return retval;
