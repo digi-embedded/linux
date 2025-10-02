@@ -147,6 +147,16 @@
 	pinctrl-1 = <&pinctrl_lpi2c3>;
 	status = "okay";
 
+	ext_rtc: ext_rtc@52 {
+		compatible = "microcrystal,rv3028";
+		reg = <0x52>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_rtc>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <31 IRQ_TYPE_LEVEL_LOW>;
+		wakeup-source;
+	};
+
 	ptn5110: tcpc@53 {
 		compatible = "nxp,ptn5110";
 		reg = <0x53>;
@@ -529,6 +539,13 @@
 			IMX95_PAD_SD2_DATA2__USDHC2_DATA2			0x13fe
 			IMX95_PAD_SD2_DATA3__USDHC2_DATA3			0x13fe
 			IMX95_PAD_SD2_VSELECT__USDHC2_VSELECT			0x51e
+		>;
+	};
+
+	/* RTC INT */
+	pinctrl_rtc: rtc_grp {
+		fsl,pins = <
+			IMX95_PAD_GPIO_IO31__GPIO2_IO_BIT31			0x31e
 		>;
 	};
 };
