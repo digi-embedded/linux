@@ -603,6 +603,8 @@ static int panel_simple_probe(struct device *dev, const struct panel_desc *desc)
 		err = gpiod_get_direction(panel->enable_gpio);
 		if (err != 0)
 			gpiod_direction_output(panel->enable_gpio, 0);
+		else
+			gpiod_direction_output(panel->enable_gpio, 1);
 	}
 
 	err = of_drm_get_panel_orientation(dev->of_node, &panel->orientation);

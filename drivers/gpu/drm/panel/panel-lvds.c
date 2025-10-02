@@ -210,6 +210,8 @@ static int panel_lvds_probe(struct platform_device *pdev)
 		ret = gpiod_get_direction(lvds->enable_gpio);
 		if (ret != 0)
 			gpiod_direction_output(lvds->enable_gpio, 0);
+		else
+			gpiod_direction_output(lvds->enable_gpio, 1);
 	}
 
 	lvds->reset_gpio = devm_gpiod_get_optional(lvds->dev, "reset",

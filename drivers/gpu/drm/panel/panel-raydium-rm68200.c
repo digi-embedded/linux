@@ -406,6 +406,8 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 		ret = gpiod_get_direction(ctx->reset_gpio);
 		if (ret != 0)
 			gpiod_direction_output(ctx->reset_gpio, 1);
+		else
+			gpiod_direction_output(ctx->reset_gpio, 0);
 	}
 
 	ctx->supply = devm_regulator_get(dev, "power");
