@@ -26,6 +26,23 @@
 		stdout-path = &lpuart6;
 	};
 
+	hdmi-connector {
+		compatible = "hdmi-connector";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_hdmi_hpd>;
+		ddc-i2c-bus = <&lpi2c4>;
+		hdmi-pwr-supply = <&reg_5v_dvk>;
+		hpd-gpios = <&gpio4 28 GPIO_ACTIVE_HIGH>;
+		label = "hdmi";
+		type = "a";
+
+		port {
+			hdmi_connector_in: endpoint {
+				remote-endpoint = <&lt8912_out>;
+			};
+		};
+	};
+
 	reg_3v3_dvk: regulator-3v3-dvk {
 		compatible = "regulator-fixed";
 		pinctrl-names = "default";
@@ -108,7 +125,16 @@
 	status = "okay";
 };
 
+&display_pixel_link {
+	status = "okay";
+};
+
 &dpu {
+	assigned-clocks = <&scmi_clk IMX95_CLK_DISP1PIX>,
+			  <&scmi_clk IMX95_CLK_VIDEOPLL1_VCO>,
+			  <&scmi_clk IMX95_CLK_VIDEOPLL1>;
+	assigned-clock-parents = <&scmi_clk IMX95_CLK_VIDEOPLL1>;
+	assigned-clock-rates = <0>, <4008000000>, <445333334>;
 	status = "okay";
 };
 
@@ -206,6 +232,35 @@
 	pinctrl-1 = <&pinctrl_lpi2c4>;
 	status = "okay";
 
+	lt_bridge: lt8912@48 {
+		compatible = "lontium,lt8912b";
+		reg = <0x48>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lt8912>;
+		reset-gpios = <&gpio3 26 GPIO_ACTIVE_LOW>;
+		status = "okay";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				lt8912_1_in: endpoint {
+					data-lanes = <1 2 3 4>;
+					remote-endpoint = <&mipi_dsi_hdmi_out>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				lt8912_out: endpoint {
+					remote-endpoint = <&hdmi_connector_in>;
+				};
+			};
+		};
+	};
+
 	max98089: codec@10 {
 		compatible = "maxim,max98089";
 		reg = <0x10>;
@@ -236,6 +291,17 @@
 	};
 };
 
+&pixel_interleaver {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	channel@0 {
+		reg = <0>;
+		status = "okay";
+	};
+};
+
 /* MicroSD */
 &usdhc2 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz", "sleep";
@@ -263,6 +329,23 @@
 	phy-handle = <&ethphy1>;
 	phy-mode = "rgmii-id";
 	status = "okay";
+};
+
+&mipi_dsi {
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@1 {
+			reg = <1>;
+
+			mipi_dsi_hdmi_out: endpoint {
+				remote-endpoint = <&lt8912_1_in>;
+			};
+		};
+	};
 };
 
 &netc_timer {
@@ -381,6 +464,16 @@
 		>;
 	};
 
+	/* HDMI bridge IOs */
+	pinctrl_lt8912: lt8912grp {
+		fsl,pins = <
+			/* Reset */
+			IMX95_PAD_CCM_CLKO1__GPIO3_IO_BIT26		0x31e
+			/* Interrupt */
+			IMX95_PAD_CCM_CLKO2__GPIO3_IO_BIT27		0x31e
+		>;
+	};
+
 	pinctrl_emdio: emdiogrp{
 		fsl,pins = <
 			IMX95_PAD_ENET1_MDC__NETCMIX_TOP_NETC_MDC		0x57e
@@ -439,13 +532,8 @@
 		>;
 	};
 
-	pinctrl_mipi_dsi_csi: mipidsigrp {
-		fsl,pins = <
-			IMX95_PAD_CCM_CLKO2__GPIO3_IO_BIT27			0x31e
-		>;
-	};
-
-	pinctrl_pcal6416: pcal6416grp {
+	/* HDMI HPD */
+	pinctrl_hdmi_hpd: hdmi_hpd_grp {
 		fsl,pins = <
 			IMX95_PAD_CCM_CLKO3__GPIO4_IO_BIT28			0x31e
 		>;
