@@ -42,6 +42,7 @@
 
 	firmware {
 		optee: optee {
+			bootph-all;
 			method = "smc";
 			compatible = "linaro,optee-tz";
 			interrupt-parent = <&intc>;
@@ -51,6 +52,7 @@
 		};
 
 		scmi: scmi {
+			bootph-all;
 			compatible = "linaro,scmi-optee";
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -62,11 +64,13 @@
 			};
 
 			scmi_clk: protocol@14 {
+				bootph-all;
 				reg = <0x14>;
 				#clock-cells = <1>;
 			};
 
 			scmi_reset: protocol@16 {
+				bootph-all;
 				reg = <0x16>;
 				#reset-cells = <1>;
 			};
@@ -104,6 +108,7 @@
 	};
 
 	psci {
+		bootph-some-ram;
 		compatible = "arm,psci-1.0";
 		method = "smc";
 	};
@@ -155,6 +160,7 @@
 	};
 
 	soc {
+		bootph-all;
 		compatible = "simple-bus";
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -841,6 +847,7 @@
 		};
 
 		rcc: rcc@50000000 {
+			bootph-all;
 			compatible = "st,stm32mp13-rcc", "syscon";
 			reg = <0x50000000 0x1000>;
 			#clock-cells = <1>;
@@ -854,6 +861,7 @@
 		};
 
 		pinctrl: pinctrl@50002000 {
+			bootph-all;
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "st,stm32mp135-pinctrl";
@@ -861,6 +869,7 @@
 			interrupt-parent = <&exti>;
 
 			gpioa: gpio@50002000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -873,6 +882,7 @@
 			};
 
 			gpiob: gpio@50003000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -885,6 +895,7 @@
 			};
 
 			gpioc: gpio@50004000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -897,6 +908,7 @@
 			};
 
 			gpiod: gpio@50005000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -909,6 +921,7 @@
 			};
 
 			gpioe: gpio@50006000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -921,6 +934,7 @@
 			};
 
 			gpiof: gpio@50007000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -933,6 +947,7 @@
 			};
 
 			gpiog: gpio@50008000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -945,6 +960,7 @@
 			};
 
 			gpioh: gpio@50009000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -957,6 +973,7 @@
 			};
 
 			gpioi: gpio@5000a000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -1049,6 +1066,7 @@
 		};
 
 		syscfg: syscon@50020000 {
+			bootph-all;
 			compatible = "st,stm32mp157-syscfg", "syscon";
 			reg = <0x50020000 0x400>;
 			clocks = <&rcc SYSCFG>;
@@ -1156,6 +1174,7 @@
 		};
 
 		iwdg2: watchdog@5a002000 {
+			bootph-all;
 			compatible = "st,stm32mp1-iwdg";
 			reg = <0x5a002000 0x400>;
 			interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
@@ -1192,6 +1211,7 @@
 		};
 
 		bsec: efuse@5c005000 {
+			bootph-all;
 			compatible = "st,stm32mp13-bsec";
 			reg = <0x5c005000 0x400>;
 			#address-cells = <1>;
@@ -1219,6 +1239,7 @@
 		};
 
 		etzpc: bus@5c007000 {
+			bootph-all;
 			compatible = "st,stm32-etzpc", "simple-bus";
 			reg = <0x5c007000 0x400>;
 			#address-cells = <1>;
@@ -1816,6 +1837,7 @@
 			};
 
 			usbphyc: usbphyc@5a006000 {
+				bootph-all;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				#clock-cells = <0>;
