@@ -29,16 +29,19 @@
 	};
 
 	cpu0_opp_table: cpu0-opp-table {
+		bootph-pre-ram;
 		compatible = "operating-points-v2";
 		opp-shared;
 
 		opp-650000000 {
+			bootph-pre-ram;
 			opp-hz = /bits/ 64 <650000000>;
 			opp-microvolt = <1200000>;
 			opp-supported-hw = <0x3>;
 		};
 
 		opp-800000000 {
+			bootph-pre-ram;
 			opp-hz = /bits/ 64 <800000000>;
 			opp-microvolt = <1350000>;
 			opp-supported-hw = <0x2>;
@@ -59,6 +62,7 @@
 	};
 
 	psci {
+		bootph-some-ram;
 		compatible = "arm,psci-1.0";
 		method = "smc";
 	};
@@ -82,31 +86,37 @@
 	};
 
 	clocks {
+		bootph-all;
 		clk_csi: clk-csi {
+			bootph-all;
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
 			clock-frequency = <4000000>;
 		};
 
 		clk_hse: clk-hse {
+			bootph-all;
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
 			clock-frequency = <24000000>;
 		};
 
 		clk_hsi: clk-hsi {
+			bootph-all;
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
 			clock-frequency = <64000000>;
 		};
 
 		clk_lse: clk-lse {
+			bootph-all;
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
 			clock-frequency = <32768>;
 		};
 
 		clk_lsi: clk-lsi {
+			bootph-all;
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
 			clock-frequency = <32000>;
@@ -159,6 +169,7 @@
 	};
 
 	soc {
+		bootph-all;
 		compatible = "simple-bus";
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -197,6 +208,7 @@
 		};
 
 		rcc: rcc@50000000 {
+			bootph-all;
 			compatible = "st,stm32mp1-rcc", "syscon";
 			reg = <0x50000000 0x1000>;
 			#clock-cells = <1>;
@@ -208,6 +220,7 @@
 		};
 
 		pwr_regulators: pwr@50001000 {
+			bootph-all;
 			compatible = "st,stm32mp1,pwr-reg";
 			reg = <0x50001000 0x10>;
 			st,tzcr = <&rcc 0x0 0x1>;
@@ -252,6 +265,7 @@
 		};
 
 		pinctrl: pinctrl@50002000 {
+			bootph-all;
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "st,stm32mp157-pinctrl";
@@ -260,6 +274,7 @@
 			hwlocks = <&hsem 0 1>;
 
 			gpioa: gpio@50002000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -271,6 +286,7 @@
 			};
 
 			gpiob: gpio@50003000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -282,6 +298,7 @@
 			};
 
 			gpioc: gpio@50004000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -293,6 +310,7 @@
 			};
 
 			gpiod: gpio@50005000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -304,6 +322,7 @@
 			};
 
 			gpioe: gpio@50006000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -315,6 +334,7 @@
 			};
 
 			gpiof: gpio@50007000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -326,6 +346,7 @@
 			};
 
 			gpiog: gpio@50008000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -337,6 +358,7 @@
 			};
 
 			gpioh: gpio@50009000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -348,6 +370,7 @@
 			};
 
 			gpioi: gpio@5000a000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -359,6 +382,7 @@
 			};
 
 			gpioj: gpio@5000b000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -370,6 +394,7 @@
 			};
 
 			gpiok: gpio@5000c000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -488,6 +513,7 @@
 		};
 
 		pinctrl_z: pinctrl@54004000 {
+			bootph-all;
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "st,stm32mp157-z-pinctrl";
@@ -496,6 +522,7 @@
 			hwlocks = <&hsem 0 1>;
 
 			gpioz: gpio@54004000 {
+				bootph-all;
 				gpio-controller;
 				#gpio-cells = <2>;
 				interrupt-controller;
@@ -576,6 +603,7 @@
 		};
 
 		ltdc: display-controller@5a001000 {
+			bootph-some-ram;
 			compatible = "st,stm32-ltdc";
 			reg = <0x5a001000 0x400>;
 			interrupts = <GIC_SPI 88 IRQ_TYPE_LEVEL_HIGH>,
@@ -587,6 +615,7 @@
 		};
 
 		iwdg2: watchdog@5a002000 {
+			bootph-all;
 			compatible = "st,stm32mp1-iwdg";
 			reg = <0x5a002000 0x400>;
 			interrupts = <GIC_SPI 151 IRQ_TYPE_LEVEL_HIGH>;
@@ -645,6 +674,7 @@
 		};
 
 		bsec: efuse@5c005000 {
+			bootph-all;
 			compatible = "st,stm32mp15-bsec";
 			reg = <0x5c005000 0x400>;
 			#address-cells = <1>;
@@ -667,6 +697,7 @@
 		};
 
 		etzpc: bus@5c007000 {
+			bootph-all;
 			compatible = "st,stm32-etzpc", "simple-bus";
 			reg = <0x5c007000 0x400>;
 			#address-cells = <1>;
