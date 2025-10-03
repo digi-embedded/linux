@@ -588,6 +588,16 @@
 	status = "disabled";
 };
 
+/* Bluetooth */
+&usart1 {
+	pinctrl-names = "default", "sleep", "idle";
+	pinctrl-0 = <&usart1_pins_a>;
+	pinctrl-1 = <&usart1_sleep_pins_a>;
+	pinctrl-2 = <&usart1_idle_pins_a>;
+	uart-has-rtscts;
+	status = "disabled";
+};
+
 &usart2 {
 	bootph-all;
 	pinctrl-names = "default", "idle", "sleep";
@@ -607,16 +617,6 @@
 	pins2 {
 		bootph-all;
 	};
-};
-
-/* Bluetooth */
-&usart1 {
-	pinctrl-names = "default", "sleep", "idle";
-	pinctrl-0 = <&usart1_pins_a>;
-	pinctrl-1 = <&usart1_sleep_pins_a>;
-	pinctrl-2 = <&usart1_idle_pins_a>;
-	uart-has-rtscts;
-	status = "disabled";
 };
 
 &usart6 {
