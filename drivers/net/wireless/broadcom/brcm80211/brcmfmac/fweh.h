@@ -155,19 +155,26 @@ enum brcmf_fweh_event_code {
 #define BRCMF_E_STATUS_FWSUP_PREP_G2		11
 
 /* reason field values in struct brcmf_event_msg */
-#define BRCMF_E_REASON_INITIAL_ASSOC		0
-#define BRCMF_E_REASON_LOW_RSSI			1
-#define BRCMF_E_REASON_DEAUTH			2
-#define BRCMF_E_REASON_DISASSOC			3
-#define BRCMF_E_REASON_BCNS_LOST		4
-#define BRCMF_E_REASON_MINTXRATE		9
-#define BRCMF_E_REASON_TXFAIL			10
+/* roam reason codes */
+#define BRCMF_E_REASON_INITIAL_ASSOC      0       /* initial assoc */
+#define BRCMF_E_REASON_LOW_RSSI           1       /* roamed due to low RSSI */
+#define BRCMF_E_REASON_DEAUTH             2       /* roamed due to DEAUTH indication */
+#define BRCMF_E_REASON_DISASSOC           3       /* roamed due to DISASSOC indication */
+#define BRCMF_E_REASON_BCNS_LOST          4       /* roamed due to lost beacons */
+#define BRCMF_E_REASON_FAST_ROAM_FAILED   5       /* roamed due to fast roam failure */
+#define BRCMF_E_REASON_DIRECTED_ROAM      6       /* roamed due to request by AP */
+#define BRCMF_E_REASON_TSPEC_REJECTED     7       /* roamed due to TSPEC rejection */
+#define BRCMF_E_REASON_BETTER_AP          8       /* roamed due to finding better AP */
+#define BRCMF_E_REASON_MINTXRATE          9       /* roamed because at mintxrate for too long */
+#define BRCMF_E_REASON_TXFAIL             10      /* We can hear AP, but AP can't hear us */
+#define BRCMF_E_REASON_BSSTRANS_REQ       11      /* roamed due to BSS Transition request by AP */
+#define BRCMF_E_REASON_LOW_RSSI_CU        12      /* roamed due to low RSSI and Channel Usage */
+#define BRCMF_E_REASON_RADAR_DETECTED     13      /* roamed due to radar detection by STA */
+#define BRCMF_E_REASON_CSA                14      /* roamed due to CSA from AP */
+#define BRCMF_E_REASON_ESTM_LOW           15	  /* roamed due to ESTM low tput */
+#define BRCMF_E_REASON_LAST               16
 
 #define BRCMF_E_REASON_LINK_BSSCFG_DIS		4
-#define BRCMF_E_REASON_FAST_ROAM_FAILED		5
-#define BRCMF_E_REASON_DIRECTED_ROAM		6
-#define BRCMF_E_REASON_TSPEC_REJECTED		7
-#define BRCMF_E_REASON_BETTER_AP		8
 
 #define BRCMF_E_REASON_TDLS_PEER_DISCOVERED	0
 #define BRCMF_E_REASON_TDLS_PEER_CONNECTED	1
@@ -316,6 +323,11 @@ struct eventmsgs_ext {
 	u8	len;
 	u8	maxgetsize;
 	u8	mask[1];
+};
+
+struct roam_reason_name {
+	u32 reason;
+	char *reason_name;
 };
 
 typedef int (*brcmf_fweh_handler_t)(struct brcmf_if *ifp,
