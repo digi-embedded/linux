@@ -395,6 +395,7 @@
 };
 
 &ltdc {
+	bootph-all;
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ltdc_pins_a>;
 	pinctrl-1 = <&ltdc_sleep_pins_a>;
@@ -588,6 +589,7 @@
 };
 
 &usart2 {
+	bootph-all;
 	pinctrl-names = "default", "idle", "sleep";
 	pinctrl-0 = <&usart2_pins_a>;
 	pinctrl-1 = <&usart2_idle_pins_a>;
@@ -595,6 +597,16 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "okay";
+};
+
+&usart2_pins_a {
+	bootph-all;
+	pins1 {
+		bootph-all;
+	};
+	pins2 {
+		bootph-all;
+	};
 };
 
 /* Bluetooth */
