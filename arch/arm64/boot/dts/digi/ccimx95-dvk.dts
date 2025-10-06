@@ -279,13 +279,6 @@
 	};
 };
 
-&lpuart6 {
-	/* console */
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart6>;
-	status = "okay";
-};
-
 /*
  * XBee interface
  * LPUART4 lines conflict with ENET2.
@@ -297,17 +290,30 @@
 	status = "okay";
 };
 
+&lpuart6 {
+	/* console */
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart6>;
+	status = "okay";
+};
+
+/* mikroBUS SPI interface */
 &lpspi8 {
 	fsl,spi-num-chipselects = <1>;
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_lpspi8>;
-	pinctrl-1 = <&pinctrl_lpspi8>;
+	pinctrl-1 = <&pinctrl_lpspi8_gpio>;
 	cs-gpios = <&gpio2 12 GPIO_ACTIVE_LOW>;
 	status = "okay";
 
 	spidev0: spi@0 {
+		/*
+		 * spidev uses a compatible string 'rohm,fs2228fv' to have the
+		 * driver create an spi device node. This is just an example,
+		 * there is not a real device connected on the SPI bus.
+		 */
+		compatible = "rohm,dh2228fv";
 		reg = <0>;
-		compatible = "lwn,bk4";
 		spi-max-frequency = <1000000>;
 	};
 };
@@ -507,10 +513,19 @@
 
 	pinctrl_lpspi8: lpspi8grp {
 		fsl,pins = <
-			IMX95_PAD_GPIO_IO12__GPIO2_IO_BIT12	0x3fe
-			IMX95_PAD_GPIO_IO13__LPSPI8_SIN		0x3fe
-			IMX95_PAD_GPIO_IO14__LPSPI8_SOUT	0x3fe
-			IMX95_PAD_GPIO_IO15__LPSPI8_SCK		0x3fe
+			IMX95_PAD_GPIO_IO12__GPIO2_IO_BIT12		0x3fe
+			IMX95_PAD_GPIO_IO13__LPSPI8_SIN			0x3fe
+			IMX95_PAD_GPIO_IO14__LPSPI8_SOUT		0x3fe
+			IMX95_PAD_GPIO_IO15__LPSPI8_SCK			0x3fe
+		>;
+	};
+
+	pinctrl_lpspi8_gpio: lpspi8gpiogrp {
+		fsl,pins = <
+			IMX95_PAD_GPIO_IO12__GPIO2_IO_BIT12		0x3fe
+			IMX95_PAD_GPIO_IO13__GPIO2_IO_BIT13		0x3fe
+			IMX95_PAD_GPIO_IO14__GPIO2_IO_BIT14		0x3fe
+			IMX95_PAD_GPIO_IO15__GPIO2_IO_BIT15		0x3fe
 		>;
 	};
 
