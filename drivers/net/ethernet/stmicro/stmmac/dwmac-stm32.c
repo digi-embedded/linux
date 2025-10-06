@@ -616,7 +616,8 @@ static int stm32mp1_suspend(struct stm32_dwmac *dwmac)
 	clk_disable_unprepare(dwmac->syscfg_clk);
 	if (dwmac->enable_eth_ck)
 		clk_disable_unprepare(dwmac->clk_eth_ck);
-	clk_disable_unprepare(priv->plat->clk_ptp_ref);
+	if (netif_running(ndev))
+		clk_disable_unprepare(priv->plat->clk_ptp_ref);
 
 	/* Keep the PHY up if we use Wake-on-Lan. */
 	if (!device_may_wakeup(dwmac->dev))
@@ -631,7 +632,8 @@ static void stm32mp1_resume(struct stm32_dwmac *dwmac)
 	struct stmmac_priv *priv = netdev_priv(ndev);
 
 	clk_disable_unprepare(dwmac->clk_ethstp);
-	clk_prepare_enable(priv->plat->clk_ptp_ref);
+	if (netif_running(ndev))
+		clk_prepare_enable(priv->plat->clk_ptp_ref);
 
 	/* The PHY was up for Wake-on-Lan. */
 	if (!device_may_wakeup(dwmac->dev))
