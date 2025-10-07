@@ -191,6 +191,16 @@
 };
 
 &scmi_iomuxc {
+	/* Bluetooth UART */
+	pinctrl_uart1: uart1grp {
+		fsl,pins = <
+			IMX95_PAD_UART1_RXD__AONMIX_TOP_LPUART1_RX		0x31e
+			IMX95_PAD_UART1_TXD__AONMIX_TOP_LPUART1_TX		0x31e
+			IMX95_PAD_UART2_TXD__AONMIX_TOP_LPUART1_RTS_B	0x31e
+			IMX95_PAD_UART2_RXD__AONMIX_TOP_LPUART1_CTS_B	0x31e
+		>;
+	};
+
 	pinctrl_usdhc1: usdhc1grp {
 		fsl,pins = <
 			IMX95_PAD_SD1_CLK__USDHC1_CLK				0x158e
@@ -239,13 +249,6 @@
 		>;
 	};
 
-	/* Wi-Fi PDn line */
-	pinctrl_wlan_pdn: wlanpdngrp {
-		fsl,pins = <
-			IMX95_PAD_GPIO_IO07__GPIO2_IO_BIT7			0x31e
-		>;
-	};
-
 	pinctrl_usdhc3: usdhc3grp {
 		fsl,pins = <
 			IMX95_PAD_SD3_CLK__USDHC3_CLK				0x1582
@@ -279,13 +282,10 @@
 		>;
 	};
 
-	/* Bluetooth UART */
-	pinctrl_uart1: uart1grp {
+	/* Wi-Fi PDn line */
+	pinctrl_wlan_pdn: wlanpdngrp {
 		fsl,pins = <
-			IMX95_PAD_UART1_RXD__AONMIX_TOP_LPUART1_RX		0x31e
-			IMX95_PAD_UART1_TXD__AONMIX_TOP_LPUART1_TX		0x31e
-			IMX95_PAD_UART2_TXD__AONMIX_TOP_LPUART1_RTS_B	0x31e
-			IMX95_PAD_UART2_RXD__AONMIX_TOP_LPUART1_CTS_B	0x31e
+			IMX95_PAD_GPIO_IO07__GPIO2_IO_BIT7			0x31e
 		>;
 	};
 };
