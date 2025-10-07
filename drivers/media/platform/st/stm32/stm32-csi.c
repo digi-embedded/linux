@@ -30,16 +30,12 @@
 #define STM32_CSI_PCR_DL0EN			BIT(2)
 #define STM32_CSI_PCR_CLEN			BIT(1)
 #define STM32_CSI_PCR_PWRDOWN			BIT(0)
-#define STM32_CSI_VCXCFGR1(x)			((((x) + 1) * 0x0010) + 0x0)
+#define STM32_CSI_VCXCFGR(vc, dt)		((((vc) + 1) * 0x0010) + \
+						 (((((dt) + 1) * 16) / 32) * 0x4))
 #define STM32_CSI_VCXCFGR1_ALLDT		BIT(0)
-#define STM32_CSI_VCXCFGR1_DT0EN		BIT(1)
-#define STM32_CSI_VCXCFGR1_DT1EN		BIT(2)
+#define STM32_CSI_VCXCFGR1_DTEN(x)		BIT((x) + 1)
 #define STM32_CSI_VCXCFGR1_CDTFT_SHIFT		8
-#define STM32_CSI_VCXCFGR1_DT0_SHIFT		16
-#define STM32_CSI_VCXCFGR1_DT0FT_SHIFT		24
-#define STM32_CSI_VCXCFGR2(x)			((((x) + 1) * 0x0010) + 0x4)
-#define STM32_CSI_VCXCFGR2_DT1_SHIFT		0
-#define STM32_CSI_VCXCFGR2_DT1FT_SHIFT		8
+#define STM32_CSI_VCXCFGR_DT_SHIFT(dt)		((((dt) + 1) * 16) % 32)
 #define STM32_CSI_INPUT_BPP8			2
 #define STM32_CSI_INPUT_BPP10			3
 #define STM32_CSI_INPUT_BPP12			4
@@ -634,13 +630,12 @@ static int stm32_csi_start_vc(struct stm32_csi_dev *csi2priv,
 		cfgr1 |= fmt->input_fmt << STM32_CSI_VCXCFGR1_CDTFT_SHIFT;
 		dev_dbg(csi2priv->dev, "VC%d: enable AllDT mode\n", vc);
 	} else {
-		cfgr1 |= fmt->datatype << STM32_CSI_VCXCFGR1_DT0_SHIFT;
-		cfgr1 |= fmt->input_fmt << STM32_CSI_VCXCFGR1_DT0FT_SHIFT;
-		cfgr1 |= STM32_CSI_VCXCFGR1_DT0EN;
+		cfgr1 |= STM32_CSI_VCXCFGR1_DTEN(0);
+		cfgr1 |= ((fmt->input_fmt << 8) | fmt->datatype) << STM32_CSI_VCXCFGR_DT_SHIFT(0);
 		dev_dbg(csi2priv->dev, "VC%d: enable DT0(0x%x)/DT0FT(0x%x)\n",
 			vc, fmt->datatype, fmt->input_fmt);
 	}
-	writel_relaxed(cfgr1, csi2priv->base + STM32_CSI_VCXCFGR1(vc));
+	writel_relaxed(cfgr1, csi2priv->base + STM32_CSI_VCXCFGR(vc, 0));
 
 	/* Enable processing of the virtual-channel and wait for its status */
 	writel_relaxed(STM32_CSI_CR_VCXSTART(vc) | STM32_CSI_CR_CSIEN,
@@ -681,8 +676,8 @@ static int stm32_csi_stop_vc(struct stm32_csi_dev *csi2priv, uint32_t vc)
 	}
 
 	/* Disable all DTs */
-	writel_relaxed(0, csi2priv->base + STM32_CSI_VCXCFGR1(vc));
-	writel_relaxed(0, csi2priv->base + STM32_CSI_VCXCFGR2(vc));
+	writel_relaxed(0, csi2priv->base + STM32_CSI_VCXCFGR(vc, 0));
+	writel_relaxed(0, csi2priv->base + STM32_CSI_VCXCFGR(vc, 1));
 
 	return 0;
 }
