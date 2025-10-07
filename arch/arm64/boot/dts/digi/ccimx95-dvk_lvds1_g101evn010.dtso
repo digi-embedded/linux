@@ -1,0 +1,195 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2025 Digi International Inc.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/clock/fsl,imx95-clock.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include "../freescale/imx95-pinfunc.h"
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: AUO G101EVN01.1 display on LVDS1";
+
+			lvds1_backlight: lvds1-backlight {
+				compatible = "pwm-backlight";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_lvds1_backlight>;
+				pwms = <&tpm6 1 50000 0>;
+				brightness-levels = <0 20 25 30 35 40 100>;
+				default-brightness-level = <6>;
+				status = "okay";
+			};
+
+			lvds1-panel {
+				compatible = "panel-lvds";
+				backlight = <&lvds1_backlight>;
+				power-supply = <&reg_5v_dvk>;
+				data-mapping = "jeida-24";
+				de-high;
+				width-mm = <216>;
+				height-mm = <135>;
+				status = "okay";
+
+				/* AUO G101EVN01.0 */
+				panel-timing {
+					clock-frequency = <68930000>;
+					hactive = <1280>;
+					vactive = <800>;
+					hfront-porch = <120>;
+					hback-porch = <2>;
+					hsync-len = <8>;
+					vback-porch = <10>;
+					vfront-porch = <2>;
+					vsync-len = <6>;
+					hsync-active = <1>;
+					vsync-active = <1>;
+				};
+
+				port {
+					panel_lvds1_in: endpoint {
+						remote-endpoint = <&lvds1_out>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Disable the HDMI bridge */
+	fragment@1 {
+		target = <&lt_bridge>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Disable MIPI DSI phy */
+	fragment@2 {
+		target = <&mipi_dsi>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Disable HDMI connector */
+	fragment@3 {
+		target = <&hdmi_connector>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Enable the LVDS bridge */
+	fragment@4 {
+		target = <&ldb>;
+		__overlay__ {
+			assigned-clocks = <&scmi_clk IMX95_CLK_LDBPLL>;
+			assigned-clock-rates = <482549760>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			channel@1 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <1>;
+				status = "okay";
+
+				port@1 {
+					reg = <1>;
+
+					lvds1_out: endpoint {
+						remote-endpoint = <&panel_lvds1_in>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Enable the LVDS phy */
+	fragment@5 {
+		target = <&ldb1_phy>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable channel1 of pixel-interleaver */
+	fragment@6 {
+		target = <&pixel_interleaver>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			/* Disable LVDS0 */
+			channel@0 {
+				reg = <0>;
+				status = "disabled";
+			};
+
+			channel@1 {
+				reg = <1>;
+				status = "okay";
+			};
+		};
+	};
+
+	/* Enable the LVDS backlight PWM */
+	fragment@7 {
+		target = <&tpm6>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable goodix_touch */
+	fragment@8 {
+		target = <&lpi2c3>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			goodix_touch: gt9271@14 {
+				compatible = "goodix,gt9271";
+				reg = <0x14>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_lvds1_touch>;
+				/* LVDS interrupt */
+				interrupt-parent = <&gpio2>;
+				interrupts = <30 IRQ_TYPE_EDGE_FALLING>;
+				irq-gpios = <&gpio2 30 GPIO_ACTIVE_HIGH>;
+				reload-fw-on-resume;
+				skip-firmware-request;
+				vin-supply = <&reg_5v_dvk>;
+				status = "okay";
+			};
+		};
+	};
+
+	/* pinctrl */
+	fragment@9 {
+		target = <&scmi_iomuxc>;
+		__overlay__ {
+			/* Backlight */
+			pinctrl_lvds1_backlight: lvds1backlightgrp {
+				fsl,pins = <
+					IMX95_PAD_GPIO_IO23__TPM6_CH1		0x51e
+				>;
+			};
+
+			/* Touch interrupt */
+			pinctrl_lvds1_touch: lvds1touchgrp {
+				fsl,pins = <
+					IMX95_PAD_GPIO_IO30__GPIO2_IO_BIT30	0x51e
+				>;
+			};
+		};
+	};
+};

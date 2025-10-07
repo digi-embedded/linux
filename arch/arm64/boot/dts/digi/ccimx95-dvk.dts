@@ -26,7 +26,7 @@
 		stdout-path = &lpuart6;
 	};
 
-	hdmi-connector {
+	hdmi_connector: hdmi-connector {
 		compatible = "hdmi-connector";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_hdmi_hpd>;
@@ -41,6 +41,16 @@
 				remote-endpoint = <&lt8912_out>;
 			};
 		};
+	};
+
+	/* Required placeholder to inject LVDS0 overlay */
+	lvds0-panel {
+		status = "disabled";
+	};
+
+	/* Required placeholder to inject LVDS1 overlay */
+	lvds1-panel {
+		status = "disabled";
 	};
 
 	reg_3v3_dvk: regulator-3v3-dvk {
