@@ -479,7 +479,14 @@ static int stm32_mdf_adc_filter_set_mode(struct stm32_mdf_adc *adc, bool cont)
 		if (cont)
 			mode = STM32_MDF_ACQ_MODE_ASYNC_CONT;
 		else
-			mode = STM32_MDF_ACQ_MODE_ASYNC_SINGLE_SHOT;
+			/*
+			 * The expected mode would be STM32_MDF_ACQ_MODE_ASYNC_SINGLE_SHOT here.
+			 * However, there is an instability depending on "bus/kernel clock ratio"
+			 * in this mode.
+			 * Use STM32_MDF_ACQ_MODE_SYNC_SINGLE_SHOT mode along with TRGO trigger,
+			 * as a workaround.
+			 */
+			mode = STM32_MDF_ACQ_MODE_SYNC_SINGLE_SHOT;
 	}
 
 	dev_dbg(adc->dev, "Set mode [0x%x] on filter [%d]\n", mode, adc->fl_id);
@@ -1305,6 +1312,7 @@ static int stm32_mdf_adc_single_conv(struct iio_dev *indio_dev,
 {
 	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
 	long timeout;
+	bool save_trgo = adc->trgo;
 	int ret;
 
 	reinit_completion(&adc->completion);
@@ -1319,6 +1327,9 @@ static int stm32_mdf_adc_single_conv(struct iio_dev *indio_dev,
 		goto err_conv;
 
 	stm32_mdf_adc_filter_set_mode(adc, false);
+
+	/* Force trgo as a workaround for STM32_MDF_ACQ_MODE_ASYNC_SINGLE_SHOT mode */
+	adc->trgo = true;
 
 	ret = stm32_mdf_adc_start_conv(indio_dev);
 	if (ret < 0) {
@@ -1350,6 +1361,8 @@ stop_conv:
 	stm32_mdf_adc_stop_conv(indio_dev);
 
 err_conv:
+	adc->trgo = save_trgo;
+
 	stm32_mdf_adc_stop_mdf(indio_dev);
 
 	return ret;
