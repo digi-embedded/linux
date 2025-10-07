@@ -12,9 +12,10 @@ maintainers:
 
 properties:
   compatible:
-    const: st,stm32-ltdc
-    const: st,stm32mp21-ltdc
-    const: st,stm32mp25-ltdc
+    enum:
+      - st,stm32-ltdc
+      - st,stm32mp21-ltdc
+      - st,stm32mp25-ltdc
 
   reg:
     maxItems: 1
