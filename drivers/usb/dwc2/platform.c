@@ -670,6 +670,14 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	if (retval)
 		return retval;
 
+	retval = pm_runtime_set_active(&dev->dev);
+	if (retval)
+		return dev_err_probe(&dev->dev, retval, "Failed to activate pm runtime\n");
+
+	retval = devm_pm_runtime_enable(&dev->dev);
+	if (retval)
+		return dev_err_probe(&dev->dev, retval, "Failed to enable pm runtime\n");
+
 	spin_lock_init(&hsotg->lock);
 
 	hsotg->vbus_supply = devm_regulator_get_optional(hsotg->dev, "vbus");
@@ -1013,6 +1021,10 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 			return ret;
 	}
 	dwc2->phy_off_for_suspend = false;
+
+	pm_runtime_disable(dev);
+	pm_runtime_set_active(dev);
+	pm_runtime_enable(dev);
 
 	if (dwc2->params.activate_stm_id_vb_detection) {
 		unsigned long flags;

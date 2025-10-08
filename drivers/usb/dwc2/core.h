@@ -1076,6 +1076,7 @@ struct dwc2_hsotg {
 	unsigned int hibernated:1;
 	unsigned int in_ppd:1;
 	bool bus_suspended;
+	bool rpm_suspended;
 	enum usb_device_state suspended_from;
 	unsigned int reset_phy_on_wake:1;
 	unsigned int need_phy_for_wake:1;
