@@ -194,6 +194,7 @@ static void stm32_pcie_perst_assert(struct dw_pcie *pci)
 {
 	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
 	struct device *dev = pci->dev;
+	struct dw_pcie_ep *ep = &pci->ep;
 
 	dev_dbg(dev, "PERST asserted by host. Shutting down the PCIe link\n");
 
@@ -207,6 +208,8 @@ static void stm32_pcie_perst_assert(struct dw_pcie *pci)
 	}
 
 	stm32_pcie_disable_link(pci);
+
+	dw_pcie_ep_deinit_notify(ep);
 
 	stm32_pcie_disable_resources(stm32_pcie);
 
@@ -255,6 +258,7 @@ static void stm32_pcie_perst_deassert(struct dw_pcie *pci)
 	ret = stm32_pcie_enable_link(pci);
 	if (ret) {
 		dev_err(dev, "PCIe Cannot establish link: %d\n", ret);
+		dw_pcie_ep_deinit_notify(ep);
 		stm32_pcie_disable_resources(stm32_pcie);
 		pm_runtime_put_sync(dev);
 		return;
@@ -411,6 +415,8 @@ static int stm32_pcie_remove(struct platform_device *pdev)
 	disable_irq(stm32_pcie->perst_irq);
 
 	dw_pcie_ep_exit(ep);
+
+	dw_pcie_ep_deinit_notify(ep);
 
 	stm32_pcie_disable_resources(stm32_pcie);
 
