@@ -7119,7 +7119,6 @@ brcmf_cfg80211_update_conn_params(struct wiphy *wiphy,
 	return err;
 }
 
-#ifdef CONFIG_PM
 static int
 brcmf_cfg80211_set_rekey_data(struct wiphy *wiphy, struct net_device *ndev,
 			      struct cfg80211_gtk_rekey_data *gtk)
@@ -7144,7 +7143,6 @@ brcmf_cfg80211_set_rekey_data(struct wiphy *wiphy, struct net_device *ndev,
 
 	return ret;
 }
-#endif
 
 static int brcmf_cfg80211_set_pmk(struct wiphy *wiphy, struct net_device *dev,
 				  const struct cfg80211_pmk_conf *conf)
