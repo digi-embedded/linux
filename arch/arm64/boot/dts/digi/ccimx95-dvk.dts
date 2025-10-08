@@ -377,6 +377,7 @@
 
 &pcie0 {
 	vpcie-supply = <&reg_3v3_dvk>;
+	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_OUTPUT>;
 	status = "okay";
 };
 
@@ -386,6 +387,7 @@
  */
 &pcie1 {
 	vpcie-supply = <&reg_3v3_dvk>;
+	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_OUTPUT>;
 	status = "disabled";
 };
 
