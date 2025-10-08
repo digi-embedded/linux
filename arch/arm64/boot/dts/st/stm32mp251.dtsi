@@ -2396,6 +2396,7 @@
 				reset-names = "pcie";
 				phys = <&combophy PHY_TYPE_PCIE>;
 				phy-names = "pcie-phy";
+				msi-map = <0x0 &v2m0 0x0 0x1>;
 				access-controllers = <&rifsc 68>;
 				power-domains = <&d1_pd>;
 				status = "disabled";
