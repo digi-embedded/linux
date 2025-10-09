@@ -248,6 +248,13 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lt8912>;
 		reset-gpios = <&gpio3 26 GPIO_ACTIVE_LOW>;
+		vdd-supply = <&scmi_vdd_1v8>;
+		vccmipirx-supply = <&scmi_vdd_1v8>;
+		vcchdmitx-supply = <&scmi_vdd_1v8>;
+		vcchdmipll-supply = <&scmi_vdd_1v8>;
+		vcclvdstx-supply = <&scmi_vdd_1v8>;
+		vccsysclk-supply = <&scmi_vdd_1v8>;
+		vcclvdspll-supply = <&scmi_vdd_1v8>;
 		status = "okay";
 
 		ports {
