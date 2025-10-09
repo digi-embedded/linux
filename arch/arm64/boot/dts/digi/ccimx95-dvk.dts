@@ -59,7 +59,7 @@
 		pinctrl-0 = <&pinctrl_reg_3v3_dvk>;
 		regulator-max-microvolt = <3300000>;
 		regulator-min-microvolt = <3300000>;
-		regulator-name = "3V3_DVK";
+		regulator-name = "3v3_dvk";
 		gpio = <&gpio5 14 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 	};
@@ -70,7 +70,7 @@
 		pinctrl-0 = <&pinctrl_reg_5v_dvk>;
 		regulator-max-microvolt = <5000000>;
 		regulator-min-microvolt = <5000000>;
-		regulator-name = "5V_DVK";
+		regulator-name = "5v_dvk";
 		gpio = <&gpio1 14 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 	};
