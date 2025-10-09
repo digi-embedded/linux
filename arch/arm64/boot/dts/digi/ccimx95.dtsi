@@ -3,6 +3,8 @@
  * Copyright 2025 Digi International Inc.
  */
 
+#include <dt-bindings/regulator/nxp,pf09-regulator.h>
+
 / {
 	cm7: imx95-cm7 {
 		compatible = "fsl,imx95-cm7";
@@ -14,6 +16,52 @@
 				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
 		fsl,startup-delay-ms = <50>;
 		status = "okay";
+	};
+
+	firmware {
+		scmi {
+			scmi_voltd: protocol@17 {
+				reg = <0x17>;
+
+				scmi_regu: regulators {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					scmi_vdd_3v3: regulator@2 {
+						reg = <VOLTD_SCMI_PF09_SW1>;
+						regulator-name = "vdd_3v3";
+						regulator-min-microvolt = <500000>;
+						regulator-max-microvolt = <3300000>;
+						regulator-boot-on;
+						regulator-always-on;
+					};
+
+					scmi_vdd_1v8: regulator@4 {
+						reg = <VOLTD_SCMI_PF09_SW3>;
+						regulator-name = "vdd_1v8";
+						regulator-min-microvolt = <300000>;
+						regulator-max-microvolt = <3300000>;
+						regulator-boot-on;
+						regulator-always-on;
+					};
+
+					scmi_vdd_ldo1: regulator@7 {
+						reg = <VOLTD_SCMI_PF09_LDO1>;
+						regulator-name = "vdd_ldo1";
+						regulator-min-microvolt = <750000>;
+						regulator-max-microvolt = <3300000>;
+					};
+
+					scmi_vdd_sdio2: regulator@8 {
+						reg = <VOLTD_SCMI_PF09_LDO2>;
+						regulator-name = "vdd_sdio2";
+						regulator-min-microvolt = <1800000>;
+						regulator-max-microvolt = <3300000>;
+						regulator-boot-on;
+					};
+				};
+			};
+		};
 	};
 
 	memory@80000000 {
