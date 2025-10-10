@@ -1979,13 +1979,6 @@
 			#access-controller-cells = <1>;
 		};
 
-		hdp: pinctrl@44090000 {
-			compatible = "st,stm32mp-hdp";
-			reg = <0x44090000 0x0 0x400>;
-			clocks = <&rcc CK_BUS_HDP>;
-			status = "disabled";
-		};
-
 		bsec: efuse@44000000 {
 			bootph-all;
 			compatible = "st,stm32mp25-bsec";
@@ -2017,6 +2010,13 @@
 			clocks = <&rcc CK_KER_DTS>;
 			resets = <&rcc DTS_R>;
 			#thermal-sensor-cells = <1>;
+		};
+
+		hdp: pinctrl@44090000 {
+			compatible = "st,stm32mp-hdp";
+			reg = <0x44090000 0x0 0x400>;
+			clocks = <&rcc CK_BUS_HDP>;
+			status = "disabled";
 		};
 
 		rcc: clock-controller@44200000 {
