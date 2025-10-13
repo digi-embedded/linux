@@ -276,6 +276,7 @@
 		reg = <0x10>;
 		clocks = <&scmi_clk IMX95_CLK_SAI3>;
 		clock-names = "mclk";
+		dvdd-supply = <&scmi_vdd_1v8>;
 	};
 };
 
