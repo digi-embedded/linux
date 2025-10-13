@@ -477,6 +477,8 @@
 	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-3 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
+	vmmc-supply = <&scmi_vdd_3v3>;
+	vqmmc-supply = <&scmi_vdd_sdio2>;
 	cd-gpios = <&gpio3 00 GPIO_ACTIVE_LOW>;
 	fsl,cd-gpio-wakeup-disable;
 	bus-width = <4>;
