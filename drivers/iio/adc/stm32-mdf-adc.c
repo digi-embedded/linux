@@ -1333,8 +1333,10 @@ static int stm32_mdf_adc_single_conv(struct iio_dev *indio_dev,
 	if (timeout == 0) {
 		dev_err(&indio_dev->dev, "Timeout reached on channel [%d]", chan->channel);
 		ret = -ETIMEDOUT;
+		goto stop_conv;
 	} else if (timeout < 0) {
 		ret = timeout;
+		goto stop_conv;
 	} else {
 		ret = IIO_VAL_INT;
 	}
@@ -1344,6 +1346,7 @@ static int stm32_mdf_adc_single_conv(struct iio_dev *indio_dev,
 	else
 		*res = adc->buffer[0];
 
+stop_conv:
 	stm32_mdf_adc_stop_conv(indio_dev);
 
 err_conv:
