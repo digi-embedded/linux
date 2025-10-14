@@ -229,6 +229,16 @@
 	read-only;
 };
 
+&soc {
+	ipu1: ipu@2400000 {
+		bypass_reset = <1>;
+	};
+
+	ipu2: ipu@2800000 {
+		bypass_reset = <1>;
+	};
+};
+
 /* Connected to wireless chip */
 &usdhc1 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
