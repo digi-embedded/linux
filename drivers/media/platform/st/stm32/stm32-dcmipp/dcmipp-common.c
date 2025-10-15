@@ -60,6 +60,7 @@ int dcmipp_ent_sd_register(struct dcmipp_ent_device *ved,
 	ved->ent = &sd->entity;
 
 	/* Initialize the subdev */
+	sd->dev = v4l2_dev->dev;
 	v4l2_subdev_init(sd, sd_ops);
 	sd->internal_ops = sd_int_ops;
 	sd->entity.function = function;
