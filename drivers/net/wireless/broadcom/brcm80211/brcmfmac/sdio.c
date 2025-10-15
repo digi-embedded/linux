@@ -5913,9 +5913,7 @@ fail:
 /* Detach and free everything */
 void brcmf_sdio_remove(struct brcmf_sdio *bus)
 {
-#if defined(CONFIG_BRCMFMAC_BT_SHARED_SDIO) || defined(CONFIG_INFFMAC_BT_SHARED_SDIO)
 	struct brcmf_bus *bus_if = bus->sdiodev->bus_if;
-#endif
 	u32 reg_val, read_reg;
 	int err = 0;
 
