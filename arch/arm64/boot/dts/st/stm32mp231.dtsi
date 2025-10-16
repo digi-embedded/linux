@@ -174,16 +174,6 @@
 		      <0x0 0x4ac40000 0x0 0x2000>,
 		      <0x0 0x4ac60000 0x0 0x2000>;
 		interrupts = <GIC_PPI 9 (GIC_CPU_MASK_SIMPLE(1) | IRQ_TYPE_LEVEL_LOW)>;
-
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		v2m0: v2m@48090000 {
-			compatible = "arm,gic-v2m-frame";
-			reg = <0x0 0x48090000 0x0 0x1000>;
-			msi-controller;
-		};
 	};
 
 	d1_pd: power-domain-d1 {
