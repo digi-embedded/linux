@@ -107,14 +107,16 @@ static int stm32_etzpc_populate_bus(struct stm32_firewall_controller *ctrl)
 		}
 
 		for (i = 0; i < len; i++) {
-			if (ctrl->grant_access(ctrl, firewalls[i].firewall_id)) {
+			err = firewalls[i].firewall_ctrl->grant_access(firewalls[i].firewall_ctrl,
+								       firewalls[i].firewall_id);
+			if (err) {
 				/*
 				 * Peripheral access not allowed or not defined.
 				 * Mark the node as populated so platform bus won't probe it
 				 */
 				of_detach_node(child);
-				dev_err(parent, "%s: Device driver will not be probed\n",
-					child->full_name);
+				dev_err(parent, "%s: Device driver will not be probed, error: %d\n",
+					child->full_name, err);
 			}
 		}
 
