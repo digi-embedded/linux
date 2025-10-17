@@ -604,7 +604,7 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		ret = v4l2_subdev_enable_streams(s_subdev, pad->index, 1);
 		if (ret < 0) {
 			dev_err(isp->dev,
-				"failed to start source subdev streaming (%d)\n", ret);
+				"isp: failed to start source subdev streaming (%d)\n", ret);
 			goto error_s_stream;
 		}
 	} else {
@@ -619,7 +619,7 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		ret = v4l2_subdev_disable_streams(s_subdev, pad->index, 1);
 		if (ret < 0) {
 			dev_err(isp->dev,
-				"failed to stop source subdev streaming (%d)\n", ret);
+				"isp: failed to stop source subdev streaming (%d)\n", ret);
 			goto error_s_stream;
 		}
 	}

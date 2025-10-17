@@ -640,7 +640,7 @@ static int dcmipp_inp_enable_streams(struct v4l2_subdev *sd,
 	ret = v4l2_subdev_enable_streams(s_subdev, s_pad->index, sink_streams_apply);
 	if (ret) {
 		dev_err(inp->dev,
-			"failed to start source subdev streaming (%d)\n", ret);
+			"input: failed to start source subdev streaming (%d)\n", ret);
 
 		for (i = 0; i < STM32_DCMIPP_STREAM_MAX; i++) {
 			if (!(sink_streams & BIT(i)))
@@ -702,7 +702,7 @@ static int dcmipp_inp_disable_streams(struct v4l2_subdev *sd,
 	ret = v4l2_subdev_disable_streams(s_subdev, s_pad->index, sink_streams_apply);
 	if (ret) {
 		dev_err(inp->dev,
-			"failed to stop source subdev streaming (%d)\n", ret);
+			"input: failed to stop source subdev streaming (%d)\n", ret);
 
 		for (i = 0; i < STM32_DCMIPP_STREAM_MAX; i++) {
 			if (!(sink_streams & BIT(i)))

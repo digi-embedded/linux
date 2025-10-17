@@ -1060,7 +1060,7 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 			ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 		if (ret < 0)
 			dev_err(pixelproc->dev,
-				"failed to stop source subdev streaming (%d)\n",
+				"pixelproc: failed to stop source subdev streaming (%d)\n",
 				ret);
 		return ret;
 	}
@@ -1099,7 +1099,7 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 	ret =  v4l2_ctrl_handler_setup(pixelproc->sd.ctrl_handler);
 	if (ret < 0) {
 		dev_err(pixelproc->dev,
-			"failed to start source subdev streaming (%d)\n", ret);
+			"pixelproc: failed to start source subdev streaming (%d)\n", ret);
 		return ret;
 	}
 
@@ -1110,7 +1110,7 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 	if (ret < 0) {
 		dev_err(pixelproc->dev,
-			"failed to start source subdev streaming (%d)\n", ret);
+			"pixelproc: failed to start source subdev streaming (%d)\n", ret);
 		return ret;
 	}
 
