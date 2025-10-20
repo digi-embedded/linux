@@ -44,6 +44,11 @@ properties:
     description: >
       Reference to the GPIO connected to the reset pin, if any.
 
+  digi,use-pm-ops:
+    description: >
+      Indicates driver uses PM operations instead of old s_power() hook.
+    type: boolean
+
   rotation:
     enum:
       - 0
