@@ -568,7 +568,7 @@ static const struct stm32_rng_data stm32mp25_rng_data = {
 
 static const struct stm32_rng_data stm32mp21_rng_data = {
 	.has_cond_reset = true,
-	.max_clock_rate = 48000000,
+	.max_clock_rate = 8000000,
 	.nb_clock = 2,
 	.cr_config1_mask = GENMASK(27, 20),
 	.cr = 0x00800D00,
