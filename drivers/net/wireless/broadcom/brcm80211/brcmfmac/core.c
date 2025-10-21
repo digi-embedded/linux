@@ -1561,6 +1561,10 @@ static void brcmf_core_bus_reset(struct work_struct *work)
 	struct brcmf_pub *drvr = container_of(work, struct brcmf_pub,
 					      bus_reset);
 
+	/* WLAN REG TOGGLE */
+	brcmf_wlanregon_gpio_toggle(0);
+	msleep(100);
+	brcmf_wlanregon_gpio_toggle(1);
 	brcmf_bus_reset(drvr->bus_if);
 }
 
@@ -1827,6 +1831,11 @@ void brcmf_dev_coredump(struct device *dev)
 
 	if (brcmf_debug_create_memdump(bus_if, NULL, 0) < 0)
 		brcmf_dbg(TRACE, "failed to create coredump\n");
+}
+
+void brcmf_wlanregon_gpio_toggle(u8 gpio_on)
+{
+	/* WLAN REG ON/OFF Toggle code to be added */
 }
 
 void brcmf_fw_crashed(struct device *dev)

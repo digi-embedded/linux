@@ -263,4 +263,5 @@ int brcmf_pktfilter_enable(struct net_device *ndev, bool enable);
 void brcmf_del_sta(struct brcmf_if *ifp, const u8 *ea);
 struct brcmf_sta *brcmf_find_sta(struct brcmf_if *ifp, const u8 *ea);
 struct brcmf_sta *brcmf_findadd_sta(struct brcmf_if *ifp, const u8 *ea);
+void brcmf_wlanregon_gpio_toggle(u8 gpio_on);
 #endif /* BRCMFMAC_CORE_H */
