@@ -124,7 +124,11 @@ brcmf_debug_del_dir_file(struct brcmf_bus *bus)
 	spin_lock(&parent->d_lock);
 
 	/* search all files under storing path and store file point on chlid */
+#if (KERNEL_VERSION(6, 8, 0) <= LINUX_VERSION_CODE)
+	hlist_for_each_entry(child, &parent->d_children, d_sib) {
+#else
 	list_for_each_entry(child, &parent->d_subdirs, d_child) {
+#endif
 		if (d_is_negative(child))
 			continue;
 
@@ -137,8 +141,10 @@ brcmf_debug_del_dir_file(struct brcmf_bus *bus)
 			/* del the file */
 #if (KERNEL_VERSION(5, 12, 0) > LINUX_VERSION_CODE)
 			ret = vfs_unlink(dir_inode, child, NULL);
-#else
+#elif (KERNEL_VERSION(6, 3, 0) > LINUX_VERSION_CODE)
 			ret = vfs_unlink(&init_user_ns, dir_inode, child, NULL);
+#else
+			ret = vfs_unlink(&nop_mnt_idmap, dir_inode, child, NULL);
 #endif
 			if (ret)
 				brcmf_err("vfs_unlink failed: %d\n", ret);
@@ -153,7 +159,8 @@ brcmf_debug_del_dir_file(struct brcmf_bus *bus)
 	return 0;
 }
 
-unsigned long long brcmf_debug_cal_avail_space(struct brcmf_bus *bus, const char *cal_path)
+static unsigned long long
+brcmf_debug_cal_avail_space(struct brcmf_bus *bus, const char *cal_path)
 {
 	struct path dir_path;
 	unsigned long long avail_bytes = 0;
