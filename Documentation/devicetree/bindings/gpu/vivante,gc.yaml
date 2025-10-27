@@ -52,6 +52,9 @@ properties:
   contiguous-area:
     maxItems: 1
 
+  access-controllers:
+    maxItems: 1
+
 required:
   - compatible
   - reg
