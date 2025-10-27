@@ -121,6 +121,10 @@ properties:
       - description: CK_SCMI_HSI_KER_CK Kernel High Speed Internal oscillator
       - description: CK_SCMI_HSE_KER_CK Kernel High Speed External oscillator
       - description: CK_SCMI_MSI_KER_CK Kernel Low Power Internal oscillator
+
+  access-controllers:
+    maxItems: 1
+
 required:
   - compatible
   - reg
