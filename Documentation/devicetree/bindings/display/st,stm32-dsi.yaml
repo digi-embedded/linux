@@ -68,6 +68,9 @@ properties:
                   - const: 1
                   - const: 2
 
+  access-controllers:
+    maxItems: 1
+
 required:
   - compatible
   - reg
