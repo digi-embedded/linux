@@ -36,6 +36,9 @@ properties:
 
   ranges: true
 
+  reg:
+    maxItems: 1
+
   "#access-controller-cells":
     const: 1
     description:
@@ -57,6 +60,7 @@ required:
   - "#size-cells"
   - clocks
   - ranges
+  - reg
 
 additionalProperties: false
 
