@@ -128,7 +128,7 @@
 };
 
 &adc1 {
-	vref-supply = <&scmi_vdd_1v8>;
+	vref-supply = <&reg_vdd_1v8_dummy>;
 	status = "okay";
 };
 
@@ -347,13 +347,13 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lt8912>;
 		reset-gpios = <&gpio3 26 GPIO_ACTIVE_LOW>;
-		vdd-supply = <&scmi_vdd_1v8>;
-		vccmipirx-supply = <&scmi_vdd_1v8>;
-		vcchdmitx-supply = <&scmi_vdd_1v8>;
-		vcchdmipll-supply = <&scmi_vdd_1v8>;
-		vcclvdstx-supply = <&scmi_vdd_1v8>;
-		vccsysclk-supply = <&scmi_vdd_1v8>;
-		vcclvdspll-supply = <&scmi_vdd_1v8>;
+		vdd-supply = <&reg_vdd_1v8_dummy>;
+		vccmipirx-supply = <&reg_vdd_1v8_dummy>;
+		vcchdmitx-supply = <&reg_vdd_1v8_dummy>;
+		vcchdmipll-supply = <&reg_vdd_1v8_dummy>;
+		vcclvdstx-supply = <&reg_vdd_1v8_dummy>;
+		vccsysclk-supply = <&reg_vdd_1v8_dummy>;
+		vcclvdspll-supply = <&reg_vdd_1v8_dummy>;
 		status = "okay";
 
 		ports {
@@ -382,7 +382,7 @@
 		reg = <0x10>;
 		clocks = <&scmi_clk IMX95_CLK_SAI3>;
 		clock-names = "mclk";
-		dvdd-supply = <&scmi_vdd_1v8>;
+		dvdd-supply = <&reg_vdd_1v8_dummy>;
 	};
 };
 
@@ -583,7 +583,7 @@
 	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-3 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
-	vmmc-supply = <&scmi_vdd_3v3>;
+	vmmc-supply = <&reg_vdd_3v3_dummy>;
 	vqmmc-supply = <&scmi_vdd_sdio2>;
 	cd-gpios = <&gpio3 00 GPIO_ACTIVE_LOW>;
 	fsl,cd-gpio-wakeup-disable;
