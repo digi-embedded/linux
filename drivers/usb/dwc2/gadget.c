@@ -5326,7 +5326,13 @@ int dwc2_hsotg_suspend(struct dwc2_hsotg *hsotg)
 
 	flush_workqueue(hsotg->wq_gadget);
 
-	if (hsotg->lx_state != DWC2_L0) {
+	if (hsotg->remote_wakeup_allowed &&
+	    (hsotg->bus_suspended || hsotg->in_ppd || hsotg->hibernated)) {
+		/*
+		 * The bus has been suspended by the HOST, and the remote
+		 * wakeup has been enabled. So don't suspend gadget or it
+		 * will disconnect.
+		 */
 		hsotg->gadget_off_for_suspend = false;
 		return 0;
 	}
