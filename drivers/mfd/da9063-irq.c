@@ -215,7 +215,6 @@ int da9063_irq_init(struct da9063 *da9063)
 	/* Report and clear fault events */
 	da9063_fault_log_init(da9063);
 
-	da9063->irq_base = -1;
 	ret = devm_regmap_add_irq_chip(da9063->dev, da9063->regmap,
 			da9063->chip_irq,
 			IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED,
@@ -227,9 +226,4 @@ int da9063_irq_init(struct da9063 *da9063)
 	}
 
 	return 0;
-}
-
-void da9063_irq_exit(struct da9063 *da9063)
-{
-	regmap_del_irq_chip(da9063->chip_irq, da9063->regmap_irq);
 }
