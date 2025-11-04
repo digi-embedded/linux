@@ -121,7 +121,12 @@ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,
 	if (err)
 		brcmf_err("failed to get OF country code map (err=%d)\n", err);
 
-	of_get_mac_address(np, settings->mac);
+	if (of_get_mac_address(np, settings->mac)) {
+		struct device_node *wireless;
+		wireless = of_find_node_by_path("/wireless");
+		of_get_mac_address(wireless, settings->mac);
+		of_node_put(wireless);
+	}
 
 	if (bus_type != BRCMF_BUSTYPE_SDIO)
 		return;
