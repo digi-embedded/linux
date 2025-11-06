@@ -2473,9 +2473,9 @@
 			};
 		};
 
-		a35ss_syscfg: syscon@48802000  {
-			compatible = "st,stm32mp25-a35ss-syscfg", "syscon";
-			reg = <0x48802000 0x0 0xac>;
+		a35ss_syscfg: syscon@48800000  {
+			compatible = "st,stm32mp25-a35ss-syscfg";
+			reg = <0x48800000 0x0 0x4000>;
 			status = "disabled";
 		};
 	};
