@@ -26,8 +26,6 @@ properties:
               - st,stm32mp25-pwr
               - st,stm32mp21-syscfg
               - st,stm32mp21-pwr
-
-              - st,stm32mp25-a35ssc-m33
           - const: syscon
       - items:
           - const: st,stm32-tamp
