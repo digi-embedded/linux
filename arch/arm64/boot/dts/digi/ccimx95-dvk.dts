@@ -16,6 +16,7 @@
 / {
 	model = "Digi International ConnectCore 95 DVK";
 	compatible = "digi,ccimx95-dvk", "digi,ccimx95", "fsl,imx95-19x19-evk", "fsl,imx95";
+	digi,machine,name = "ccimx95-dvk";
 
 	aliases {
 		ethernet0 = &enetc_port0;
