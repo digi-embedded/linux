@@ -73,6 +73,26 @@
 		status = "okay";
 	};
 
+	reg_can1_xcvr: regulator-can1 {
+		compatible = "regulator-fixed";
+		regulator-name = "can1_xcvr";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_enable_can1_xcvr>;
+		gpio = <&gpio1 2 GPIO_ACTIVE_LOW>;
+		vin-supply = <&bperi>;
+		enable-active-low;
+	};
+
+	reg_can2_xcvr: regulator-can2 {
+		compatible = "regulator-fixed";
+		regulator-name = "can2_xcvr";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_enable_can2_xcvr>;
+		gpio = <&gpio1 5 GPIO_ACTIVE_LOW>;
+		vin-supply = <&bperi>;
+		enable-active-low;
+	};
+
 	/* Parallel display */
 	lcd: display@di0 {
 		compatible = "fsl,lcd";
@@ -187,13 +207,13 @@
 &can1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
-	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+	xceiver-supply = <&reg_can1_xcvr>;
 };
 
 &can2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
-	stby-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;
+	xceiver-supply = <&reg_can2_xcvr>;
 };
 
 &clks {
@@ -703,6 +723,19 @@
 				MX6QDL_PAD_SD3_DAT2__GPIO7_IO06 0x80000000
 			>;
 		};
+	};
+
+
+	pinctrl_enable_can1_xcvr: enablecan1stbrgrp {
+		fsl,pins = <
+			MX6QDL_PAD_GPIO_2__GPIO1_IO02  0x1b0b0
+		>;
+	};
+
+	pinctrl_enable_can2_xcvr: enablecan2stbrgrp {
+		fsl,pins = <
+			MX6QDL_PAD_GPIO_5__GPIO1_IO05    0x1b0b0
+		>;
 	};
 
 	pcie {
