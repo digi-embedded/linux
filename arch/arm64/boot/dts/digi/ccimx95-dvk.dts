@@ -484,7 +484,7 @@
 	pinctrl-3 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
 	vmmc-supply = <&reg_vdd_3v3_dummy>;
 	vqmmc-supply = <&scmi_vdd_sdio2>;
-	cd-gpios = <&gpio3 00 GPIO_ACTIVE_LOW>;
+	cd-gpios = <&gpio3 00 GPIO_ACTIVE_HIGH>;
 	fsl,cd-gpio-wakeup-disable;
 	bus-width = <4>;
 	status = "okay";
