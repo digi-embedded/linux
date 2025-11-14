@@ -80,7 +80,8 @@ ccimx95_dvk_overlays := ccimx95-dvk_enet2.dtbo \
 			ccimx95-dvk_lvds0_g101evn010.dtbo \
 			ccimx95-dvk_lvds1_g101evn010.dtbo \
 			ccimx95-dvk_mikroe-accel2-click.dtbo \
-			ccimx95-dvk_mikroe-gyro-click.dtbo
+			ccimx95-dvk_mikroe-gyro-click.dtbo \
+			ccimx95-dvk_pcam5c.dtbo
 
 ccimx95-dtbs := 	ccimx95-dvk.dtb \
 			$(ccimx9_som_overlays) \
