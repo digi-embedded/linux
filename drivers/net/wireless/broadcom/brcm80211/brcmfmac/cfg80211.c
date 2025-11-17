@@ -490,6 +490,7 @@ struct wl_wsec_info {
 
 static bool brcmf_has_pmkid(const u8 *parse, u32 len, u32 *offset_in_ie);
 static int brcmf_setup_wiphybands(struct brcmf_cfg80211_info *cfg);
+static void brcmf_wiphy_reset_band_and_channel(struct wiphy *wiphy);
 static bool
 wl_cfgoce_has_ie(const u8 *ie, const u8 **tlvs, u32 *tlvs_len,
 		 const u8 *oui, u32 oui_len, u8 type);
@@ -9128,6 +9129,7 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 {
 	struct brcmf_pub *drvr = ifp->drvr;
 	struct ieee80211_supported_band *band;
+	struct brcmf_cfg80211_info *cfg = drvr->config;
 	int err, i;
 	__le32 bandlist[4];
 	u32 n_bands;
@@ -9139,11 +9141,17 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 		return err;
 	}
 
-	brcmf_wiphy_reset_band_and_channel(wiphy);
+	/* Reset bands if needed */
+	if (cfg->bands_reset_required) {
+		brcmf_dbg(INFO, "Performing band reset due to country change\n");
+		brcmf_wiphy_reset_band_and_channel(wiphy);
+		cfg->bands_reset_required = false;
+	}
 
 	n_bands = le32_to_cpu(bandlist[0]);
 	for (i = 1; i <= n_bands && i < ARRAY_SIZE(bandlist); i++) {
-		if (bandlist[i] == cpu_to_le32(WLC_BAND_2G)) {
+		if (bandlist[i] == cpu_to_le32(WLC_BAND_2G) &&
+		    !wiphy->bands[NL80211_BAND_2GHZ]) {
 			band = kmemdup(&__wl_band_2ghz, sizeof(__wl_band_2ghz),
 				       GFP_KERNEL);
 			if (!band)
@@ -9157,7 +9165,8 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 			/* restore 2G channels info */
 			band->n_channels = ARRAY_SIZE(__wl_2ghz_channels);
 			wiphy->bands[NL80211_BAND_2GHZ] = band;
-		} else if (bandlist[i] == cpu_to_le32(WLC_BAND_5G)) {
+		} else if (bandlist[i] == cpu_to_le32(WLC_BAND_5G) &&
+		    !wiphy->bands[NL80211_BAND_5GHZ]) {
 			band = kmemdup(&__wl_band_5ghz, sizeof(__wl_band_5ghz),
 				       GFP_KERNEL);
 			if (!band)
@@ -9172,6 +9181,7 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 			band->n_channels = ARRAY_SIZE(__wl_5ghz_channels);
 			wiphy->bands[NL80211_BAND_5GHZ] = band;
 		} else if (bandlist[i] == cpu_to_le32(WLC_BAND_6G) &&
+			!wiphy->bands[NL80211_BAND_6GHZ] &&
 		    brcmf_feat_is_6ghz_enabled(ifp)) {
 			band = kmemdup(&__wl_band_6ghz, sizeof(__wl_band_6ghz),
 				       GFP_KERNEL);
@@ -9268,7 +9278,6 @@ static int brcmf_construct_chaninfo(struct brcmf_cfg80211_info *cfg,
 		bphy_err(drvr, "get chanspecs error (%d)\n", err);
 		goto fail_pbuf;
 	}
-
 	err = brcmf_fill_band_with_default_chanlist(wiphy, ifp);
 	if (err) {
 		bphy_err(drvr, "could not retrore band and channels: err=%d\n", err);
