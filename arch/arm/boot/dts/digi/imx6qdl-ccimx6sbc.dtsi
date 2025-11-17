@@ -38,6 +38,7 @@
 		pinctrl-0 = <&pinctrl_pcie_reg>;
 		regulator-name = "PCIe_VCC";
 		regulator-always-on;
+		vin-supply = <&bperi>;
 		startup-delay-us = <100000>;
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
@@ -630,10 +631,12 @@
 
 		pinctrl_pcie_reg: pciereggrp {
 			fsl,pins = <
+				/* PCIe_VCC_EN */
 				MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
+				/* PCIe_VCC_OG */
+				MX6QDL_PAD_EIM_LBA__GPIO2_IO27 0x00000800
 			>;
 		};
-
 	};
 
 	pwm1 {
