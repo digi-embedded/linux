@@ -58,7 +58,7 @@
 		target = <&imx8mm_cm4>;
 		__overlay__ {
 			memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
-				<&rsc_table>;
+				<&rsc_table>, <&m_core_reserved>;
 			status = "okay";
 		};
 	};
