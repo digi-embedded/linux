@@ -960,7 +960,7 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	sdio_retune_release(bus->sdiodev->func1);
 
 	if (kso_loop_time > KSO_MAX_SEQ_TIME_NS)
-		brcmf_err("ERR: KSO=%d sequence took %luns > expected %uns try_cnt=%d\n"
+		brcmf_dbg(SDIO, "KSO=%d sequence took %luns > expected %uns try_cnt=%d\n"
 			  "err_cnt=%d rd_val=0x%x err=%d\n",
 			   on, kso_loop_time, KSO_MAX_SEQ_TIME_NS, try_cnt, err_cnt, rd_val, err);
 
