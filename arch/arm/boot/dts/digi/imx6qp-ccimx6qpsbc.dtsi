@@ -93,7 +93,7 @@
 		vin-supply = <&bperi>;
 		enable-active-low;
 	};
-
+	
 	/* Parallel display */
 	lcd: display@di0 {
 		compatible = "fsl,lcd";
@@ -819,6 +819,15 @@
 		};
 	};
 
+	usb_hub_pads: usb-hub-pads {
+		/* Group node (this is what pinctrl references) */
+		pinctrl_usb_hub_reset: usb_hub_resetgrp {
+			fsl,pins = <
+				MX6QDL_PAD_EIM_DA10__GPIO3_IO10 0x80000000
+			>;
+		};
+	};
+
 	usbotg {
 		pinctrl_usbotg: usbotg {
 			fsl,pins = <
@@ -971,8 +980,6 @@
 				MX6QDL_PAD_EIM_D26__GPIO3_IO26 0x80000000
 				/* BT_DISABLE_N */
 				MX6QDL_PAD_GPIO_9__GPIO1_IO09 0x80000000
-				/* USB_HUB_RESET_N */
-				MX6QDL_PAD_EIM_DA10__GPIO3_IO10 0x80000000
 				/* XBEE_ON / SLEEP_N  */
 				MX6QDL_PAD_EIM_D27__GPIO3_IO27 0x80000000
 				/* XBEE_RESET_N  */
@@ -1061,6 +1068,21 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart5>;
 	uart-has-rtscts;
+};
+
+&usbh1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usb_hub_reset>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	hub@1 {
+		compatible = "usb424,2514";       /* Microchip USB2514 */
+		vdd-supply = <&bperi>;
+		reg = <1>;                         /* upstream port number on root hub */
+		reset-gpios = <&gpio3 10 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
 };
 
 &usbotg {
