@@ -1759,9 +1759,16 @@ static void dwc2_gadget_start_next_request(struct dwc2_hsotg_ep *hs_ep)
 	}
 	if (!hs_ep->isochronous) {
 		if (hs_ep->index && !dir_in) {
-			/* No new request, stop xfer and NAK on this endpoint. */
-			dev_dbg(hsotg->dev, "No request, stop %s\n", hs_ep->ep.name);
-			dwc2_hsotg_ep_stop_xfr(hsotg, hs_ep);
+			u32 ctrl = dwc2_readl(hsotg, DOEPCTL(hs_ep->index));
+
+			if (ctrl & DXEPCTL_EPENA) {
+				/*
+				 * No new request for enabled endpoint, stop xfer and NAK
+				 * on this endpoint.
+				 */
+				dev_dbg(hsotg->dev, "No request, stop %s\n", hs_ep->ep.name);
+				dwc2_hsotg_ep_stop_xfr(hsotg, hs_ep);
+			}
 		}
 		return;
 	}
