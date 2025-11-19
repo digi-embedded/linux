@@ -1187,6 +1187,9 @@ static int brcmf_ops_sdio_probe(struct sdio_func *func,
 	brcmf_dbg(SDIO, "sdio vendor ID: 0x%04x\n", func->vendor);
 	brcmf_dbg(SDIO, "sdio device ID: 0x%04x\n", func->device);
 	brcmf_dbg(SDIO, "Function#: %d\n", func->num);
+	/* Consume func num 1 but dont do anything with it. */
+	if (func->num == SDIO_FUNC_1 || func->num == SDIO_FUNC_3)
+		return 0;
 
 	/* Set MMC_QUIRK_LENIENT_FN0 for this card */
 	func->card->quirks |= MMC_QUIRK_LENIENT_FN0;
@@ -1195,10 +1198,6 @@ static int brcmf_ops_sdio_probe(struct sdio_func *func,
 	 * Use func->cur_blksize by default
 	 */
 	func->card->quirks |= MMC_QUIRK_BLKSZ_FOR_BYTE_MODE;
-
-	/* Consume func num 1 but dont do anything with it. */
-	if (func->num == SDIO_FUNC_1 || func->num == SDIO_FUNC_3)
-		return 0;
 
 	/* Ignore anything but func 2 */
 	if (func->num != SDIO_FUNC_2)
