@@ -756,21 +756,27 @@ void brcmf_rx_event(struct device *dev, struct sk_buff *skb)
 
 void brcmf_txfinalize(struct brcmf_if *ifp, struct sk_buff *txp, bool success)
 {
-	struct ethhdr *eh;
-	u16 type;
+	if (!txp) {
+		if (!success && ifp && ifp->ndev)
+			ifp->ndev->stats.tx_errors++;
+		return;
+	}
 
 	if (!ifp) {
 		brcmu_pkt_buf_free_skb(txp);
 		return;
 	}
 
-	eh = (struct ethhdr *)(txp->data);
-	type = ntohs(eh->h_proto);
+	if (txp->data) {
+		struct ethhdr *eh = (struct ethhdr *)(txp->data);
+		u16 type = ntohs(eh->h_proto);
 
-	if (type == ETH_P_PAE) {
-		atomic_dec(&ifp->pend_8021x_cnt);
-		if (waitqueue_active(&ifp->pend_8021x_wait))
-			wake_up(&ifp->pend_8021x_wait);
+		if (type == ETH_P_PAE) {
+			atomic_dec(&ifp->pend_8021x_cnt);
+			/* Adding comment to avoid WARNING */
+			if (waitqueue_active(&ifp->pend_8021x_wait))
+				wake_up(&ifp->pend_8021x_wait);
+		}
 	}
 
 	if (!success && ifp->ndev)
