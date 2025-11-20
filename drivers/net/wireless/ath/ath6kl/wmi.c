@@ -2005,7 +2005,11 @@ static int ath6kl_wmi_startscan_cmd(struct wmi *wmi, u8 if_idx,
 	if (num_chan > WMI_MAX_CHANNELS)
 		return -EINVAL;
 
-	skb = ath6kl_wmi_get_new_buf(struct_size(sc, ch_list, num_chan));
+	/* Reserve at least one channel entry: num_chan == 0 with a
+	 * zero-sized ch_list breaks older AR6233 devices with scan timeouts.
+	 * This matches the previous ch_list[1] minimum size.
+	 */
+	skb = ath6kl_wmi_get_new_buf(struct_size(sc, ch_list, num_chan ? num_chan : 1));
 	if (!skb)
 		return -ENOMEM;
 
@@ -2061,7 +2065,11 @@ int ath6kl_wmi_beginscan_cmd(struct wmi *wmi, u8 if_idx,
 	if (num_chan > WMI_MAX_CHANNELS)
 		return -EINVAL;
 
-	skb = ath6kl_wmi_get_new_buf(struct_size(sc, ch_list, num_chan));
+	/* Reserve at least one channel entry: num_chan == 0 with a
+	 * zero-sized ch_list breaks older AR6233 devices with scan timeouts.
+	 * This matches the previous ch_list[1] minimum size.
+	 */
+	skb = ath6kl_wmi_get_new_buf(struct_size(sc, ch_list, num_chan ? num_chan : 1));
 	if (!skb)
 		return -ENOMEM;
 
