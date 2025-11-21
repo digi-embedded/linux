@@ -83,8 +83,7 @@
 		regulator-name = "can1-stby";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-		gpio = <&gpio1 11 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
+		gpio = <&gpio1 11 GPIO_ACTIVE_LOW>;
 		vin-supply = <&reg_5v_dvk>;
 	};
 
@@ -95,8 +94,7 @@
 		regulator-name = "can2-stby";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-		gpio = <&gpio1 13 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
+		gpio = <&gpio1 13 GPIO_ACTIVE_LOW>;
 		vin-supply = <&reg_5v_dvk>;
 	};
 
