@@ -290,6 +290,36 @@ static inline void __reg_clear(struct device *dev, void __iomem *base, u32 reg,
 	__reg_write(dev, base, reg, readl_relaxed(base + reg) & ~mask);
 }
 
+/* Entities always available */
+#define ID_INPUT 0
+#define ID_DUMP_BYTEPROC 1
+#define ID_DUMP_CAPTURE 2
+
+/* Entities only available on MP2x */
+#define	ID_MAIN_ISP 3
+#define	ID_MAIN_POSTPROC 4
+#define	ID_MAIN_CAPTURE	5
+#define	ID_AUX_POSTPROC 6
+#define	ID_AUX_CAPTURE 7
+#define	ID_ISP_STAT_CAPTURE 8
+#define	ID_ISP_PARAMS_OUTPUT 9
+#define	ID_TPG 10
+
+static inline bool dcmipp_is_input_csi(struct dcmipp_device *dcmipp)
+{
+	/* Only valid for DCMIPP having CSI input */
+	if (!dcmipp->pipe_cfg->has_csi2)
+		return false;
+
+	/* Check if input is connected to a TPG */
+	if (dcmipp->pipe_cfg->has_tpg &&
+	    media_pad_remote_pad_first(&dcmipp->entity[ID_INPUT]->pads[0]) ==
+	    &dcmipp->entity[ID_TPG]->pads[0])
+		return false;
+
+	return (dcmipp->entity[ID_INPUT]->bus_type == V4L2_MBUS_CSI2_DPHY);
+}
+
 /* DCMIPP subdev init / release entry points */
 struct dcmipp_ent_device *dcmipp_tpg_ent_init(const char *entity_name,
 					      struct dcmipp_device *dcmipp);

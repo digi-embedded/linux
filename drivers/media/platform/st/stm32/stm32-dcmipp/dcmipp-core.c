@@ -64,10 +64,6 @@ static const struct dcmipp_ent_config stm32mp13_ent_config[] = {
 	},
 };
 
-#define ID_INPUT 0
-#define ID_DUMP_BYTEPROC 1
-#define ID_DUMP_CAPTURE 2
-
 static const struct dcmipp_ent_link stm32mp13_ent_links[] = {
 	DCMIPP_ENT_LINK(ID_INPUT, 1, ID_DUMP_BYTEPROC, 0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
@@ -85,14 +81,6 @@ static const struct dcmipp_pipeline_config stm32mp13_pipe_cfg = {
 	.pipe_nb	= 1
 };
 
-#define	ID_MAIN_ISP 3
-#define	ID_MAIN_POSTPROC 4
-#define	ID_MAIN_CAPTURE	5
-#define	ID_AUX_POSTPROC 6
-#define	ID_AUX_CAPTURE 7
-#define	ID_ISP_STAT_CAPTURE 8
-#define	ID_ISP_PARAMS_OUTPUT 9
-#define	ID_TPG 10
 static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
 	{
 		.name = "dcmipp_input",
