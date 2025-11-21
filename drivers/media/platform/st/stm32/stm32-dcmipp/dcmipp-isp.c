@@ -281,6 +281,14 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 		else
 			opp_pad_fmt->code = MEDIA_BUS_FMT_RGB888_1X24;
 
+		/* Need to consider ISP output as RGB in case of CSI Yxx input */
+		if (dcmipp_is_input_csi(isp->ved.dcmipp) &&
+		    (fmt->format.code == MEDIA_BUS_FMT_Y8_1X8 ||
+		     fmt->format.code == MEDIA_BUS_FMT_Y10_1X10 ||
+		     fmt->format.code == MEDIA_BUS_FMT_Y12_1X12 ||
+		     fmt->format.code == MEDIA_BUS_FMT_Y14_1X14))
+			opp_pad_fmt->code = MEDIA_BUS_FMT_RGB888_1X24;
+
 		crop->top = 0;
 		crop->left = 0;
 		crop->width = fmt->format.width;
@@ -305,6 +313,15 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 			fmt->format.code = MEDIA_BUS_FMT_YUV8_1X24;
 		else
 			fmt->format.code = MEDIA_BUS_FMT_RGB888_1X24;
+
+		/* Need to consider ISP output as RGB in case of CSI Yxx input */
+		if (dcmipp_is_input_csi(isp->ved.dcmipp) &&
+		    (opp_pad_fmt->code == MEDIA_BUS_FMT_Y8_1X8 ||
+		     opp_pad_fmt->code == MEDIA_BUS_FMT_Y10_1X10 ||
+		     opp_pad_fmt->code == MEDIA_BUS_FMT_Y12_1X12 ||
+		     opp_pad_fmt->code == MEDIA_BUS_FMT_Y14_1X14))
+			fmt->format.code = MEDIA_BUS_FMT_RGB888_1X24;
+
 		if (compose->width && compose->height) {
 			fmt->format.width = compose->width;
 			fmt->format.height = compose->height;
