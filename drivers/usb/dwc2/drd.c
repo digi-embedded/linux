@@ -185,6 +185,11 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 			role = USB_ROLE_DEVICE;
 	}
 
+	if (hsotg->current_role == role) {
+		spin_unlock_irqrestore(&hsotg->lock, flags);
+		goto skip;
+	}
+
 	if ((IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) ||
 	     IS_ENABLED(CONFIG_USB_DWC2_DUAL_ROLE)) &&
 	     dwc2_is_device_mode(hsotg) &&
@@ -215,12 +220,14 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 		}
 	}
 
+	hsotg->current_role = role;
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 
 	if (!already && hsotg->dr_mode == USB_DR_MODE_OTG)
 		/* This will raise a Connector ID Status Change Interrupt */
 		dwc2_force_mode(hsotg, role == USB_ROLE_HOST);
 
+skip:
 	if (!hsotg->ll_hw_enabled && hsotg->clk)
 		clk_disable_unprepare(hsotg->clk);
 
