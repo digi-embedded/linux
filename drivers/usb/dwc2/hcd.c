@@ -4392,7 +4392,6 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)
 		 * clock gating is used to save power.
 		 */
 		if (!hsotg->params.no_clock_gating) {
-			dwc2_disable_global_interrupts(hsotg);
 			dwc2_host_enter_clock_gating(hsotg);
 
 			/* After entering suspend, hardware is not accessible */
