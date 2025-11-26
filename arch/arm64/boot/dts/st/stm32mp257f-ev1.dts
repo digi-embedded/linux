@@ -62,6 +62,11 @@
 		};
 	};
 
+	clock_critical: clock_critical {
+		compatible = "st,stm32-hog";
+		clocks = <&rcc CK_LPTIM4_AM>;
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 
