@@ -988,7 +988,8 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 		dwc2->phy_off_for_suspend = true;
 	}
 
-	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+	/* If HW has been kept enabled for wakeup, enable wake irq */
+	if (dwc2->ll_hw_enabled && !dwc2->phy_off_for_suspend)
 		enable_irq_wake(dwc2->irq);
 
 	return ret;
@@ -1000,7 +1001,7 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 	bool ll_hw_enabled = dwc2->ll_hw_enabled;
 	int ret = 0;
 
-	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+	if (dwc2->ll_hw_enabled && !dwc2->phy_off_for_suspend)
 		disable_irq_wake(dwc2->irq);
 
 	if (!ll_hw_enabled) {
