@@ -5732,17 +5732,13 @@ bool dwc2_host_can_poweroff_phy(struct dwc2_hsotg *dwc2)
 	if (dwc2_is_device_mode(dwc2) || dwc2->dr_mode == USB_DR_MODE_PERIPHERAL)
 		return false;
 
-	/* If the controller isn't allowed to wakeup then we can power off. */
-	if (!device_may_wakeup(dwc2->dev))
-		return true;
-
 	root_hub = dwc2_hsotg_to_hcd(dwc2)->self.root_hub;
 
 	/*
-	 * We don't want to power off the PHY if something under the
-	 * root hub has wakeup enabled.
+	 * If the controller is allowed to wakeup or if something under the root hub has wakeup
+	 * enabled, then we don't want to power off the PHY.
 	 */
-	if (usb_wakeup_enabled_descendants(root_hub))
+	if (device_may_wakeup(dwc2->dev) || usb_wakeup_enabled_descendants(root_hub))
 		return false;
 
 	/* No reason to keep the PHY powered, so allow poweroff */
