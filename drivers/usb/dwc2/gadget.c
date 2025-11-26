@@ -3293,6 +3293,18 @@ static void dwc2_gadget_enter_lp(struct dwc2_hsotg *hsotg)
 	}
 }
 
+static void dwc2_gadget_enum_timeout(struct work_struct *work)
+{
+	struct dwc2_hsotg *hsotg = container_of(work, struct dwc2_hsotg, dw_enumtimeout.work);
+	unsigned long flags;
+
+	dev_dbg(hsotg->dev, "%s enumeration timeout\n",  __func__);
+
+	spin_lock_irqsave(&hsotg->lock, flags);
+	dwc2_gadget_enter_lp(hsotg);
+	spin_unlock_irqrestore(&hsotg->lock, flags);
+}
+
 /**
  * dwc2_hsotg_irq_enumdone - Handle EnumDone interrupt (enumeration done)
  * @hsotg: The device state.
@@ -3723,9 +3735,14 @@ void dwc2_hsotg_core_disconnect(struct dwc2_hsotg *hsotg)
 
 void dwc2_hsotg_core_connect(struct dwc2_hsotg *hsotg)
 {
-	/* remove the soft-disconnect and let's go */
-	if (!hsotg->role_sw || (dwc2_readl(hsotg, GOTGCTL) & GOTGCTL_BSESVLD))
+	if (!hsotg->role_sw || (dwc2_readl(hsotg, GOTGCTL) & GOTGCTL_BSESVLD)) {
+		/* remove the soft-disconnect and let's go */
 		dwc2_clear_bit(hsotg, DCTL, DCTL_SFTDISCON);
+	} else {
+		/* Delayed power saving, if not connected: role_sw can exit from lp later */
+		queue_delayed_work(hsotg->wq_gadget, &hsotg->dw_enumtimeout,
+				   msecs_to_jiffies(2000));
+	}
 }
 
 /**
@@ -3897,6 +3914,8 @@ irq_retry:
 
 	if (gintsts & GINTSTS_ENUMDONE) {
 		dwc2_writel(hsotg, GINTSTS_ENUMDONE, GINTSTS);
+
+		cancel_delayed_work(&hsotg->dw_enumtimeout);
 
 		dwc2_hsotg_irq_enumdone(hsotg);
 	}
@@ -5303,6 +5322,7 @@ int dwc2_gadget_init(struct dwc2_hsotg *hsotg)
 	}
 	INIT_WORK(&hsotg->wf_gadget, dwc2_gadget_remote_wkup_change);
 	INIT_DELAYED_WORK(&hsotg->dw_gsetup, dwc2_gadget_setup_timeout);
+	INIT_DELAYED_WORK(&hsotg->dw_enumtimeout, dwc2_gadget_enum_timeout);
 
 	/* setup endpoint information */
 

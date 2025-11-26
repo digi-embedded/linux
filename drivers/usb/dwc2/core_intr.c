@@ -554,6 +554,15 @@ static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 		if (!dwc2_is_device_connected(hsotg)) {
 			dev_dbg(hsotg->dev,
 				"ignore suspend request before enumeration\n");
+			/*
+			 * Connect timing: timeout to put the controller in low power, in
+			 * case the enumeration doesn't complete. Typical case is to start
+			 * the gadget driver, without a cable plugged. Still prevent to
+			 * suspend during enumeration process.
+			 */
+			if (hsotg->wq_gadget)
+				queue_delayed_work(hsotg->wq_gadget, &hsotg->dw_enumtimeout,
+						   msecs_to_jiffies(2000));
 			return;
 		}
 		if (dsts & DSTS_SUSPSTS) {
