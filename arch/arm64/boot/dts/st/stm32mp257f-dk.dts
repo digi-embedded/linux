@@ -55,6 +55,11 @@
 		};
 	};
 
+	clock_critical: clock_critical {
+		compatible = "st,stm32-hog";
+		clocks = <&rcc CK_LPTIM4_AM>;
+	};
+
 	dmic0: dmic-0 {
 		compatible = "dmic-codec";
 		#sound-dai-cells = <1>;
