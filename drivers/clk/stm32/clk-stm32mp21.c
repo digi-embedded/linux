@@ -4,6 +4,7 @@
  * Author: Gabriel Fernandez <gabriel.fernandez@foss.st.com> for STMicroelectronics.
  */
 
+#include <linux/bitfield.h>
 #include <linux/bus/stm32_firewall_device.h>
 #include <linux/clk.h>
 #include <linux/of_address.h>
@@ -207,7 +208,6 @@ static const struct stm32_mux_cfg stm32mp21_muxes[MUX_NB] = {
 enum enum_gate_cfg {
 	GATE_ADC1,
 	GATE_ADC2,
-	GATE_CCB,
 	GATE_CRC,
 	GATE_CRYP1,
 	GATE_CRYP2,
@@ -363,7 +363,6 @@ static const struct stm32_gate_cfg stm32mp21_gates[GATE_NB] = {
 	GATE_CFG(GATE_CRC,		RCC_CRCCFGR,		1,	0),
 	GATE_CFG(GATE_CRYP1,		RCC_CRYP1CFGR,		1,	0),
 	GATE_CFG(GATE_CRYP2,		RCC_CRYP2CFGR,		1,	0),
-	GATE_CFG(GATE_CCB,		RCC_CCBCFGR,		1,	0),
 	GATE_CFG(GATE_CSI,		RCC_CSICFGR,		1,	0),
 	GATE_CFG(GATE_DCMIPP,		RCC_DCMIPPCFGR,		1,	0),
 	GATE_CFG(GATE_DCMIPSSI,		RCC_DCMIPSSICFGR,	1,	0),
@@ -630,11 +629,6 @@ static struct clk_stm32_gate ck_icn_p_cryp2 = {
 	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_cryp2", ICN_LS_MCU, &clk_stm32_gate_ops, 0),
 };
 
-static struct clk_stm32_gate ck_icn_p_ccb = {
-	.gate_id = GATE_CCB,
-	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_ccb", ICN_LS_MCU, &clk_stm32_gate_ops, 0),
-};
-
 /* DBG & TRACE*/
 /* Trace and debug clocks are managed by SCMI */
 
@@ -802,7 +796,7 @@ static struct clk_stm32_gate ck_icn_p_i3c2 = {
 
 static struct clk_stm32_gate ck_icn_p_i3c3 = {
 	.gate_id = GATE_I3C3,
-	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_i3c3", ICN_APB1, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_i3c3", ICN_APB5, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_ker_i3c1 = {
@@ -1460,7 +1454,6 @@ static const struct clock_config stm32mp21_clock_cfg[] = {
 	STM32_GATE_CFG(CK_BUS_RNG2, ck_icn_p_rng2, SEC_RIFSC(93)),
 	STM32_GATE_CFG(CK_BUS_CRYP1, ck_icn_p_cryp1, SEC_RIFSC(98)),
 	STM32_GATE_CFG(CK_BUS_CRYP2, ck_icn_p_cryp2, SEC_RIFSC(99)),
-	STM32_GATE_CFG(CK_BUS_CCB, ck_icn_p_ccb, SEC_RIFSC(91)),
 	STM32_GATE_CFG(CK_BUS_SAES, ck_icn_p_saes, SEC_RIFSC(95)),
 	STM32_GATE_CFG(CK_BUS_PKA, ck_icn_p_pka, SEC_RIFSC(94)),
 	STM32_GATE_CFG(CK_BUS_LPUART1, ck_icn_p_lpuart1, SEC_RIFSC(40)),
@@ -1472,7 +1465,7 @@ static const struct clock_config stm32mp21_clock_cfg[] = {
 	STM32_GATE_CFG(CK_BUS_SDMMC3, ck_icn_m_sdmmc3, SEC_RIFSC(78)),
 	STM32_GATE_CFG(CK_BUS_USBHOHCI, ck_icn_m_usbhohci, SEC_RIFSC(63)),
 	STM32_GATE_CFG(CK_BUS_USBHEHCI, ck_icn_m_usbhehci, SEC_RIFSC(63)),
-	STM32_GATE_CFG(CK_BUS_OTG, ck_icn_m_otg, SEC_RIFSC(63)),
+	STM32_GATE_CFG(CK_BUS_OTG, ck_icn_m_otg, SEC_RIFSC(66)),
 	STM32_GATE_CFG(CK_BUS_TIM2, ck_icn_p_tim2, SEC_RIFSC(1)),
 	STM32_GATE_CFG(CK_BUS_TIM3, ck_icn_p_tim3, SEC_RIFSC(2)),
 	STM32_GATE_CFG(CK_BUS_TIM4, ck_icn_p_tim4, SEC_RIFSC(3)),
@@ -1516,18 +1509,18 @@ static const struct clock_config stm32mp21_clock_cfg[] = {
 	STM32_GATE_CFG(CK_BUS_SPI4, ck_icn_p_spi4, SEC_RIFSC(25)),
 	STM32_GATE_CFG(CK_BUS_SPI5, ck_icn_p_spi5, SEC_RIFSC(26)),
 	STM32_GATE_CFG(CK_BUS_SPI6, ck_icn_p_spi6, SEC_RIFSC(27)),
-	STM32_GATE_CFG(CK_BUS_IWDG1, ck_icn_p_iwdg1, SEC_RIFSC(98)),
-	STM32_GATE_CFG(CK_BUS_IWDG2, ck_icn_p_iwdg2, SEC_RIFSC(99)),
-	STM32_GATE_CFG(CK_BUS_IWDG3, ck_icn_p_iwdg3, SEC_RIFSC(100)),
-	STM32_GATE_CFG(CK_BUS_IWDG4, ck_icn_p_iwdg4, SEC_RIFSC(101)),
-	STM32_GATE_CFG(CK_BUS_WWDG1, ck_icn_p_wwdg1, SEC_RIFSC(103)),
+	STM32_GATE_CFG(CK_BUS_IWDG1, ck_icn_p_iwdg1, SEC_RIFSC(100)),
+	STM32_GATE_CFG(CK_BUS_IWDG2, ck_icn_p_iwdg2, SEC_RIFSC(101)),
+	STM32_GATE_CFG(CK_BUS_IWDG3, ck_icn_p_iwdg3, SEC_RIFSC(102)),
+	STM32_GATE_CFG(CK_BUS_IWDG4, ck_icn_p_iwdg4, SEC_RIFSC(103)),
+	STM32_GATE_CFG(CK_BUS_WWDG1, ck_icn_p_wwdg1, SEC_RIFSC(104)),
 	STM32_GATE_CFG(CK_BUS_VREF, ck_icn_p_vref, SEC_RIFSC(106)),
 	STM32_GATE_CFG(CK_BUS_SERC, ck_icn_p_serc, SEC_RIFSC(110)),
 	STM32_GATE_CFG(CK_BUS_HDP, ck_icn_p_hdp, SEC_RIFSC(57)),
 	STM32_GATE_CFG(CK_BUS_LTDC, ck_icn_p_ltdc, SEC_RIFSC(80)),
 	STM32_GATE_CFG(CK_BUS_CSI, ck_icn_p_csi, SEC_RIFSC(86)),
 	STM32_GATE_CFG(CK_BUS_DCMIPP, ck_icn_p_dcmipp, SEC_RIFSC(87)),
-	STM32_GATE_CFG(CK_BUS_DCMIPSSI, ck_icn_p_dcmipssi, SEC_RIFSC(87)),
+	STM32_GATE_CFG(CK_BUS_DCMIPSSI, ck_icn_p_dcmipssi, SEC_RIFSC(88)),
 	STM32_GATE_CFG(CK_BUS_DDRPERFM, ck_icn_p_ddrperfm, SEC_RIFSC(67)),
 	STM32_GATE_CFG(CK_KER_TIM2, ck_ker_tim2, SEC_RIFSC(1)),
 	STM32_GATE_CFG(CK_KER_TIM3, ck_ker_tim3, SEC_RIFSC(2)),
@@ -1600,7 +1593,7 @@ static const struct clock_config stm32mp21_clock_cfg[] = {
 	STM32_COMPOSITE_CFG(CK_KER_ADC1, ck_ker_adc1, SEC_RIFSC(58)),
 	STM32_COMPOSITE_CFG(CK_KER_ADC2, ck_ker_adc2, SEC_RIFSC(59)),
 	STM32_COMPOSITE_CFG(CK_KER_USB2PHY1, ck_ker_usb2phy1, SEC_RIFSC(63)),
-	STM32_COMPOSITE_CFG(CK_KER_USB2PHY2EN, ck_ker_usb2phy2_en, SEC_RIFSC(63)),
+	STM32_COMPOSITE_CFG(CK_KER_USB2PHY2EN, ck_ker_usb2phy2_en, SEC_RIFSC(66)),
 	STM32_COMPOSITE_CFG(CK_KER_DTS, ck_ker_dts, SEC_RIFSC(107)),
 	STM32_GATE_CFG(CK_KER_LTDC, ck_ker_ltdc, SEC_RIFSC(80)),
 };
@@ -1843,7 +1836,7 @@ static unsigned long clk_get_pll_fvco(struct clk_stm32_clock_data *data, u32 off
 	void __iomem *pllxcfgr1 = data->base + offset_base;
 	void __iomem *pllxcfgr2 = pllxcfgr1 + RCC_OFFSET_PLLXCFGR2;
 	void __iomem *pllxcfgr3 = pllxcfgr1 + RCC_OFFSET_PLLXCFGR3;
-	unsigned long fvco = 0UL;
+	u64 fvco;
 	u32 fracin, fbdiv, refdiv;
 
 	fracin = readl(pllxcfgr3) & RCC_PLLxCFGR3_FRACIN_MASK;
@@ -2228,7 +2221,6 @@ CS_GATE(ck_icn_p_rng1, ck_icn_ls_mcu, GATE_RNG1);
 CS_GATE(ck_icn_p_rng2, ck_icn_ls_mcu, GATE_RNG1);
 CS_GATE(ck_icn_p_cryp1, ck_icn_ls_mcu, GATE_CRYP1);
 CS_GATE(ck_icn_p_cryp2, ck_icn_ls_mcu, GATE_CRYP2);
-CS_GATE(ck_icn_p_ccb, ck_icn_ls_mcu, GATE_CCB);
 CS_GATE(ck_icn_p_saes, ck_icn_ls_mcu, GATE_SAES);
 CS_GATE(ck_icn_p_pka, ck_icn_ls_mcu, GATE_PKA);
 CS_GATE(ck_icn_p_gpioa, ck_icn_ls_mcu, GATE_GPIOA);
@@ -2284,10 +2276,10 @@ CS_GATE(ck_icn_p_uart4, ck_icn_apb1, GATE_UART4);
 CS_GATE(ck_icn_p_uart5, ck_icn_apb1, GATE_UART5);
 CS_GATE(ck_icn_p_i2c1, ck_icn_apb1, GATE_I2C1);
 CS_GATE(ck_icn_p_i2c2, ck_icn_apb1, GATE_I2C2);
-CS_GATE(ck_icn_p_i2c3, ck_icn_apb1, GATE_I2C3);
+CS_GATE(ck_icn_p_i2c3, ck_icn_apb5, GATE_I2C3);
 CS_GATE(ck_icn_p_i3c1, ck_icn_apb1, GATE_I3C1);
 CS_GATE(ck_icn_p_i3c2, ck_icn_apb1, GATE_I3C2);
-CS_GATE(ck_icn_p_i3c3, ck_icn_apb1, GATE_I3C3);
+CS_GATE(ck_icn_p_i3c3, ck_icn_apb5, GATE_I3C3);
 CS_GATE(ck_icn_p_tim1, ck_icn_apb2, GATE_TIM1);
 CS_GATE(ck_icn_p_tim8, ck_icn_apb2, GATE_TIM8);
 CS_GATE(ck_icn_p_tim15, ck_icn_apb2, GATE_TIM15);
@@ -2535,7 +2527,6 @@ static struct clk_summary *stm32mp21_clock_summary[] = {
 	CS_CLOCK(ck_icn_p_rng2),
 	CS_CLOCK(ck_icn_p_cryp1),
 	CS_CLOCK(ck_icn_p_cryp2),
-	CS_CLOCK(ck_icn_p_ccb),
 	CS_CLOCK(ck_icn_p_saes),
 	CS_CLOCK(ck_icn_p_pka),
 	CS_CLOCK(ck_icn_p_gpioa),

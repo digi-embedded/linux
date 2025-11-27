@@ -333,7 +333,7 @@ static inline int stm32_cryp_wait_input(struct stm32_cryp *cryp)
 	u32 status;
 
 	return readl_relaxed_poll_timeout_atomic(cryp->regs + cryp->caps->sr, status,
-			status & SR_IFNF, 1, 10);
+			status & SR_IFNF, 10, 100000);
 }
 
 static inline int stm32_cryp_wait_output(struct stm32_cryp *cryp)
@@ -341,7 +341,7 @@ static inline int stm32_cryp_wait_output(struct stm32_cryp *cryp)
 	u32 status;
 
 	return readl_relaxed_poll_timeout_atomic(cryp->regs + cryp->caps->sr, status,
-			status & SR_OFNE, 1, 10);
+			status & SR_OFNE, 10, 100000);
 }
 
 static inline void stm32_cryp_key_read_enable(struct stm32_cryp *cryp)
@@ -1972,7 +1972,8 @@ static int stm32_cryp_read_auth_tag(struct stm32_cryp *cryp)
 	cfg &= ~CR_DEC_NOT_ENC;
 	cfg |= CR_CRYPEN;
 
-	stm32_cryp_write(cryp, cryp->caps->cr, cfg);
+	/* Not relaxed: this ensures write completes before continuing */
+	writel(cfg, cryp->regs + cryp->caps->cr);
 
 	if (is_gcm(cryp)) {
 		/* GCM: write aad and payload size (in bits) */

@@ -45,14 +45,14 @@ struct stm32_firewall_controller {
 	struct list_head entry;
 	unsigned int type;
 	unsigned int max_entries;
-	u32 *risal_map_bases;
-	u32 nb_risal;
 
 	int (*grant_access)(struct stm32_firewall_controller *ctrl, u32 id);
 	void (*release_access)(struct stm32_firewall_controller *ctrl, u32 id);
 	int (*grant_memory_range_access)(struct stm32_firewall_controller *ctrl, phys_addr_t paddr,
 					 size_t size);
 };
+
+#if IS_ENABLED(CONFIG_STM32_FIREWALL)
 
 /**
  * stm32_firewall_controller_register - Register a firewall controller to the STM32 firewall
@@ -70,16 +70,18 @@ int stm32_firewall_controller_register(struct stm32_firewall_controller *firewal
  */
 void stm32_firewall_controller_unregister(struct stm32_firewall_controller *firewall_controller);
 
-/**
- * stm32_firewall_populate_bus - Populate device tree nodes that have a correct firewall
- *				 configuration. This is used at boot-time only, as a sanity check
- *				 between device tree and firewalls hardware configurations to
- *				 prevent a kernel crash when a device driver is not granted access
- *
- * @firewall_controller:	Firewall controller which nodes will be populated or not
- *
- * Returns 0 in case of success or appropriate errno code if error occurred.
- */
-int stm32_firewall_populate_bus(struct stm32_firewall_controller *firewall_controller);
+#else /* IS_ENABLED(CONFIG_STM32_FIREWALL) */
 
+static inline int
+stm32_firewall_controller_register(struct stm32_firewall_controller *firewall_controller)
+{
+	return -ENODEV;
+}
+
+static inline void
+stm32_firewall_controller_unregister(struct stm32_firewall_controller *firewall_controller)
+{
+}
+
+#endif/* IS_ENABLED(CONFIG_STM32_FIREWALL) */
 #endif /* _STM32_FIREWALL_H */

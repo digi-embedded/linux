@@ -556,22 +556,18 @@ static int lvds_pixel_clk_enable(struct clk_hw *hw)
 	struct drm_device *drm = lvds->lvds_bridge.dev;
 	struct lvds_phy_info *phy;
 	int ret;
-
-	if (!pm_runtime_active(lvds->dev)) {
-		ret = pm_runtime_resume_and_get(lvds->dev);
-		if (ret < 0) {
-			DRM_ERROR("Failed to enable clocks, cannot resume pm\n");
-			return ret;
-		}
-	}
+	u32 reg;
 
 	/* In case we are operating in dual link the second PHY is set before the primary PHY. */
 	if (lvds->secondary) {
 		phy = lvds->secondary;
+		reg = lvds_read(lvds, phy->base + phy->ofs.GCR);
 
 		/* Release LVDS PHY from reset mode */
-		lvds_set(lvds, phy->base + phy->ofs.GCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
-		lvds_pll_config(lvds, phy);
+		if (!(reg & (PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ))) {
+			lvds_set(lvds, phy->base + phy->ofs.GCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
+			lvds_pll_config(lvds, phy);
+		}
 
 		ret = lvds_pll_enable(lvds, phy);
 		if (ret) {
@@ -582,10 +578,13 @@ static int lvds_pixel_clk_enable(struct clk_hw *hw)
 
 	if (lvds->primary) {
 		phy = lvds->primary;
+		reg = lvds_read(lvds, phy->base + phy->ofs.GCR);
 
 		/* Release LVDS PHY from reset mode */
-		lvds_set(lvds, phy->base + phy->ofs.GCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
-		lvds_pll_config(lvds, phy);
+		if (!(reg & (PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ))) {
+			lvds_set(lvds, phy->base + phy->ofs.GCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
+			lvds_pll_config(lvds, phy);
+		}
 
 		ret = lvds_pll_enable(lvds, phy);
 		if (ret) {
@@ -625,8 +624,6 @@ static void lvds_pixel_clk_disable(struct clk_hw *hw)
 		lvds_clear(lvds, lvds->secondary->base + lvds->secondary->ofs.GCR,
 			   PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
 	}
-
-	pm_runtime_put(lvds->dev);
 }
 
 static unsigned long lvds_pixel_clk_recalc_rate(struct clk_hw *hw,
@@ -995,19 +992,32 @@ static void lvds_atomic_enable(struct drm_bridge *bridge,
 	struct drm_connector *connector;
 	int ret;
 
+	ret = regulator_enable(lvds->vdda18_supply);
+	if (ret) {
+		DRM_ERROR("Failed to enable regulator vdda18: %d\n", ret);
+		return;
+	}
+
+	ret = regulator_enable(lvds->vdd_supply);
+	if (ret) {
+		regulator_disable(lvds->vdda18_supply);
+		DRM_ERROR("Failed to enable regulator vdd: %d\n", ret);
+		return;
+	}
+
 	ret = pm_runtime_resume_and_get(lvds->dev);
 	if (ret < 0) {
 		DRM_ERROR("Failed to enable lvds, cannot resume pm\n");
-		return;
+		goto err;
 	}
 
 	connector = drm_atomic_get_new_connector_for_encoder(state, bridge->encoder);
 	if (!connector)
-		return;
+		goto err;
 
 	conn_state = drm_atomic_get_new_connector_state(state, connector);
 	if (!conn_state)
-		return;
+		goto err;
 
 	lvds_config_mode(lvds);
 
@@ -1021,6 +1031,11 @@ static void lvds_atomic_enable(struct drm_bridge *bridge,
 		drm_panel_prepare(lvds->panel);
 		drm_panel_enable(lvds->panel);
 	}
+
+	return;
+err:
+	regulator_disable(lvds->vdd_supply);
+	regulator_disable(lvds->vdda18_supply);
 }
 
 static void lvds_atomic_disable(struct drm_bridge *bridge,
@@ -1037,6 +1052,9 @@ static void lvds_atomic_disable(struct drm_bridge *bridge,
 	lvds_clear(lvds, LVDS_CR, CR_LVDSEN);
 
 	pm_runtime_put(lvds->dev);
+
+	regulator_disable(lvds->vdd_supply);
+	regulator_disable(lvds->vdda18_supply);
 }
 
 static const struct drm_bridge_funcs lvds_bridge_funcs = {
@@ -1053,10 +1071,7 @@ static int lvds_probe(struct platform_device *pdev)
 	struct device_node *port1, *port2, *remote;
 	struct device *dev = &pdev->dev;
 	struct reset_control *rstc;
-	struct lvds_phy_info *phy;
 	struct stm_lvds *lvds;
-	unsigned int pll_in_khz, bdiv, mdiv, ndiv;
-	int multiplier, rate;
 	int ret, dual_link;
 
 	dev_dbg(dev, "Probing LVDS driver...\n");
@@ -1201,38 +1216,6 @@ static int lvds_probe(struct platform_device *pdev)
 	drm_bridge_add(&lvds->lvds_bridge);
 	platform_set_drvdata(pdev, lvds);
 
-	/*
-	 * To obtain a continuous display after the probe,
-	 *  the clocks must remain activated
-	 */
-	if (device_property_read_bool(dev, "default-on")) {
-		ret = pm_runtime_resume_and_get(lvds->dev);
-		if (ret < 0) {
-			DRM_ERROR("Failed to probe lvds, cannot resume pm\n");
-			return ret;
-		}
-
-		if (lvds->primary) {
-			if (lvds_is_dual_link(lvds->link_type))
-				multiplier = 2;
-			else
-				multiplier = 1;
-
-			phy = lvds->primary;
-			pll_in_khz = clk_get_rate(lvds->pllref_clk) / 1000;
-
-			ndiv = lvds_read(lvds, phy->base + phy->ofs.PLLCR2) >> 16;
-			bdiv = lvds_read(lvds, phy->base + phy->ofs.PLLCR2) & 0xFFFF;
-			mdiv = lvds_read(lvds, phy->base + phy->ofs.PLLSDCR1);
-
-			/* X7 because for each pixel in 1 lane there is 7 bits
-			 * We want pixclk, not bitclk
-			 */
-			rate = pll_get_clkout_khz(pll_in_khz, bdiv, mdiv, ndiv);
-			lvds->pixel_clock_rate = (unsigned long) rate  * 1000 * multiplier / 7;
-		}
-	}
-
 	return 0;
 }
 
@@ -1256,8 +1239,6 @@ static int __maybe_unused lvds_runtime_suspend(struct device *dev)
 
 	clk_disable_unprepare(lvds->pllref_clk);
 	clk_disable_unprepare(lvds->pclk);
-	regulator_disable(lvds->vdd_supply);
-	regulator_disable(lvds->vdda18_supply);
 
 	return 0;
 }
@@ -1269,23 +1250,8 @@ static int __maybe_unused lvds_runtime_resume(struct device *dev)
 
 	DRM_DEBUG_DRIVER("\n");
 
-	ret = regulator_enable(lvds->vdda18_supply);
-	if (ret) {
-		DRM_ERROR("Failed to enable regulator vdda18: %d\n", ret);
-		return ret;
-	}
-
-	ret = regulator_enable(lvds->vdd_supply);
-	if (ret) {
-		regulator_disable(lvds->vdda18_supply);
-		DRM_ERROR("Failed to enable regulator vdd: %d\n", ret);
-		return ret;
-	}
-
 	ret = clk_prepare_enable(lvds->pclk);
 	if (ret) {
-		regulator_disable(lvds->vdd_supply);
-		regulator_disable(lvds->vdda18_supply);
 		DRM_ERROR("Failed to enable pclk: %d\n", ret);
 		return ret;
 	}
@@ -1293,8 +1259,6 @@ static int __maybe_unused lvds_runtime_resume(struct device *dev)
 	ret = clk_prepare_enable(lvds->pllref_clk);
 	if (ret) {
 		clk_disable_unprepare(lvds->pclk);
-		regulator_disable(lvds->vdd_supply);
-		regulator_disable(lvds->vdda18_supply);
 		DRM_ERROR("Failed to enable pllref_clk: %d\n", ret);
 	}
 

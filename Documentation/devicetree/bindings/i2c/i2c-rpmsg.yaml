@@ -21,12 +21,13 @@ properties:
     const: rpmsg,i2c-controller
 
   rpmsg,dev-id:
+    $ref: /schemas/types.yaml#/definitions/string
     description:
       Id name of the rpmsg_i2c device instance
 
 required:
   - compatible
-  - dev-id
+  - rpmsg,dev-id
 
 examples:
   - |

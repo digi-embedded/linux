@@ -45,6 +45,7 @@
 #define DCMIPP_P0FSCR	0x404
 #define DCMIPP_P1FSCR	0x804
 #define DCMIPP_P2FSCR	0xC04
+#define DCMIPP_P1FSCR_PIPEDIFF		BIT(18)
 #define DCMIPP_PxFSCR_DTMODE_MASK	GENMASK(17, 16)
 #define DCMIPP_PxFSCR_DTMODE_SHIFT	16
 #define DCMIPP_PxFSCR_DTMODE_DTIDA	0x00
@@ -268,9 +269,9 @@ static void dcmipp_inp_adjust_fmt(struct dcmipp_inp_device *inp,
 		fmt->code = fmt_default.code;
 
 	fmt->width = clamp_t(u32, fmt->width, DCMIPP_FRAME_MIN_WIDTH,
-			     DCMIPP_FRAME_MAX_WIDTH) & ~1;
+			     DCMIPP_FRAME_MAX_WIDTH);
 	fmt->height = clamp_t(u32, fmt->height, DCMIPP_FRAME_MIN_HEIGHT,
-			      DCMIPP_FRAME_MAX_HEIGHT) & ~1;
+			      DCMIPP_FRAME_MAX_HEIGHT);
 
 	if (fmt->field == V4L2_FIELD_ANY || fmt->field == V4L2_FIELD_ALTERNATE)
 		fmt->field = fmt_default.field;
@@ -393,8 +394,22 @@ static int dcmipp_inp_configure_parallel(struct dcmipp_inp_device *inp,
 	val |= vpix->prcr_format << DCMIPP_PRCR_FORMAT_SHIFT;
 
 	/* swap cycles */
-	if (vpix->prcr_swapcycles)
-		val |= DCMIPP_PRCR_SWAPCYCLES;
+	/*
+	 * PPCR SWAPYUV is not available on STM32MP13 so behavior regarding
+	 * to SWAPCYCLES should be reversed compared to other platforms for
+	 * YUV422 format
+	 */
+	if (of_device_is_compatible(inp->dev->of_node, "st,stm32mp13-dcmipp") &&
+	    (src_fmt->code == MEDIA_BUS_FMT_YUYV8_2X8 ||
+	     src_fmt->code == MEDIA_BUS_FMT_YVYU8_2X8 ||
+	     src_fmt->code == MEDIA_BUS_FMT_UYVY8_2X8 ||
+	     src_fmt->code == MEDIA_BUS_FMT_VYUY8_2X8)) {
+		if (!vpix->prcr_swapcycles)
+			val |= DCMIPP_PRCR_SWAPCYCLES;
+	} else {
+		if (vpix->prcr_swapcycles)
+			val |= DCMIPP_PRCR_SWAPCYCLES;
+	}
 
 	reg_write(inp, DCMIPP_PRCR, val);
 
@@ -461,14 +476,9 @@ static int dcmipp_inp_configure_csi_dt(struct dcmipp_inp_device *inp,
 
 static int dcmipp_inp_configure_csi(struct dcmipp_inp_device *inp)
 {
-	int i, pipe_nb, ret;
+	int i, ret;
 
-	if (of_device_is_compatible(inp->dev->of_node, "st,stm32mp25-dcmipp"))
-		pipe_nb = 3;
-	else
-		pipe_nb = 1;
-
-	for (i = 0; i < pipe_nb; i++) {
+	for (i = 0; i < inp->ved.dcmipp->pipe_cfg->pipe_nb; i++) {
 		ret = dcmipp_inp_configure_csi_dt(inp, i);
 		if (ret)
 			return ret;
@@ -508,6 +518,17 @@ static int dcmipp_inp_s_stream(struct v4l2_subdev *sd, int enable)
 			ret = dcmipp_inp_configure_csi(inp);
 		if (ret)
 			goto error_s_stream;
+
+		/*
+		 * Check if the Aux pipe source pad is connected / enabled
+		 * or not.  If enabled, it means that Aux pipe works alone
+		 * and not connected to Main pipe ISP
+		 */
+		if (inp->ved.ent->num_pads >= 3 &&
+		    !media_pad_remote_pad_first(&inp->ved.pads[3]))
+			reg_clear(inp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
+		else
+			reg_set(inp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
 
 		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 		if (ret < 0) {
@@ -575,8 +596,6 @@ void dcmipp_inp_ent_release(struct dcmipp_ent_device *ved)
 	mutex_destroy(&inp->lock);
 }
 
-#define DCMIPP_INP_SINK_PAD_NB_MP13	1
-#define DCMIPP_INP_SINK_PAD_NB_MP25	3
 struct dcmipp_ent_device *dcmipp_inp_ent_init(const char *entity_name,
 					      struct dcmipp_device *dcmipp)
 {
@@ -586,13 +605,9 @@ struct dcmipp_ent_device *dcmipp_inp_ent_init(const char *entity_name,
 		MEDIA_PAD_FL_SOURCE, MEDIA_PAD_FL_SOURCE,
 	};
 	struct device *dev = dcmipp->dev;
-	u16 pads_nb = DCMIPP_INP_SINK_PAD_NB_MP25 + 1;
+	u16 pads_nb = dcmipp->pipe_cfg->pipe_nb + 1;
 	int ret;
 
-	if (of_device_is_compatible(dev->of_node, "st,stm32mp13-dcmipp"))
-		pads_nb = DCMIPP_INP_SINK_PAD_NB_MP13 + 1;
-	else if (of_device_is_compatible(dev->of_node, "st,stm32mp25-dcmipp"))
-		pads_nb = DCMIPP_INP_SINK_PAD_NB_MP25 + 1;
 
 	/* Allocate the inp struct */
 	inp = kzalloc(sizeof(*inp), GFP_KERNEL);

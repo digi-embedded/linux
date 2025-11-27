@@ -44,9 +44,18 @@
 #define MDF_IS_INTERLEAVED_FILT_NOT_0(adc)	({ typeof(adc) x = (adc);\
 						MDF_IS_INTERLEAVED_FILT(x) && !MDF_IS_FILTER0(x); })
 
+#define STM32_MDF_ERR_SCK_FREQ BIT(1)
+#define STM32_MDF_ERR_MODE_RATIO BIT(2)
+#define STM32_MDF_ERR_DECIM_RATIO BIT(3)
+
 struct stm32_mdf_dev_data {
 	int type;
 	int (*init)(struct device *dev, struct iio_dev *indio_dev);
+};
+
+struct stm32_mdf_adc_chan {
+	const char *channel_name;
+	struct iio_backend *backend;
 };
 
 /*
@@ -57,7 +66,7 @@ struct stm32_mdf_dev_data {
  * @regmap: regmap pointer for register read/write
  * @node: pointer to filter node
  * @dma_chan: filter dma channel pointer
- * @backend: backend handles array
+ * @channels: pointer to channel descriptors array
  * @dev_data: mdf device data pointer
  * @sitf: pointer to serial interface feeding the filter
  * @completion: completion for conversion
@@ -93,7 +102,7 @@ struct stm32_mdf_adc {
 	struct regmap *regmap;
 	struct fwnode_handle *node;
 	struct dma_chan *dma_chan;
-	struct iio_backend **backend;
+	struct stm32_mdf_adc_chan *channels;
 	const struct stm32_mdf_dev_data *dev_data;
 	struct stm32_mdf_sitf *sitf;
 	struct completion completion;
@@ -679,11 +688,11 @@ static int stm32_mdf_adc_set_filters_config(struct iio_dev *indio_dev, unsigned 
 
 	if (gain_lin > 0) {
 		max *= gain_lin;
-		max /= 1000;
+		max = DIV_ROUND_CLOSEST_ULL(max, 1000);
 	}
 	if (gain_lin < 0) {
-		max /= -gain_lin;
-		max /= 10;
+		max = DIV_ROUND_CLOSEST_ULL(max, -gain_lin);
+		max = DIV_ROUND_CLOSEST_ULL(max,  10);
 	}
 
 	adc->dflt_max = max;
@@ -693,28 +702,63 @@ static int stm32_mdf_adc_set_filters_config(struct iio_dev *indio_dev, unsigned 
 	return stm32_mdf_adc_apply_filters_config(adc, scale);
 }
 
-static int stm32_mdf_adc_check_clock_config(struct stm32_mdf_adc *adc, unsigned long sck_freq)
+static int stm32_mdf_adc_check_clock_config(struct stm32_mdf_adc *adc, unsigned long *sck_freq)
 {
-	unsigned int ratio;
-	unsigned int decim_ratio;
+	unsigned long cck_expected_freq;
+	unsigned int ratio, cic_ratio;
+	int ret, error = 0;
 
-	ratio = DIV_ROUND_CLOSEST(adc->mdf->fproc, sck_freq);
-	decim_ratio = DIV_ROUND_CLOSEST(24, adc->decim_cic);
+	/*
+	 * The cck expected rate is set at probe from "clock-frequency" device tree property.
+	 * The serial interface clock sck (aka cck) is derived from MDF kernel clock frequency.
+	 * The kernel clock rate may have been changed by another consumer, or MDF dividers
+	 * may have been updated through clk_get_rate() call.
+	 * Ensure that kernel clock rate and MDF dividers, still provide the right sck/cck rate
+	 */
+	cck_expected_freq = stm32_mdf_core_get_cck(adc->mdf);
+	if (*sck_freq != cck_expected_freq) {
+		dev_dbg(adc->dev, "Wrong sck_freq [%lu]Hz. Expected [%lu]Hz.\n",
+			*sck_freq, cck_expected_freq);
+		error |= STM32_MDF_ERR_SCK_FREQ;
+	}
 
+	/*
+	 * Mode SPI:    check Fproc >= 4 * Fsck
+	 * Mode LF SPI: check Fproc >= 2 * Fsck
+	 */
+	ratio = DIV_ROUND_CLOSEST(adc->mdf->fproc, *sck_freq);
 	if ((adc->sitf->mode == STM32_MDF_MODE_SPI && ratio <= 4) ||
-	    (adc->sitf->mode == STM32_MDF_MODE_LF_SPI && ratio <= 2))
-		goto err;
+	    (adc->sitf->mode == STM32_MDF_MODE_LF_SPI && ratio <= 2)) {
+		dev_dbg(adc->dev, "Wrong Fproc/Fsck ratio [%d]. sitf mode [%d], RSFLT [%s]\n",
+			ratio, adc->sitf->mode, adc->rsflt_bypass ? "off" : "on");
+		error |= STM32_MDF_ERR_MODE_RATIO;
+	}
 
-	if (adc->rsflt_bypass && ratio <= decim_ratio)
-		goto err;
+	/* RSFLT enabled: check Fproc > 24 * Fsck / (MCICD+1) */
+	cic_ratio = DIV_ROUND_CLOSEST(24, adc->decim_cic);
+	if (!adc->rsflt_bypass && ratio <= cic_ratio)
+		error |= STM32_MDF_ERR_DECIM_RATIO;
+
+	/* If we found an error, try to restore clocks initial settings */
+	if (error) {
+		ret = stm32_mdf_core_restore_cck(adc->mdf);
+		if (ret < 0)
+			goto err;
+
+		*sck_freq = clk_get_rate(adc->sitf->sck);
+		if (!*sck_freq) {
+			ret = -EINVAL;
+			goto err;
+		}
+	}
 
 	return 0;
 
 err:
-	dev_err(adc->dev, "Wrong Fproc/Fsck ratio [%d] for sitf mode [%d] with RSFLT [%s]\n",
-		ratio, adc->sitf->mode, adc->rsflt_bypass ? "off" : "on");
+	dev_err(adc->dev, "Wrong clock configuration [0x%x]. Clock recovering returned [%d]\n",
+		error, ret);
 
-	return -EINVAL;
+	return ret;
 }
 
 static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample_freq, int lock)
@@ -723,7 +767,6 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 	struct device *dev = &indio_dev->dev;
 	unsigned int decim_ratio;
 	unsigned long delta, delta_ppm, sck_freq;
-	unsigned long cck_expected_freq;
 	int ret;
 
 	if (lock) {
@@ -748,25 +791,9 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 	if (!sample_freq)
 		sample_freq = sck_freq / MDF_DEFAULT_DECIM_RATIO;
 
-	/*
-	 * MDF may share its parent clock with SAI, so kernel clock rate may have been changed.
-	 * The set_rate ops is called implicitly through clk_get_rate() call, and MDF dividers
-	 * may have been updated to keep the expected rate on cck clock. Check if sitf clock
-	 * frequency is still the expected one. If not, try to restore the kernel clock rate
-	 * for audio use case.
-	 */
-	cck_expected_freq = stm32_mdf_core_get_cck(adc->mdf);
-	if (sck_freq != cck_expected_freq) {
-		ret = stm32_mdf_core_restore_cck(adc->mdf);
-		if (ret < 0)
-			goto err;
-
-		sck_freq = clk_get_rate(adc->sitf->sck);
-		if (!sck_freq) {
-			ret = -EINVAL;
-			goto err;
-		}
-	}
+	ret = stm32_mdf_adc_check_clock_config(adc, &sck_freq);
+	if (ret)
+		goto err;
 
 	decim_ratio = DIV_ROUND_CLOSEST(sck_freq, sample_freq);
 
@@ -779,6 +806,11 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 		dev_dbg(dev, "Sample rate deviation [%lu] ppm: [%lu] vs [%lu] Hz\n",
 			delta_ppm, sck_freq / decim_ratio, sample_freq);
 
+	/*
+	 * Convert settling time into a minimum number of output sample to discard before releasing
+	 * the data. This allows to drop the samples affected by the impulse response of the
+	 * filter and wait for stable data.
+	 */
 	adc->nbdis = DIV_ROUND_UP(adc->stu * sample_freq, 1000000);
 	if (adc->nbdis > MDF_DFLTCR_NBDIS_MAX) {
 		dev_warn(dev, "NBDIS [%u] too large. Force to [%lu]\n",
@@ -790,10 +822,6 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 	}
 
 	ret = stm32_mdf_adc_set_filters_config(indio_dev, decim_ratio);
-	if (ret < 0)
-		goto err;
-
-	ret = stm32_mdf_adc_check_clock_config(adc, sck_freq);
 	if (ret < 0)
 		goto err;
 
@@ -1010,17 +1038,15 @@ static int stm32_mdf_adc_postenable(struct iio_dev *indio_dev)
 	/* Reset adc buffer index */
 	adc->bufi = 0;
 
-	if (adc->backend) {
-		while (adc->backend[i]) {
-			ret = iio_backend_enable(adc->backend[i]);
-			if (ret < 0) {
-				while (--i > 0)
-					iio_backend_disable(adc->backend[i]);
+	while (adc->channels[i].backend && i < indio_dev->num_channels) {
+		ret = iio_backend_enable(adc->channels[i].backend);
+		if (ret < 0) {
+			while (--i > 0)
+				iio_backend_disable(adc->channels[i].backend);
 
-				return ret;
-			}
-			i++;
+			return ret;
 		}
+		i++;
 	}
 
 	ret = stm32_mdf_adc_start_mdf(indio_dev);
@@ -1061,11 +1087,9 @@ err_dma:
 	stm32_mdf_adc_stop_mdf(indio_dev);
 err_start:
 	i = 0;
-	if (adc->backend) {
-		while (adc->backend[i]) {
-			iio_backend_disable(adc->backend[i]);
-			i++;
-		}
+	while (adc->channels[i].backend && i < indio_dev->num_channels) {
+		iio_backend_disable(adc->channels[i].backend);
+		i++;
 	}
 
 	return ret;
@@ -1087,11 +1111,9 @@ static int stm32_mdf_adc_predisable(struct iio_dev *indio_dev)
 
 	stm32_mdf_adc_stop_mdf(indio_dev);
 
-	if (adc->backend) {
-		while (adc->backend[i]) {
-			iio_backend_disable(adc->backend[i]);
-			i++;
-		}
+	while (adc->channels[i].backend && i < indio_dev->num_channels) {
+		iio_backend_disable(adc->channels[i].backend);
+		i++;
 	}
 
 	return 0;
@@ -1111,7 +1133,7 @@ static ssize_t stm32_mdf_adc_audio_get_channels(struct iio_dev *indio_dev, uintp
 	if (MDF_IS_FILTER0(adc) && adc->mdf->nb_interleave)
 		sub_channels_nb = adc->mdf->nb_interleave;
 
-	return snprintf(buf, STM32_MDF_EXT_INFO_BUZ_SZ, "%u", sub_channels_nb);
+	return snprintf(buf, STM32_MDF_EXT_INFO_BUZ_SZ, "%u\n", sub_channels_nb);
 }
 
 /*
@@ -1166,6 +1188,7 @@ static int stm32_mdf_channel_parse_of(struct iio_dev *indio_dev, struct fwnode_h
 {
 	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
 	struct iio_backend *backend;
+	const char *label = fwnode_get_name(node);
 	int ret;
 	u32 stu = 0;
 
@@ -1175,22 +1198,42 @@ static int stm32_mdf_channel_parse_of(struct iio_dev *indio_dev, struct fwnode_h
 		return ret;
 	}
 
-	/* settling-time-us is optional */
-	if (fwnode_property_present(node, "settling-time-us")) {
-		ret = fwnode_property_read_u32(node, "settling-time-us", &stu);
+	if (fwnode_property_present(node, "label")) {
+		/* label is optional */
+		ret = fwnode_property_read_string(node, "label", &label);
 		if (ret < 0) {
-			dev_err(&indio_dev->dev, "Failed to read settling time: [%d]\n", ret);
+			dev_err(&indio_dev->dev,
+				" Error parsing 'label' for idx %d\n", ch->channel);
 			return ret;
 		}
 	}
-	adc->stu = stu;
+	adc->channels[ch->scan_index].channel_name = label;
+
+	/* settling-time-us is optional */
+	if (fwnode_property_present(node, "settling-time-us")) {
+		/*
+		 * The settling time is relevant only for the first channel. In case of interleaved
+		 * channels, the settling time of the first configured channel, is applied to other
+		 * channels.
+		 */
+		if (!ch->scan_index) {
+			ret = fwnode_property_read_u32(node, "settling-time-us", &stu);
+			if (ret < 0) {
+				dev_err(&indio_dev->dev, "Failed to read settling time: [%d]\n",
+					ret);
+				return ret;
+			}
+
+			adc->stu = stu;
+		}
+	}
 
 	if (adc->dev_data->type == STM32_MDF_IIO) {
 		backend = devm_iio_backend_fwnode_get(&indio_dev->dev, NULL, node);
 		if (IS_ERR(backend))
 			return dev_err_probe(&indio_dev->dev, PTR_ERR(backend),
 					     "Failed to get backend\n");
-		adc->backend[ch->scan_index] = backend;
+		adc->channels[ch->scan_index].backend = backend;
 	}
 
 	return ret;
@@ -1206,22 +1249,20 @@ static int stm32_mdf_adc_chan_init_one(struct iio_dev *indio_dev, struct fwnode_
 	ch->indexed = 1;
 	ch->scan_index = idx;
 
-	if (adc->dev_data->type == STM32_MDF_IIO) {
-		ret = stm32_mdf_channel_parse_of(indio_dev, node, ch);
-		if (ret < 0) {
-			dev_err(&indio_dev->dev, "Failed to parse channel [%d]\n", idx);
-			return ret;
-		}
+	ret = stm32_mdf_channel_parse_of(indio_dev, node, ch);
+	if (ret < 0) {
+		dev_err(&indio_dev->dev, "Failed to parse channel [%d]\n", idx);
+		return ret;
+	}
 
+	if (adc->dev_data->type == STM32_MDF_IIO) {
 		ch->info_mask_separate = BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE) |
 					 BIT(IIO_CHAN_INFO_OFFSET);
 		ch->scan_type.shift = 8;
 	}
 
-	if (adc->dev_data->type == STM32_MDF_AUDIO) {
+	if (adc->dev_data->type == STM32_MDF_AUDIO)
 		ch->ext_info = stm32_mdf_adc_audio_ext_info;
-		ch->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
-	}
 
 	ch->info_mask_shared_by_all = BIT(IIO_CHAN_INFO_SAMP_FREQ);
 	ch->scan_type.sign = 's';
@@ -1237,21 +1278,21 @@ static int stm32_mdf_adc_chan_init(struct iio_dev *indio_dev, struct iio_chan_sp
 	int chan_idx = 0, ret;
 
 	device_for_each_child_node(indio_dev->dev.parent, child) {
+		/* Skip the child nodes with a compatible. (e.g. DAI node for audio) */
+		if (fwnode_property_present(child, "compatible"))
+			continue;
+
 		ret = stm32_mdf_adc_chan_init_one(indio_dev, child, &channels[chan_idx], chan_idx);
 		if (ret < 0) {
-			dev_err(&indio_dev->dev, "Channels [%d] init failed\n", chan_idx);
-			goto err;
+			fwnode_handle_put(child);
+			return dev_err_probe(&indio_dev->dev, ret, "Channels [%d] init failed\n",
+					     chan_idx);
 		}
 
 		chan_idx++;
 	}
 
 	return chan_idx;
-
-err:
-	fwnode_handle_put(child);
-
-	return ret;
 }
 
 static int stm32_mdf_set_watermark(struct iio_dev *indio_dev, unsigned int val)
@@ -1362,8 +1403,8 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 		if (ret)
 			return ret;
 
-		if (adc->backend) {
-			ret = iio_backend_enable(adc->backend[idx]);
+		if (adc->channels[idx].backend) {
+			ret = iio_backend_enable(adc->channels[idx].backend);
 			if (ret)
 				goto err_release_direct_mode;
 		}
@@ -1372,8 +1413,8 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 		if (ret)
 			goto err_backend_disable;
 
-		if (adc->backend)
-			iio_backend_disable(adc->backend[idx]);
+		if (adc->channels[idx].backend)
+			iio_backend_disable(adc->channels[idx].backend);
 
 		iio_device_release_direct_mode(indio_dev);
 
@@ -1394,8 +1435,9 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 		 * max_dflt = D^N * gain_lin * gain_rsflt
 		 * scale = Vref * max / dflt_max
 		 */
-		if (adc->backend) {
-			ret = iio_backend_read_scale(adc->backend[idx], chan, &scale, NULL);
+		if (adc->channels[idx].backend) {
+			ret = iio_backend_read_scale(adc->channels[idx].backend, chan,
+						     &scale, NULL);
 			if (ret < 0)
 				return ret;
 
@@ -1411,8 +1453,9 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 		return IIO_VAL_FRACTIONAL_LOG2;
 
 	case IIO_CHAN_INFO_OFFSET:
-		if (adc->backend) {
-			ret = iio_backend_read_offset(adc->backend[idx], chan, &offset, NULL);
+		if (adc->channels[idx].backend) {
+			ret = iio_backend_read_offset(adc->channels[idx].backend, chan,
+						      &offset, NULL);
 			if (ret < 0)
 				return ret;
 
@@ -1429,24 +1472,35 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 	return -EINVAL;
 
 err_backend_disable:
-	if (adc->backend)
-		iio_backend_disable(adc->backend[idx]);
+	if (adc->channels[idx].backend)
+		iio_backend_disable(adc->channels[idx].backend);
 err_release_direct_mode:
 	iio_device_release_direct_mode(indio_dev);
 
 	return ret;
 }
 
+static int stm32_mdf_adc_read_label(struct iio_dev *indio_dev, const struct iio_chan_spec *chan,
+				    char *label)
+{
+	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
+	const char *name = adc->channels[chan->scan_index].channel_name;
+
+	return sysfs_emit(label, "%s\n", name);
+}
+
 static const struct iio_info stm32_mdf_info_audio = {
 	.hwfifo_set_watermark = stm32_mdf_set_watermark,
 	.write_raw = stm32_mdf_adc_write_raw,
 	.read_raw = stm32_mdf_adc_read_raw,
+	.read_label = stm32_mdf_adc_read_label,
 };
 
 static const struct iio_info stm32_mdf_info_adc = {
 	.hwfifo_set_watermark = stm32_mdf_set_watermark,
 	.write_raw = stm32_mdf_adc_write_raw,
 	.read_raw = stm32_mdf_adc_read_raw,
+	.read_label = stm32_mdf_adc_read_label,
 	.validate_trigger = stm32_mdf_adc_get_trig,
 };
 
@@ -1508,19 +1562,20 @@ static int stm32_mdf_audio_init(struct device *dev, struct iio_dev *indio_dev)
 	if (!ch)
 		return -ENOMEM;
 
+	adc->channels = devm_kzalloc(&indio_dev->dev, sizeof(*adc->channels), GFP_KERNEL);
+	if (!adc->channels)
+		return -ENOMEM;
+
 	ret = stm32_mdf_adc_chan_init(indio_dev, ch);
-	if (ret < 0) {
-		dev_err(&indio_dev->dev, "Channels init failed\n");
-		return ret;
-	}
+	if (ret < 0)
+		return dev_err_probe(dev, ret, "Channels init failed\n");
+
 	indio_dev->num_channels = 1;
 	indio_dev->channels = ch;
 
 	ret = stm32_mdf_dma_request(dev, indio_dev);
-	if (ret) {
-		dev_err(&indio_dev->dev, "Failed to get dma: %d\n", ret);
-		return ret;
-	}
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to get DMA\n");
 
 	ret =  stm32_mdf_adc_filter_set_mode(adc, true);
 	if (ret)
@@ -1550,20 +1605,18 @@ static int stm32_mdf_adc_init(struct device *dev, struct iio_dev *indio_dev)
 			}
 		}
 
-		adc->backend = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*adc->backend),
-					    GFP_KERNEL);
-		if (!adc->backend)
-			return -ENOMEM;
-
 		ch = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*ch), GFP_KERNEL);
 		if (!ch)
 			return -ENOMEM;
 
+		adc->channels = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*adc->channels),
+					     GFP_KERNEL);
+		if (!adc->channels)
+			return -ENOMEM;
+
 		ret = stm32_mdf_adc_chan_init(indio_dev, ch);
-		if (ret < 0) {
-			dev_err(&indio_dev->dev, "Channels init failed\n");
-			return ret;
-		}
+		if (ret < 0)
+			return dev_err_probe(dev, ret, "Channels init failed\n");
 	}
 
 	indio_dev->num_channels = num_ch;
@@ -1896,10 +1949,8 @@ static int stm32_mdf_adc_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, irq, "Failed to get IRQ\n");
 
 	ret = devm_request_irq(dev, irq, stm32_mdf_irq, 0, pdev->name, iio);
-	if (ret < 0) {
-		dev_err(dev, "Failed to request IRQ\n");
-		return ret;
-	}
+	if (ret < 0)
+		return dev_err_probe(dev, ret, "Failed to request IRQ\n");
 
 	ret = stm32_mdf_adc_parse_of(pdev, adc);
 	if (ret < 0)
@@ -1920,7 +1971,7 @@ static int stm32_mdf_adc_probe(struct platform_device *pdev)
 	if (!MDF_IS_INTERLEAVED_FILT_NOT_0(adc)) {
 		ret = iio_device_register(iio);
 		if (ret < 0) {
-			dev_err(dev, "Failed to register IIO device: %d\n", ret);
+			dev_err_probe(dev, ret, "Failed to register IIO device: %d\n", ret);
 			goto err_cleanup;
 		}
 	}

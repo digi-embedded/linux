@@ -5,6 +5,7 @@
  *	    Pascal Paillet <p.paillet@st.com> for STMicroelectronics.
  */
 
+#include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/clockchips.h>
 #include <linux/interrupt.h>
@@ -13,10 +14,11 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/pm_wakeirq.h>
 
 #define CFGR_PSC_OFFSET		9
-#define STM32_LP_RATING		1000
+#define STM32_LP_RATING		80
 #define STM32_TARGET_CLKRATE	(32000 * HZ)
 #define STM32_LP_MAX_PSC	7
 
@@ -27,6 +29,7 @@ struct stm32_lp_private {
 	u32 psc;
 	struct device *dev;
 	struct clk *clk;
+	u32 version;
 };
 
 static struct stm32_lp_private*
@@ -38,6 +41,15 @@ to_priv(struct clock_event_device *clkevt)
 static int stm32_clkevent_lp_shutdown(struct clock_event_device *clkevt)
 {
 	struct stm32_lp_private *priv = to_priv(clkevt);
+	int ret;
+
+	if (clockevent_state_oneshot(clkevt) || clockevent_state_periodic(clkevt)) {
+		ret = pm_runtime_put(priv->dev);
+		if (ret < 0) {
+			dev_err(priv->dev, "pm runtime get returned %d\n", ret);
+			return ret;
+		}
+	}
 
 	regmap_write(priv->reg, STM32_LPTIM_CR, 0);
 	regmap_write(priv->reg, STM32_LPTIM_IER, 0);
@@ -47,12 +59,46 @@ static int stm32_clkevent_lp_shutdown(struct clock_event_device *clkevt)
 	return 0;
 }
 
-static int stm32_clkevent_lp_set_timer(unsigned long evt,
-				       struct clock_event_device *clkevt,
-				       int is_periodic)
+static int stm32mp25_clkevent_lp_set_evt(struct stm32_lp_private *priv, unsigned long evt)
 {
-	struct stm32_lp_private *priv = to_priv(clkevt);
+	int ret;
+	u32 val;
 
+	regmap_read(priv->reg, STM32_LPTIM_CR, &val);
+	if (!FIELD_GET(STM32_LPTIM_ENABLE, val)) {
+		/* Enable LPTIMER to be able to write into IER and ARR registers */
+		regmap_write(priv->reg, STM32_LPTIM_CR, STM32_LPTIM_ENABLE);
+		/*
+		 * After setting the ENABLE bit, a delay of two counter clock cycles is needed
+		 * before the LPTIM is actually enabled. For 32KHz rate, this makes approximately
+		 * 62.5 micro-seconds, round it up.
+		 */
+		udelay(63);
+	}
+	/* set next event counter */
+	regmap_write(priv->reg, STM32_LPTIM_ARR, evt);
+	/* enable ARR interrupt */
+	regmap_write(priv->reg, STM32_LPTIM_IER, STM32_LPTIM_ARRMIE);
+
+	/* Poll DIEROK and ARROK to ensure register access has completed */
+	ret = regmap_read_poll_timeout_atomic(priv->reg, STM32_LPTIM_ISR, val,
+					      (val & STM32_LPTIM_DIEROK_ARROK) ==
+					      STM32_LPTIM_DIEROK_ARROK,
+					      10, 500);
+	if (ret) {
+		dev_err(priv->dev, "access to LPTIM timed out\n");
+		/* Disable LPTIMER */
+		regmap_write(priv->reg, STM32_LPTIM_CR, 0);
+		return ret;
+	}
+	/* Clear DIEROK and ARROK flags */
+	regmap_write(priv->reg, STM32_LPTIM_ICR, STM32_LPTIM_DIEROKCF_ARROKCF);
+
+	return 0;
+}
+
+static void stm32_clkevent_lp_set_evt(struct stm32_lp_private *priv, unsigned long evt)
+{
 	/* disable LPTIMER to be able to write into IER register*/
 	regmap_write(priv->reg, STM32_LPTIM_CR, 0);
 	/* enable ARR interrupt */
@@ -61,6 +107,22 @@ static int stm32_clkevent_lp_set_timer(unsigned long evt,
 	regmap_write(priv->reg, STM32_LPTIM_CR, STM32_LPTIM_ENABLE);
 	/* set next event counter */
 	regmap_write(priv->reg, STM32_LPTIM_ARR, evt);
+}
+
+static int stm32_clkevent_lp_set_timer(unsigned long evt,
+				       struct clock_event_device *clkevt,
+				       int is_periodic)
+{
+	struct stm32_lp_private *priv = to_priv(clkevt);
+	int ret;
+
+	if (priv->version == STM32_LPTIM_VERR_23) {
+		ret = stm32mp25_clkevent_lp_set_evt(priv, evt);
+		if (ret)
+			return ret;
+	} else {
+		stm32_clkevent_lp_set_evt(priv, evt);
+	}
 
 	/* start counter */
 	if (is_periodic)
@@ -80,18 +142,54 @@ static int stm32_clkevent_lp_set_next_event(unsigned long evt,
 					   clockevent_state_periodic(clkevt));
 }
 
+static int stm32_clkevent_lp_pm_runtime_get(struct clock_event_device *clkevt)
+{
+	struct stm32_lp_private *priv = to_priv(clkevt);
+	int ret;
+
+	/* Rely on old clockevent state, to balance pm_runtime_get() / pm_runtime_put() calls */
+	if (clockevent_state_detached(clkevt) || clockevent_state_shutdown(clkevt)) {
+		ret = pm_runtime_get(priv->dev);
+		if (ret < 0) {
+			pm_runtime_put_noidle(priv->dev);
+			dev_err(priv->dev, "pm runtime get returned %d\n", ret);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 static int stm32_clkevent_lp_set_periodic(struct clock_event_device *clkevt)
 {
 	struct stm32_lp_private *priv = to_priv(clkevt);
+	int ret;
 
-	return stm32_clkevent_lp_set_timer(priv->period, clkevt, true);
+	ret = stm32_clkevent_lp_pm_runtime_get(clkevt);
+	if (ret < 0)
+		return ret;
+
+	ret = stm32_clkevent_lp_set_timer(priv->period, clkevt, true);
+	if (ret < 0)
+		pm_runtime_put(priv->dev);
+
+	return ret;
 }
 
 static int stm32_clkevent_lp_set_oneshot(struct clock_event_device *clkevt)
 {
 	struct stm32_lp_private *priv = to_priv(clkevt);
+	int ret;
 
-	return stm32_clkevent_lp_set_timer(priv->period, clkevt, false);
+	ret = stm32_clkevent_lp_pm_runtime_get(clkevt);
+	if (ret < 0)
+		return ret;
+
+	ret = stm32_clkevent_lp_set_timer(priv->period, clkevt, false);
+	if (ret < 0)
+		pm_runtime_put(priv->dev);
+
+	return ret;
 }
 
 static irqreturn_t stm32_clkevent_lp_irq_handler(int irq, void *dev_id)
@@ -176,6 +274,7 @@ static int stm32_clkevent_lp_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	priv->reg = ddata->regmap;
+	priv->version = ddata->version;
 	priv->clk = ddata->clk;
 	ret = clk_prepare_enable(priv->clk);
 	if (ret)
@@ -208,9 +307,13 @@ static int stm32_clkevent_lp_probe(struct platform_device *pdev)
 
 	stm32_clkevent_lp_set_prescaler(priv, &rate);
 
-	stm32_clkevent_lp_init(priv, pdev->dev.parent->of_node, rate);
+	ret = devm_pm_runtime_enable(&pdev->dev);
+	if (ret)
+		return ret;
 
 	priv->dev = &pdev->dev;
+
+	stm32_clkevent_lp_init(priv, pdev->dev.parent->of_node, rate);
 
 	return 0;
 
@@ -221,8 +324,6 @@ out_clk_disable:
 
 static const struct of_device_id stm32_clkevent_lp_of_match[] = {
 	{ .compatible = "st,stm32-lptimer-timer", },
-	{ .compatible = "st,stm32mp21-lptimer-timer", },
-	{ .compatible = "st,stm32mp25-lptimer-timer", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_clkevent_lp_of_match);

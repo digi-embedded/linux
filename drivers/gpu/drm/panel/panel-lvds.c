@@ -8,6 +8,7 @@
  * Contact: Laurent Pinchart (laurent.pinchart@ideasonboard.com)
  */
 
+#include <linux/delay.h>
 #include <linux/gpio/consumer.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -33,6 +34,7 @@ struct panel_lvds {
 	struct drm_display_mode dmode;
 	u32 bus_flags;
 	unsigned int bus_format;
+	bool prepared;
 
 	struct regulator *supply;
 
@@ -51,11 +53,16 @@ static int panel_lvds_unprepare(struct drm_panel *panel)
 {
 	struct panel_lvds *lvds = to_panel_lvds(panel);
 
+	if (!lvds->prepared)
+		return 0;
+
 	if (lvds->enable_gpio)
 		gpiod_set_value_cansleep(lvds->enable_gpio, 0);
 
 	if (lvds->supply)
 		regulator_disable(lvds->supply);
+
+	lvds->prepared = false;
 
 	return 0;
 }
@@ -63,6 +70,9 @@ static int panel_lvds_unprepare(struct drm_panel *panel)
 static int panel_lvds_prepare(struct drm_panel *panel)
 {
 	struct panel_lvds *lvds = to_panel_lvds(panel);
+
+	if (lvds->prepared)
+		return 0;
 
 	if (lvds->supply) {
 		int err;
@@ -77,6 +87,15 @@ static int panel_lvds_prepare(struct drm_panel *panel)
 
 	if (lvds->enable_gpio)
 		gpiod_set_value_cansleep(lvds->enable_gpio, 1);
+
+	/*
+	 * ETML070016NDHA LVDS panel requires at least 16ms and several VSD cycles
+	 * between enable regulators and first frame. The delay sets by defaults to 30ms,
+	 * device tree needs to be updated to add new properties for delays.
+	 */
+	msleep(30);
+
+	lvds->prepared = true;
 
 	return 0;
 }
@@ -189,8 +208,12 @@ static int panel_lvds_probe(struct platform_device *pdev)
 	}
 
 	/* Get GPIOs and backlight controller. */
-	lvds->enable_gpio = devm_gpiod_get_optional(lvds->dev, "enable",
-						     GPIOD_OUT_HIGH);
+	if (device_property_read_bool(lvds->dev, "default-on"))
+		lvds->enable_gpio = devm_gpiod_get_optional(lvds->dev, "enable",
+							    GPIOD_OUT_HIGH);
+	else
+		lvds->enable_gpio = devm_gpiod_get_optional(lvds->dev, "enable",
+							    GPIOD_OUT_LOW);
 	if (IS_ERR(lvds->enable_gpio)) {
 		ret = PTR_ERR(lvds->enable_gpio);
 		dev_err(lvds->dev, "failed to request %s GPIO: %d\n",
@@ -198,8 +221,12 @@ static int panel_lvds_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	lvds->reset_gpio = devm_gpiod_get_optional(lvds->dev, "reset",
-						     GPIOD_OUT_HIGH);
+	if (device_property_read_bool(lvds->dev, "default-on"))
+		lvds->reset_gpio = devm_gpiod_get_optional(lvds->dev, "reset",
+							   GPIOD_OUT_LOW);
+	else
+		lvds->reset_gpio = devm_gpiod_get_optional(lvds->dev, "reset",
+							   GPIOD_OUT_HIGH);
 	if (IS_ERR(lvds->reset_gpio)) {
 		ret = PTR_ERR(lvds->reset_gpio);
 		dev_err(lvds->dev, "failed to request %s GPIO: %d\n",
@@ -221,6 +248,21 @@ static int panel_lvds_probe(struct platform_device *pdev)
 	ret = drm_panel_of_backlight(&lvds->panel);
 	if (ret)
 		return ret;
+
+	if (device_property_read_bool(lvds->dev, "default-on")) {
+		if (lvds->supply) {
+			ret = regulator_enable(lvds->supply);
+			if (ret < 0) {
+				dev_err(lvds->dev, "failed to enable supply: %d\n", ret);
+				return ret;
+			}
+		}
+
+		if (lvds->enable_gpio)
+			gpiod_set_value_cansleep(lvds->enable_gpio, 1);
+	}
+
+	lvds->prepared = true;
 
 	drm_panel_add(&lvds->panel);
 

@@ -41,6 +41,7 @@
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_vblank.h>
+#include <drm/drm_managed.h>
 
 #include <video/videomode.h>
 
@@ -126,17 +127,14 @@
 #define LTDC_L1FPF1R	(ldev->caps.layer_regs[30])	/* L1 Flexible Pixel Format 1 */
 
 /* Bit definitions */
-#define SSCR_VSH	GENMASK(10, 0)	/* Vertical Synchronization Height */
-#define SSCR_HSW	GENMASK(27, 16)	/* Horizontal Synchronization Width */
-
-#define BPCR_AVBP	GENMASK(10, 0)	/* Accumulated Vertical Back Porch */
-#define BPCR_AHBP	GENMASK(27, 16)	/* Accumulated Horizontal Back Porch */
-
-#define AWCR_AAH	GENMASK(10, 0)	/* Accumulated Active Height */
-#define AWCR_AAW	GENMASK(27, 16)	/* Accumulated Active Width */
-
-#define TWCR_TOTALH	GENMASK(10, 0)	/* TOTAL Height */
-#define TWCR_TOTALW	GENMASK(27, 16)	/* TOTAL Width */
+#define SSCR_VSH	(ldev->caps.conf_regs[0])	/* Vertical Synchronization Height */
+#define SSCR_HSW	(ldev->caps.conf_regs[1])	/* Horizontal Synchronization Width */
+#define BPCR_AVBP	(ldev->caps.conf_regs[2])	/* Accumulated Vertical Back Porch */
+#define BPCR_AHBP	(ldev->caps.conf_regs[3])	/* Accumulated Horizontal Back Porch */
+#define AWCR_AAH	(ldev->caps.conf_regs[4])	/* Accumulated Active Height */
+#define AWCR_AAW	(ldev->caps.conf_regs[5])	/* Accumulated Active Width */
+#define TWCR_TOTALH	(ldev->caps.conf_regs[6])	/* TOTAL Height */
+#define TWCR_TOTALW	(ldev->caps.conf_regs[7])	/* TOTAL Width */
 
 #define GCR_LTDCEN	BIT(0)		/* LTDC ENable */
 #define GCR_ROTEN	BIT(2)		/* ROTation ENable */
@@ -494,6 +492,28 @@ static const u32 ltdc_layer_regs_a2[] = {
 	0x178	/* L1 Flexible Pixel Format 1 */
 };
 
+static const u32 ltdc_conf_regs_a0[] = {
+	GENMASK(10, 0),		/* Vertical Synchronization Height */
+	GENMASK(27, 16),	/* Horizontal Synchronization Width */
+	GENMASK(10, 0),		/* Accumulated Vertical Back Porch */
+	GENMASK(27, 16),	/* Accumulated Horizontal Back Porch */
+	GENMASK(10, 0),		/* Accumulated Active Height */
+	GENMASK(27, 16),	/* Accumulated Active Width */
+	GENMASK(10, 0),		/* TOTAL Height */
+	GENMASK(27, 16)		/* TOTAL Width */
+};
+
+static const u32 ltdc_conf_regs_a1[] = {
+	GENMASK(11, 0),		/* Vertical Synchronization Height */
+	GENMASK(27, 16),	/* Horizontal Synchronization Width */
+	GENMASK(11, 0),		/* Accumulated Vertical Back Porch */
+	GENMASK(27, 16),	/* Accumulated Horizontal Back Porch */
+	GENMASK(11, 0),		/* Accumulated Active Height */
+	GENMASK(27, 16),	/* Accumulated Active Width */
+	GENMASK(11, 0),		/* TOTAL Height */
+	GENMASK(27, 16)		/* TOTAL Width */
+};
+
 static const u64 ltdc_format_modifiers[] = {
 	DRM_FORMAT_MOD_LINEAR,
 	DRM_FORMAT_MOD_INVALID
@@ -507,6 +527,11 @@ static const struct regmap_config stm32_ltdc_regmap_cfg = {
 	.use_relaxed_mmio = true,
 	.cache_type = REGCACHE_NONE,
 };
+
+/* Set by default the clock tolerance to 5‰ */
+static int clock_tolerance = 5;
+module_param_named(clock_tolerance, clock_tolerance, int, 0444);
+MODULE_PARM_DESC(clock_tolerance, "Clock tolerance ‰");
 
 static const u32 ltdc_ycbcr2rgb_coeffs[DRM_COLOR_ENCODING_MAX][DRM_COLOR_RANGE_MAX][2] = {
 	[DRM_COLOR_YCBCR_BT601][DRM_COLOR_YCBCR_LIMITED_RANGE] = {
@@ -1324,7 +1349,6 @@ static void ltdc_crtc_atomic_print_state(struct drm_printer *p,
 }
 
 static const struct drm_crtc_funcs ltdc_crtc_funcs = {
-	.destroy = drm_crtc_cleanup,
 	.set_config = drm_atomic_helper_set_config,
 	.page_flip = drm_atomic_helper_page_flip,
 	.reset = drm_atomic_helper_crtc_reset,
@@ -1337,7 +1361,6 @@ static const struct drm_crtc_funcs ltdc_crtc_funcs = {
 };
 
 static const struct drm_crtc_funcs ltdc_crtc_with_crc_support_funcs = {
-	.destroy = drm_crtc_cleanup,
 	.set_config = drm_atomic_helper_set_config,
 	.page_flip = drm_atomic_helper_page_flip,
 	.reset = drm_atomic_helper_crtc_reset,
@@ -1838,6 +1861,9 @@ static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 	/* Set the transparency of the layer to the default value */
 	regmap_write_bits(ldev->regmap, LTDC_L1CACR + lofs, LXCACR_CONSTA, 0x00);
 
+	/* Reset the layer transparency to hide any related background color */
+	regmap_write_bits(ldev->regmap, LTDC_L1CACR + lofs, LXCACR_CONSTA, 0x00);
+
 	/* Commit shadow registers = update plane at next vblank */
 	if (ldev->caps.plane_reg_shadow)
 		regmap_write_bits(ldev->regmap, LTDC_L1RCR + lofs,
@@ -1891,7 +1917,6 @@ static void ltdc_plane_atomic_print_state(struct drm_printer *p,
 static const struct drm_plane_funcs ltdc_plane_funcs = {
 	.update_plane = drm_atomic_helper_update_plane,
 	.disable_plane = drm_atomic_helper_disable_plane,
-	.destroy = drm_plane_cleanup,
 	.reset = drm_atomic_helper_plane_reset,
 	.atomic_duplicate_state = drm_atomic_helper_plane_duplicate_state,
 	.atomic_destroy_state = drm_atomic_helper_plane_destroy_state,
@@ -1919,7 +1944,6 @@ static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
 	const u64 *modifiers = ltdc_format_modifiers;
 	u32 lofs = index * LAY_OFS;
 	u32 val;
-	int ret;
 
 	/* Allocate the biggest size according to supported color formats */
 	formats = devm_kzalloc(dev, (ldev->caps.pix_fmt_nb +
@@ -1927,6 +1951,8 @@ static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
 			       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_sp) +
 			       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_fp)) *
 			       sizeof(*formats), GFP_KERNEL);
+	if (!formats)
+		return NULL;
 
 	for (i = 0; i < ldev->caps.pix_fmt_nb; i++) {
 		drm_fmt = ldev->caps.pix_fmt_drm[i];
@@ -1950,11 +1976,11 @@ static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
 		}
 
 		/*
-		 * Soc MP21 & MP25 doesn't support pixel formats yuv semiplanar &
-		 * planar on layer1 only.
+		 * Soc MP25 doesn't support YUV semiplanar and planar pixel formats on layer 1.
+		 * Soc MP21 doesn't support YUV semiplanar and planar pixel formats (all layers).
 		 */
-		if (!((of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc") ||
-		    of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) && !index)) {
+		if ((of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc") && index) ||
+		    (of_device_is_compatible(dev->of_node, "st,stm32-ltdc"))) {
 			if (val & LXCR_C1R_YSPA) {
 				memcpy(&formats[nb_fmt], ltdc_drm_fmt_ycbcr_sp,
 				       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_sp) * sizeof(*formats));
@@ -1968,14 +1994,10 @@ static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
 		}
 	}
 
-	plane = devm_kzalloc(dev, sizeof(*plane), GFP_KERNEL);
-	if (!plane)
-		return NULL;
-
-	ret = drm_universal_plane_init(ddev, plane, possible_crtcs,
-				       &ltdc_plane_funcs, formats, nb_fmt,
-				       modifiers, type, NULL);
-	if (ret < 0)
+	plane = drmm_universal_plane_alloc(ddev, struct drm_plane, dev,
+					   possible_crtcs, &ltdc_plane_funcs, formats,
+					   nb_fmt, modifiers, type, NULL);
+	if (IS_ERR(plane))
 		return NULL;
 
 	if (ldev->caps.ycbcr_input) {
@@ -1996,15 +2018,6 @@ static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
 	DRM_DEBUG_DRIVER("plane:%d created\n", plane->base.id);
 
 	return plane;
-}
-
-static void ltdc_plane_destroy_all(struct drm_device *ddev)
-{
-	struct drm_plane *plane, *plane_temp;
-
-	list_for_each_entry_safe(plane, plane_temp,
-				 &ddev->mode_config.plane_list, head)
-		drm_plane_cleanup(plane);
 }
 
 static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
@@ -2042,14 +2055,14 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 
 	/* Init CRTC according to its hardware features */
 	if (ldev->caps.crc)
-		ret = drm_crtc_init_with_planes(ddev, crtc, primary, NULL,
-						&ltdc_crtc_with_crc_support_funcs, NULL);
+		ret = drmm_crtc_init_with_planes(ddev, crtc, primary, NULL,
+						 &ltdc_crtc_with_crc_support_funcs, NULL);
 	else
-		ret = drm_crtc_init_with_planes(ddev, crtc, primary, NULL,
-						&ltdc_crtc_funcs, NULL);
+		ret = drmm_crtc_init_with_planes(ddev, crtc, primary, NULL,
+						 &ltdc_crtc_funcs, NULL);
 	if (ret) {
 		DRM_ERROR("Can not initialize CRTC\n");
-		goto cleanup;
+		return ret;
 	}
 
 	drm_crtc_helper_add(crtc, &ltdc_crtc_helper_funcs);
@@ -2063,9 +2076,8 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 	for (i = 1; i < ldev->caps.nb_layers; i++) {
 		overlay = ltdc_plane_create(ddev, DRM_PLANE_TYPE_OVERLAY, i);
 		if (!overlay) {
-			ret = -ENOMEM;
 			DRM_ERROR("Can not create overlay plane %d\n", i);
-			goto cleanup;
+			return -ENOMEM;
 		}
 		if (ldev->caps.dynamic_zorder)
 			drm_plane_create_zpos_property(overlay, i, 0, ldev->caps.nb_layers - 1);
@@ -2078,13 +2090,7 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 	}
 
 	return 0;
-
-cleanup:
-	ltdc_plane_destroy_all(ddev);
-	return ret;
 }
-
-#define CLK_TOLERANCE_HZ 50
 
 static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 						    const struct drm_display_mode *mode)
@@ -2096,8 +2102,8 @@ static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 	struct drm_connector_list_iter iter;
 	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
 	int target = mode->clock * 1000;
-	int target_min = target - CLK_TOLERANCE_HZ;
-	int target_max = target + CLK_TOLERANCE_HZ;
+	int target_min = mode->clock * (1000 - clock_tolerance);
+	int target_max = mode->clock * (1000 + clock_tolerance);
 	int result;
 
 	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
@@ -2156,8 +2162,11 @@ static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 	 * Filter modes according to the clock value, particularly useful for
 	 * hdmi modes that require precise pixel clocks.
 	 */
-	if (result < target_min || result > target_max)
-		return MODE_CLOCK_RANGE;
+	if (result < target_min)
+		return MODE_CLOCK_LOW;
+
+	if (result > target_max)
+		return MODE_CLOCK_HIGH;
 
 	return MODE_OK;
 }
@@ -2212,23 +2221,19 @@ static int ltdc_encoder_init(struct drm_device *ddev, struct drm_bridge *bridge)
 	struct drm_encoder *encoder;
 	int ret;
 
-	encoder = devm_kzalloc(ddev->dev, sizeof(*encoder), GFP_KERNEL);
-	if (!encoder)
-		return -ENOMEM;
+	encoder = drmm_simple_encoder_alloc(ddev, struct drm_encoder, dev,
+					    DRM_MODE_ENCODER_DPI);
+	if (IS_ERR(encoder))
+		return PTR_ERR(encoder);
 
 	encoder->possible_crtcs = CRTC_MASK;
 	encoder->possible_clones = 0;	/* No cloning support */
 
-	drm_simple_encoder_init(ddev, encoder, DRM_MODE_ENCODER_DPI);
-
 	drm_encoder_helper_add(encoder, &ltdc_encoder_helper_funcs);
 
 	ret = drm_bridge_attach(encoder, bridge, NULL, 0);
-	if (ret) {
-		if (ret != -EPROBE_DEFER)
-			drm_encoder_cleanup(encoder);
+	if (ret)
 		return ret;
-	}
 
 	DRM_DEBUG_DRIVER("Bridge encoder:%d created\n", encoder->base.id);
 
@@ -2244,6 +2249,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 	u32 bus_width_log2, lcr, gc2r, lxc1r;
 	const struct ltdc_plat_data *pdata = of_device_get_match_data(ddev->dev);
 	int ret, i;
+	bool is_layer_secured = false;
 
 	/*
 	 * at least 1 layer must be managed & the number of layers
@@ -2296,6 +2302,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 					 */
 					if (!strcmp("l3", fwl[i].entry)) {
 						ldev->caps.nb_layers--;
+						is_layer_secured = true;
 					} else {
 						stm32_firewall_release_access(fwl);
 						return ret;
@@ -2315,9 +2322,9 @@ static int ltdc_get_caps(struct drm_device *ddev)
 
 	switch (ldev->caps.hw_version) {
 	case HWVER_10200:
-	case HWVER_10300:
 		ldev->caps.layer_ofs = LAY_OFS_0;
 		ldev->caps.layer_regs = ltdc_layer_regs_a0;
+		ldev->caps.conf_regs = ltdc_conf_regs_a0;
 		ldev->caps.pix_fmt_hw = ltdc_pix_fmt_a0;
 		ldev->caps.pix_fmt_drm = ltdc_drm_fmt_a0;
 		ldev->caps.pix_fmt_nb = ARRAY_SIZE(ltdc_drm_fmt_a0);
@@ -2330,8 +2337,33 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		 * does not work on 2nd layer.
 		 */
 		ldev->caps.non_alpha_only_l1 = true;
-		if (ldev->caps.hw_version == HWVER_10200)
-			ldev->caps.pad_max_freq_hz = 65000000;
+		ldev->caps.pad_max_freq_hz = 65000000;
+		ldev->caps.nb_irq = 2;
+		ldev->caps.ycbcr_input = false;
+		ldev->caps.ycbcr_output = false;
+		ldev->caps.plane_reg_shadow = false;
+		ldev->caps.crc = false;
+		ldev->caps.dynamic_zorder = false;
+		ldev->caps.plane_rotation = false;
+		ldev->caps.crtc_rotation = false;
+		ldev->caps.fifo_threshold = false;
+		break;
+	case HWVER_10300:
+		ldev->caps.layer_ofs = LAY_OFS_0;
+		ldev->caps.layer_regs = ltdc_layer_regs_a0;
+		ldev->caps.conf_regs = ltdc_conf_regs_a1;
+		ldev->caps.pix_fmt_hw = ltdc_pix_fmt_a0;
+		ldev->caps.pix_fmt_drm = ltdc_drm_fmt_a0;
+		ldev->caps.pix_fmt_nb = ARRAY_SIZE(ltdc_drm_fmt_a0);
+		ldev->caps.pix_fmt_flex = false;
+		/*
+		 * Hw older versions support non-alpha color formats derived
+		 * from native alpha color formats only on the primary layer.
+		 * For instance, RG16 native format without alpha works fine
+		 * on 2nd layer but XR24 (derived color format from AR24)
+		 * does not work on 2nd layer.
+		 */
+		ldev->caps.non_alpha_only_l1 = true;
 		ldev->caps.nb_irq = 2;
 		ldev->caps.ycbcr_input = false;
 		ldev->caps.ycbcr_output = false;
@@ -2345,6 +2377,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 	case HWVER_20101:
 		ldev->caps.layer_ofs = LAY_OFS_0;
 		ldev->caps.layer_regs = ltdc_layer_regs_a1;
+		ldev->caps.conf_regs = ltdc_conf_regs_a1;
 		ldev->caps.pix_fmt_hw = ltdc_pix_fmt_a1;
 		ldev->caps.pix_fmt_drm = ltdc_drm_fmt_a1;
 		ldev->caps.pix_fmt_nb = ARRAY_SIZE(ltdc_drm_fmt_a1);
@@ -2365,6 +2398,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 	case HWVER_40101:
 		ldev->caps.layer_ofs = LAY_OFS_1;
 		ldev->caps.layer_regs = ltdc_layer_regs_a2;
+		ldev->caps.conf_regs = ltdc_conf_regs_a1;
 		ldev->caps.pix_fmt_hw = ltdc_pix_fmt_a2;
 		ldev->caps.pix_fmt_drm = ltdc_drm_fmt_a2;
 		ldev->caps.pix_fmt_nb = ARRAY_SIZE(ltdc_drm_fmt_a2);
@@ -2392,6 +2426,13 @@ static int ltdc_get_caps(struct drm_device *ddev)
 				ldev->caps.plane_scaling[i] = true;
 			else
 				ldev->caps.plane_scaling[i] = false;
+		}
+
+		if (of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc") ||
+		    of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+			/* Do not expose the crc to the user if the third layer is secure.*/
+			if (is_layer_secured)
+				ldev->caps.crc = false;
 		}
 		break;
 	default:
@@ -2481,8 +2522,7 @@ int ltdc_load(struct drm_device *ddev)
 			return ret;
 
 		if (panel) {
-			bridge = drm_panel_bridge_add_typed(panel,
-							    DRM_MODE_CONNECTOR_DPI);
+			bridge = drmm_panel_bridge_add(ddev, panel);
 			if (IS_ERR(bridge)) {
 				DRM_ERROR("panel-bridge endpoint %d\n", i);
 				ret = PTR_ERR(bridge);
@@ -2569,7 +2609,7 @@ int ltdc_load(struct drm_device *ddev)
 		}
 	}
 
-	crtc = devm_kzalloc(dev, sizeof(*crtc), GFP_KERNEL);
+	crtc = drmm_kzalloc(ddev, sizeof(*crtc), GFP_KERNEL);
 	if (!crtc) {
 		DRM_ERROR("Failed to allocate crtc\n");
 		ret = -ENOMEM;

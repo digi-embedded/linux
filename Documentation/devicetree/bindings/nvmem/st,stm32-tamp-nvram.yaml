@@ -14,7 +14,7 @@ maintainers:
   - Siméon Marijon <simeon.marijon@foss.st.com>
 
 allOf:
-  - $ref: "nvmem.yaml#"
+  - $ref: nvmem.yaml#
 
 properties:
   compatible:

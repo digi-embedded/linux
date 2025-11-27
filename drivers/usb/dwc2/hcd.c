@@ -50,15 +50,24 @@ static void dwc2_enable_common_interrupts(struct dwc2_hsotg *hsotg)
 	dwc2_writel(hsotg, 0xffffffff, GINTSTS);
 
 	/* Enable the interrupts in the GINTMSK */
-	intmsk = GINTSTS_MODEMIS | GINTSTS_OTGINT;
+	if (hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_HNP_SRP_CAPABLE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_DEVICE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_HOST)
+		intmsk = GINTSTS_MODEMIS;
+	else
+		intmsk = GINTSTS_MODEMIS | GINTSTS_OTGINT;
 
 	if (!hsotg->params.host_dma)
 		intmsk |= GINTSTS_RXFLVL;
 	if (!hsotg->params.external_id_pin_ctl)
 		intmsk |= GINTSTS_CONIDSTSCHNG;
-
-	intmsk |= GINTSTS_WKUPINT | GINTSTS_USBSUSP |
-		  GINTSTS_SESSREQINT;
+	if (hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_HNP_SRP_CAPABLE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_DEVICE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_HOST)
+		intmsk |= GINTSTS_WKUPINT | GINTSTS_USBSUSP;
+	else
+		intmsk |= GINTSTS_WKUPINT | GINTSTS_USBSUSP |
+			  GINTSTS_SESSREQINT;
 
 	if (dwc2_is_device_mode(hsotg) && hsotg->params.lpm)
 		intmsk |= GINTSTS_LPMTRANRCVD;
@@ -3547,11 +3556,9 @@ static int dwc2_hcd_hub_control(struct dwc2_hsotg *hsotg, u16 typereq,
 			port_status |= USB_PORT_STAT_C_OVERCURRENT << 16;
 		}
 
-		if (!hsotg->flags.b.port_connect_status) {
+		if (dwc2_is_device_mode(hsotg)) {
 			/*
-			 * The port is disconnected, which means the core is
-			 * either in device mode or it soon will be. Just
-			 * return 0's for the remainder of the port status
+			 * Just return 0's for the remainder of the port status
 			 * since the port register can't be read if the core
 			 * is in device mode.
 			 */
@@ -4354,7 +4361,7 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)
 	if (hsotg->bus_suspended)
 		goto skip_power_saving;
 
-	if (hsotg->flags.b.port_connect_status == 0)
+	if (!(dwc2_read_hprt0(hsotg) & HPRT0_CONNSTS))
 		goto skip_power_saving;
 
 	switch (hsotg->params.power_down) {
@@ -4435,6 +4442,7 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)
 		 * Power Down mode.
 		 */
 		if (hprt0 & HPRT0_CONNSTS) {
+			set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
 			hsotg->lx_state = DWC2_L0;
 			goto unlock;
 		}
@@ -5718,11 +5726,17 @@ int dwc2_host_exit_hibernation(struct dwc2_hsotg *hsotg, int rem_wakeup,
 
 bool dwc2_host_can_poweroff_phy(struct dwc2_hsotg *dwc2)
 {
-	struct usb_device *root_hub = dwc2_hsotg_to_hcd(dwc2)->self.root_hub;
+	struct usb_device *root_hub;
+
+	/* host driver don't need the PHY, as in device mode */
+	if (dwc2_is_device_mode(dwc2) || dwc2->dr_mode == USB_DR_MODE_PERIPHERAL)
+		return false;
 
 	/* If the controller isn't allowed to wakeup then we can power off. */
 	if (!device_may_wakeup(dwc2->dev))
 		return true;
+
+	root_hub = dwc2_hsotg_to_hcd(dwc2)->self.root_hub;
 
 	/*
 	 * We don't want to power off the PHY if something under the

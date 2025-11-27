@@ -43,10 +43,10 @@ static int stm32_pwm_lp_update_allowed(struct stm32_pwm_lp *priv, int channel)
 	if (!priv->num_cc_chans)
 		return true;
 
-	ret = regmap_read(priv->regmap, STM32MP25_LPTIM_CCMR1, &ccmr1);
+	ret = regmap_read(priv->regmap, STM32_LPTIM_CCMR1, &ccmr1);
 	if (ret)
 		return ret;
-	ccmr = ccmr1 & (STM32MP25_LPTIM_CC1E | STM32MP25_LPTIM_CC2E);
+	ccmr = ccmr1 & (STM32_LPTIM_CC1E | STM32_LPTIM_CC2E);
 
 	/* More than one channel enabled: enable, prescaler or ARR value can't be changed */
 	if (bitmap_weight(&ccmr, sizeof(u32) * BITS_PER_BYTE) > 1)
@@ -57,9 +57,9 @@ static int stm32_pwm_lp_update_allowed(struct stm32_pwm_lp *priv, int channel)
 	 * report if enable, prescaler or ARR value can be changed.
 	 */
 	if (channel)
-		return !(ccmr1 & STM32MP25_LPTIM_CC1E);
+		return !(ccmr1 & STM32_LPTIM_CC1E);
 	else
-		return !(ccmr1 & STM32MP25_LPTIM_CC2E);
+		return !(ccmr1 & STM32_LPTIM_CC2E);
 }
 
 static int stm32_pwm_lp_compare_channel_apply(struct stm32_pwm_lp *priv, int channel,
@@ -73,25 +73,25 @@ static int stm32_pwm_lp_compare_channel_apply(struct stm32_pwm_lp *priv, int cha
 	if (!priv->num_cc_chans)
 		return 0;
 
-	ret = regmap_read(priv->regmap, STM32MP25_LPTIM_CCMR1, &ccmr1);
+	ret = regmap_read(priv->regmap, STM32_LPTIM_CCMR1, &ccmr1);
 	if (ret)
 		return ret;
 
 	if (channel) {
-		/* Must disable CC channel (CCxE) to modify polarity (CCxP), then reenable */
-		reenable = (enable && FIELD_GET(STM32MP25_LPTIM_CC2E, ccmr1)) &&
-			(polarity != FIELD_GET(STM32MP25_LPTIM_CC2P, ccmr1));
+		/* Must disable CC channel (CCxE) to modify polarity (CCxP), then re-enable */
+		reenable = (enable && FIELD_GET(STM32_LPTIM_CC2E, ccmr1)) &&
+			(polarity != FIELD_GET(STM32_LPTIM_CC2P, ccmr1));
 
-		mask = STM32MP25_LPTIM_CC2SEL | STM32MP25_LPTIM_CC2E | STM32MP25_LPTIM_CC2P;
-		val = FIELD_PREP(STM32MP25_LPTIM_CC2P, polarity);
-		val |= FIELD_PREP(STM32MP25_LPTIM_CC2E, enable);
+		mask = STM32_LPTIM_CC2SEL | STM32_LPTIM_CC2E | STM32_LPTIM_CC2P;
+		val = FIELD_PREP(STM32_LPTIM_CC2P, polarity);
+		val |= FIELD_PREP(STM32_LPTIM_CC2E, enable);
 	} else {
-		reenable = (enable && FIELD_GET(STM32MP25_LPTIM_CC1E, ccmr1)) &&
-			(polarity != FIELD_GET(STM32MP25_LPTIM_CC1P, ccmr1));
+		reenable = (enable && FIELD_GET(STM32_LPTIM_CC1E, ccmr1)) &&
+			(polarity != FIELD_GET(STM32_LPTIM_CC1P, ccmr1));
 
-		mask = STM32MP25_LPTIM_CC1SEL | STM32MP25_LPTIM_CC1E | STM32MP25_LPTIM_CC1P;
-		val = FIELD_PREP(STM32MP25_LPTIM_CC1P, polarity);
-		val |= FIELD_PREP(STM32MP25_LPTIM_CC1E, enable);
+		mask = STM32_LPTIM_CC1SEL | STM32_LPTIM_CC1E | STM32_LPTIM_CC1P;
+		val = FIELD_PREP(STM32_LPTIM_CC1P, polarity);
+		val |= FIELD_PREP(STM32_LPTIM_CC1E, enable);
 	}
 
 	if (reenable) {
@@ -99,8 +99,8 @@ static int stm32_pwm_lp_compare_channel_apply(struct stm32_pwm_lp *priv, int cha
 		unsigned long rate;
 		unsigned int delay_us;
 
-		ret = regmap_update_bits(priv->regmap, STM32MP25_LPTIM_CCMR1,
-					 channel ? STM32MP25_LPTIM_CC2E : STM32MP25_LPTIM_CC1E, 0);
+		ret = regmap_update_bits(priv->regmap, STM32_LPTIM_CCMR1,
+					 channel ? STM32_LPTIM_CC2E : STM32_LPTIM_CC1E, 0);
 		if (ret)
 			return ret;
 		/*
@@ -118,7 +118,7 @@ static int stm32_pwm_lp_compare_channel_apply(struct stm32_pwm_lp *priv, int cha
 		usleep_range(delay_us, delay_us * 2);
 	}
 
-	return regmap_update_bits(priv->regmap, STM32MP25_LPTIM_CCMR1, mask, val);
+	return regmap_update_bits(priv->regmap, STM32_LPTIM_CCMR1, mask, val);
 }
 
 static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
@@ -142,7 +142,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 			if (ret)
 				return ret;
 			ret = regmap_write(priv->regmap, pwm->hwpwm ?
-					   STM32MP25_LPTIM_CCR2 : STM32_LPTIM_CMP, 0);
+					   STM32_LPTIM_CCR2 : STM32_LPTIM_CMP, 0);
 			if (ret)
 				return ret;
 
@@ -188,9 +188,16 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	dty = prd * state->duty_cycle;
 	dty = DIV_ROUND_CLOSEST_ULL(dty, state->period);
 
+	if (!cstate.enabled) {
+		/* enable clock to drive PWM counter */
+		ret = pm_runtime_resume_and_get(chip->dev);
+		if (ret)
+			return ret;
+	}
+
 	ret = regmap_read(priv->regmap, STM32_LPTIM_CFGR, &cfgr);
 	if (ret)
-		return ret;
+		goto err;
 
 	/*
 	 * When there are several channels, they share the same prescaler and reload value.
@@ -199,17 +206,12 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	if (!stm32_pwm_lp_update_allowed(priv, pwm->hwpwm)) {
 		ret = regmap_read(priv->regmap, STM32_LPTIM_ARR, &arr);
 		if (ret)
-			return ret;
+			goto err;
 
-		if ((FIELD_GET(STM32_LPTIM_PRESC, cfgr) != presc) || (arr != prd - 1))
-			return -EBUSY;
-	}
-
-	if (!cstate.enabled) {
-		/* enable clock to drive PWM counter */
-		ret = pm_runtime_resume_and_get(chip->dev);
-		if (ret)
-			return ret;
+		if ((FIELD_GET(STM32_LPTIM_PRESC, cfgr) != presc) || (arr != prd - 1)) {
+			ret = -EBUSY;
+			goto err;
+		}
 	}
 
 	if ((FIELD_GET(STM32_LPTIM_PRESC, cfgr) != presc) ||
@@ -252,7 +254,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 		goto err;
 
 	/* Write CMP/CCRx register and ensure it's been properly written */
-	ret = regmap_write(priv->regmap, pwm->hwpwm ? STM32MP25_LPTIM_CCR2 : STM32_LPTIM_CMP,
+	ret = regmap_write(priv->regmap, pwm->hwpwm ? STM32_LPTIM_CCR2 : STM32_LPTIM_CMP,
 			   prd - (1 + dty));
 	if (ret)
 		goto err;
@@ -304,32 +306,39 @@ static int stm32_pwm_lp_get_state(struct pwm_chip *chip,
 	u64 tmp;
 	int ret;
 
+	/* Enable the clock to access registers */
+	ret = pm_runtime_resume_and_get(chip->dev);
+	if (ret < 0)
+		return ret;
+
 	regmap_read(priv->regmap, STM32_LPTIM_CR, &val);
 	enabled = !!FIELD_GET(STM32_LPTIM_ENABLE, val);
 	if (priv->num_cc_chans) {
 		/* There's a CC chan, need to also check if it's enabled */
-		regmap_read(priv->regmap, STM32MP25_LPTIM_CCMR1, &ccmr1);
+		regmap_read(priv->regmap, STM32_LPTIM_CCMR1, &ccmr1);
 		if (pwm->hwpwm)
-			enabled &= !!FIELD_GET(STM32MP25_LPTIM_CC2E, ccmr1);
+			enabled &= !!FIELD_GET(STM32_LPTIM_CC2E, ccmr1);
 		else
-			enabled &= !!FIELD_GET(STM32MP25_LPTIM_CC1E, ccmr1);
+			enabled &= !!FIELD_GET(STM32_LPTIM_CC1E, ccmr1);
 	}
 	state->enabled = enabled;
 
 	/* Keep PWM counter clock refcount in sync with PWM initial state */
 	if (state->enabled) {
 		ret = pm_runtime_resume_and_get(chip->dev);
-		if (ret < 0)
+		if (ret < 0) {
+			pm_runtime_put_sync_suspend(chip->dev);
 			return ret;
+		}
 	}
 
 	regmap_read(priv->regmap, STM32_LPTIM_CFGR, &val);
 	presc = FIELD_GET(STM32_LPTIM_PRESC, val);
 	if (priv->num_cc_chans) {
 		if (pwm->hwpwm)
-			state->polarity = FIELD_GET(STM32MP25_LPTIM_CC2P, ccmr1);
+			state->polarity = FIELD_GET(STM32_LPTIM_CC2P, ccmr1);
 		else
-			state->polarity = FIELD_GET(STM32MP25_LPTIM_CC1P, ccmr1);
+			state->polarity = FIELD_GET(STM32_LPTIM_CC1P, ccmr1);
 	} else {
 		state->polarity = FIELD_GET(STM32_LPTIM_WAVPOL, val);
 	}
@@ -339,12 +348,12 @@ static int stm32_pwm_lp_get_state(struct pwm_chip *chip,
 	tmp = (tmp << presc) * NSEC_PER_SEC;
 	state->period = DIV_ROUND_CLOSEST_ULL(tmp, rate);
 
-	regmap_read(priv->regmap, pwm->hwpwm ? STM32MP25_LPTIM_CCR2 : STM32_LPTIM_CMP, &val);
+	regmap_read(priv->regmap, pwm->hwpwm ? STM32_LPTIM_CCR2 : STM32_LPTIM_CMP, &val);
 	tmp = prd - val;
 	tmp = (tmp << presc) * NSEC_PER_SEC;
 	state->duty_cycle = DIV_ROUND_CLOSEST_ULL(tmp, rate);
 
-	return 0;
+	return pm_runtime_put_sync_suspend(chip->dev);
 }
 
 static const struct pwm_ops stm32_pwm_lp_ops = {
@@ -412,36 +421,12 @@ static int stm32_pwm_lp_resume(struct device *dev)
 	return pinctrl_pm_select_default_state(dev);
 }
 
-static int stm32_pwm_lp_runtime_suspend(struct device *dev)
-{
-	struct stm32_pwm_lp *priv = dev_get_drvdata(dev);
-
-	clk_disable(priv->clk);
-
-	return 0;
-}
-
-static int stm32_pwm_lp_runtime_resume(struct device *dev)
-{
-	struct stm32_pwm_lp *priv = dev_get_drvdata(dev);
-	int ret;
-
-	ret = clk_enable(priv->clk);
-	if (ret)
-		dev_err(dev, "failed to enable clock. Error [%d]\n", ret);
-
-	return ret;
-}
-
 static const struct dev_pm_ops stm32_pwm_lp_pm_ops = {
 	SYSTEM_SLEEP_PM_OPS(stm32_pwm_lp_suspend, stm32_pwm_lp_resume)
-	RUNTIME_PM_OPS(stm32_pwm_lp_runtime_suspend, stm32_pwm_lp_runtime_resume, NULL)
 };
 
 static const struct of_device_id stm32_pwm_lp_of_match[] = {
 	{ .compatible = "st,stm32-pwm-lp", },
-	{ .compatible = "st,stm32mp21-pwm-lp", },
-	{ .compatible = "st,stm32mp25-pwm-lp", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_pwm_lp_of_match);

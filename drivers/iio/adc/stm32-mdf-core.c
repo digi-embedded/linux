@@ -194,13 +194,16 @@ EXPORT_SYMBOL_GPL(stm32_mdf_core_get_cck);
 int stm32_mdf_core_lock_kclk_rate(struct stm32_mdf *mdf)
 {
 	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
+	struct device *dev = &priv->pdev->dev;
 	int ret;
 
 	if (!atomic_read(&priv->n_active_ch)) {
 		/* Request rate exclusivity on kernel clock right now */
 		ret = clk_rate_exclusive_get(priv->kclk);
-		if (ret < 0)
+		if (ret < 0) {
+			dev_err(dev, "Failed to get exclusive rate on kernel clock: [%d]\n", ret);
 			return ret;
+		}
 
 		priv->exclusive_flg = true;
 	}
@@ -228,11 +231,12 @@ int stm32_mdf_core_restore_cck(struct stm32_mdf *mdf)
 
 	ret = clk_set_rate(priv->kclk, priv->kclk_rate);
 	if (ret) {
-		dev_err(dev, "Changing MDF kernel clock rate returned error %d\n", ret);
+		dev_err(dev, "Failed to change kernel clock rate from [%lu]Hz to [%lu]Hz: [%d]\n",
+			clk_get_rate(priv->kclk), priv->kclk_rate, ret);
 		return ret;
 	}
 
-	dev_dbg(dev, "MDF kernel clock rate changed to [%lu]Kz.\n", priv->kclk_rate);
+	dev_dbg(dev, "MDF kernel clock rate changed to [%lu]Hz.\n", priv->kclk_rate);
 
 	return 0;
 }

@@ -218,6 +218,12 @@ static const struct stm32_csi_fmts stm32_csi_formats[] = {
 	FMT_MBUS_DT_DTFMT_BPP(YVYU8_1X16, YUV422_8B, BPP8, 8),
 	FMT_MBUS_DT_DTFMT_BPP(VYUY8_1X16, YUV422_8B, BPP8, 8),
 
+	/* Grey */
+	FMT_MBUS_DT_DTFMT_BPP(Y8_1X8, RAW8, BPP8, 8),
+	FMT_MBUS_DT_DTFMT_BPP(Y10_1X10, RAW10, BPP10, 10),
+	FMT_MBUS_DT_DTFMT_BPP(Y12_1X12, RAW12, BPP12, 12),
+	FMT_MBUS_DT_DTFMT_BPP(Y14_1X14, RAW14, BPP14, 14),
+
 	/* Raw Bayer */
 	/* 8 bit */
 	FMT_MBUS_DT_DTFMT_BPP(SBGGR8_1X8, RAW8, BPP8, 8),
@@ -360,21 +366,33 @@ struct stm32_csi_dev *v4l2_subdev_to_csi2priv(struct v4l2_subdev *subdev)
 
 static int stm32_csi_setup_lane_merger(struct stm32_csi_dev *csi2priv)
 {
-	int i;
+	int i, j;
 	u32 lmcfgr;
+	u32 lanes_used = 0;
 
 	lmcfgr = readl_relaxed(csi2priv->base + STM32_CSI_LMCFGR);
 	lmcfgr &= ~(STM32_CSI_LMCFGR_LANENB_MASK | STM32_CSI_LMCFGR_DL0MAP_MASK |
 		    STM32_CSI_LMCFGR_DL1MAP_MASK);
 
-	for (i = 0; i < csi2priv->num_lanes; i++) {
-		/* Check that lane ID is < max number of lane */
-		if (csi2priv->lanes[i] >= STM32_CSI_LANES_MAX) {
-			dev_err(csi2priv->dev, "Invalid lane id (%d)\n",
-				csi2priv->lanes[i]);
-			return -EINVAL;
+	/* We need to route all lanes, even if not enabled later on */
+	for (i = 0; i < STM32_CSI_LANES_MAX; i++) {
+		if (i < csi2priv->num_lanes) {
+			/* Check that lane ID is not 0 and < max number of lane */
+			if (!csi2priv->lanes[i] || csi2priv->lanes[i] > STM32_CSI_LANES_MAX) {
+				dev_err(csi2priv->dev, "Invalid lane id (%d)\n",
+					csi2priv->lanes[i]);
+				return -EINVAL;
+			}
+			lanes_used |= BIT(csi2priv->lanes[i]);
+		} else {
+			for (j = 1; j <= STM32_CSI_LANES_MAX; j++) {
+				if (!(lanes_used & BIT(j))) {
+					csi2priv->lanes[i] = j;
+					lanes_used |= BIT(j);
+				}
+			}
 		}
-		lmcfgr |= ((csi2priv->lanes[i] + 1) << ((i * 4) +
+		lmcfgr |= (csi2priv->lanes[i] << ((i * 4) +
 			   STM32_CSI_LMCFGR_DL0MAP_SHIFT));
 	}
 
@@ -460,7 +478,6 @@ static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
 	int ret, i, mbps;
 	u32 lanes_ie = 0;
 	u32 lanes_en = 0;
-	u32 lanes_stop = 0;
 	u32 ccfr;
 	s64 link_freq;
 
@@ -483,7 +500,7 @@ static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
 
 	/* MBPS is expressed in Mbps, hence link_freq / 100000 * 2 */
 	/* TODO - calcul below doesn't sound right, extra 0 ?? */
-	mbps = div_s64(link_freq, 500000);
+	mbps = DIV_ROUND_CLOSEST_ULL((u64)link_freq, 500000);
 	dev_dbg(csi2priv->dev, "Computed Mbps: %u\n", mbps);
 
 	for (phy_regs = snps_stm32mp25; phy_regs->mbps != 0; phy_regs++)
@@ -501,14 +518,12 @@ static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
 
 	/* Prepare lanes related configuration bits */
 	for (i = 0; i < csi2priv->num_lanes; i++) {
-		if (!csi2priv->lanes[i]) {
+		if (csi2priv->lanes[i] == 1) {
 			lanes_ie |= STM32_CSI_SR1_DL0_ERRORS;
 			lanes_en |= STM32_CSI_PCR_DL0EN;
-			lanes_stop |= STM32_CSI_SR1_STOPDL0F;
-		} else {
+		} else if (csi2priv->lanes[i] == 2) {
 			lanes_ie |= STM32_CSI_SR1_DL1_ERRORS;
 			lanes_en |= STM32_CSI_PCR_DL1EN;
-			lanes_stop |= STM32_CSI_SR1_STOPDL1F;
 		}
 	}
 
@@ -965,7 +980,7 @@ static int stm32_csi_parse_dt(struct stm32_csi_dev *csi2priv)
 	}
 
 	csi2priv->num_lanes = v4l2_ep.bus.mipi_csi2.num_data_lanes;
-	if (csi2priv->num_lanes > STM32_CSI_LANES_MAX) {
+	if (!csi2priv->num_lanes || csi2priv->num_lanes > STM32_CSI_LANES_MAX) {
 		dev_err(csi2priv->dev, "Unsupported number of data-lanes: %d\n",
 			csi2priv->num_lanes);
 		return -EINVAL;

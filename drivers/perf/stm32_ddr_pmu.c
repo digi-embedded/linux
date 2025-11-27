@@ -105,6 +105,7 @@ struct stm32_ddr_pmu {
 	struct hrtimer hrtimer;
 	ktime_t poll_period;
 	int selected_set;
+	u32 dram_type;
 	struct list_head counters[];
 };
 
@@ -758,9 +759,7 @@ static int stm32_ddr_pmu_device_probe(struct platform_device *pdev)
 	}
 
 	if (pmu->cfg->regs->dram_inf.reg) {
-		u32 dram_type;
-
-		ret = of_property_read_u32(pdev->dev.of_node, "st,dram-type", &dram_type);
+		ret = of_property_read_u32(pdev->dev.of_node, "st,dram-type", &pmu->dram_type);
 		if (ret) {
 			dev_err(&pdev->dev, "Missing device-tree property 'st,dram-type'\n");
 			perf_pmu_unregister(&pmu->pmu);
@@ -768,7 +767,7 @@ static int stm32_ddr_pmu_device_probe(struct platform_device *pdev)
 			return ret;
 		}
 
-		writel_relaxed(dram_type, pmu->membase + pmu->cfg->regs->dram_inf.reg);
+		writel_relaxed(pmu->dram_type, pmu->membase + pmu->cfg->regs->dram_inf.reg);
 	}
 
 	clk_disable(pmu->clk);
@@ -786,6 +785,17 @@ static void stm32_ddr_pmu_device_remove(struct platform_device *pdev)
 	struct stm32_ddr_pmu *stm32_ddr_pmu = platform_get_drvdata(pdev);
 
 	perf_pmu_unregister(&stm32_ddr_pmu->pmu);
+}
+
+static int stm32_ddr_pmu_device_resume(struct device *dev)
+{
+	struct stm32_ddr_pmu *pmu = dev_get_drvdata(dev);
+
+	clk_enable(pmu->clk);
+	writel_relaxed(pmu->dram_type, pmu->membase + pmu->cfg->regs->dram_inf.reg);
+	clk_disable(pmu->clk);
+
+	return 0;
 }
 
 static const struct stm32_ddr_pmu_regspec stm32mp1_ddr_pmu_regspec = {
@@ -846,6 +856,10 @@ static const struct stm32_ddr_pmu_cfg stm32mp2_ddr_pmu_cfg = {
 	.get_counter = stm32_ddr_pmu_get_event_counter_mp2,
 };
 
+static const struct dev_pm_ops stm32_ddr_pmu_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(NULL, stm32_ddr_pmu_device_resume)
+};
+
 static const struct of_device_id stm32_ddr_pmu_of_match[] = {
 	{ .compatible = "st,stm32-ddr-pmu", .data = &stm32mp_ddr_pmu_cfg },
 	{ .compatible = "st,stm32mp25-ddr-pmu", .data = &stm32mp2_ddr_pmu_cfg },
@@ -856,6 +870,7 @@ MODULE_DEVICE_TABLE(of, stm32_ddr_pmu_of_match);
 static struct platform_driver stm32_ddr_pmu_driver = {
 	.driver = {
 		.name	= "stm32-ddr-pmu",
+		.pm = &stm32_ddr_pmu_pm_ops,
 		.of_match_table = of_match_ptr(stm32_ddr_pmu_of_match),
 	},
 	.probe = stm32_ddr_pmu_device_probe,

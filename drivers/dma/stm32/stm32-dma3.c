@@ -8,6 +8,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/clk.h>
+#include <linux/dma-direct.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
 #include <linux/dmapool.h>
@@ -318,7 +319,7 @@ struct stm32_dma3_ddata {
 	u32 dma_requests;
 	enum stm32_dma3_port_data_width ports_max_dw[2];
 	u32 axi_max_burst_len;
-	phys_addr_t axi_addr_offset;
+	u64 axi_addr_offset;
 	u32 lap;
 	struct gen_pool *gen_pool;
 	struct dma_pool *dma_pool;
@@ -343,6 +344,11 @@ static inline struct stm32_dma3_swdesc *to_stm32_dma3_swdesc(struct virt_dma_des
 static struct device *chan2dev(struct stm32_dma3_chan *chan)
 {
 	return &chan->vchan.chan.dev->device;
+}
+
+static struct device *ddata2dev(struct stm32_dma3_ddata *ddata)
+{
+	return ddata->dma_dev.dev;
 }
 
 #ifdef CONFIG_DEBUG_FS
@@ -373,17 +379,32 @@ static void stm32_dma3_dbg_summary_show(struct seq_file *s, struct dma_device *d
 static dma_addr_t stm32_dma3_translate_addr(struct stm32_dma3_ddata *ddata, u32 port,
 					    struct device *client, dma_addr_t dma_addr)
 {
-	/*
-	 * If port used is AHB or address is already below the 2G addressable space,
-	 * don't force translation: there is no HW translation on AHB port and either DMA client
-	 * buffer allocation has taken dma-ranges into account or there is no HW translation, so
-	 * no dma-ranges, so addresses are not and must not be translated by this driver.
-	 */
-	if (port_is_ahb(ddata->ports_max_dw[port]) || (client && client->dma_range_map) ||
-	    dma_addr < ddata->axi_addr_offset)
+	const struct bus_dma_region *dma_map = client ? client->dma_range_map : NULL;
+	struct device *dev = client ? : ddata2dev(ddata);
+
+	/* No HW translation, no need to check address */
+	if (!ddata->axi_addr_offset)
 		return dma_addr;
 
-	return dma_addr - ddata->axi_addr_offset;
+	/* Client is identified and dma-ranges properly applied */
+	if (dma_map && dma_map->offset == ddata->axi_addr_offset)
+		return dma_addr;
+
+	/* For debug purpose - if condition is useless but it is to group ratelimit with dev_warn */
+	if (ddata->axi_addr_offset) {
+		static DEFINE_RATELIMIT_STATE(rs, HZ, 2);
+		bool is_axi = port_is_axi(ddata->ports_max_dw[port]);
+
+		ratelimit_set_flags(&rs, RATELIMIT_MSG_ON_RELEASE);
+		if (__ratelimit(&rs))
+			dev_warn(dev,
+				 "Addr (0x%llx+0x%llx) via %s port: client (%s) offset is 0x%llx\n",
+				 dma_addr, is_axi ? ddata->axi_addr_offset : 0,
+				 is_axi ? "AXI" : "AHB",
+				 client ? dev_name(client) : "?", dma_map ? dma_map->offset : 0);
+	}
+
+	return dma_addr;
 }
 
 static void stm32_dma3_chan_dump_reg(struct stm32_dma3_chan *chan)
@@ -430,8 +451,8 @@ static void stm32_dma3_chan_dump_reg(struct stm32_dma3_chan *chan)
 	offset = STM32_DMA3_CLLR(id);
 	dev_dbg(dev, "C%dLLR(0x%03x): %08x\n", id, offset, readl_relaxed(ddata->base + offset));
 	if (axi_port_used && ddata->axi_addr_offset)
-		dev_dbg(dev, "(*) Address remapping enabled on AXI port, offset=%pap\n",
-			&ddata->axi_addr_offset);
+		dev_dbg(dev, "(*) Address remapping enabled on AXI port, offset=%llx\n",
+			ddata->axi_addr_offset);
 }
 
 static void stm32_dma3_chan_dump_hwdesc(struct stm32_dma3_chan *chan,
@@ -450,16 +471,16 @@ static void stm32_dma3_chan_dump_hwdesc(struct stm32_dma3_chan *chan,
 			dev_dbg(chan2dev(chan), "V\n");
 		axi_used = port_is_axi(ddata->ports_max_dw[FIELD_GET(CCR_LAP, swdesc->ccr)]);
 		dev_dbg(chan2dev(chan), "[%d]@%pad%s\n", i, &swdesc->lli[i].hwdesc_addr,
-			axi_used && ddata->axi_addr_offset ? "(*)" : "");
+			axi_used && ddata->axi_addr_offset ? " (*)" : "");
 		dev_dbg(chan2dev(chan), "| C%dTR1: %08x\n", chan->id, hwdesc->ctr1);
 		dev_dbg(chan2dev(chan), "| C%dTR2: %08x\n", chan->id, hwdesc->ctr2);
 		dev_dbg(chan2dev(chan), "| C%dBR1: %08x\n", chan->id, hwdesc->cbr1);
 		axi_used = port_is_axi(ddata->ports_max_dw[FIELD_GET(CTR1_SAP, hwdesc->ctr1)]);
 		dev_dbg(chan2dev(chan), "| C%dSAR: %08x%s\n", chan->id, hwdesc->csar,
-			axi_used && ddata->axi_addr_offset ? "(*)" : "");
+			axi_used && ddata->axi_addr_offset ? " (*)" : "");
 		axi_used = port_is_axi(ddata->ports_max_dw[FIELD_GET(CTR1_DAP, hwdesc->ctr1)]);
 		dev_dbg(chan2dev(chan), "| C%dDAR: %08x%s\n", chan->id, hwdesc->cdar,
-			axi_used && ddata->axi_addr_offset ? "(*)" : "");
+			axi_used && ddata->axi_addr_offset ? " (*)" : "");
 		dev_dbg(chan2dev(chan), "| C%dLLR: %08x\n", chan->id, hwdesc->cllr);
 		axi_port_used |= axi_used;
 	}
@@ -472,8 +493,8 @@ static void stm32_dma3_chan_dump_hwdesc(struct stm32_dma3_chan *chan,
 	}
 
 	if (axi_port_used && ddata->axi_addr_offset)
-		dev_dbg(chan2dev(chan), "Address remapping enabled on AXI port, offset=%pap\n",
-			&ddata->axi_addr_offset);
+		dev_dbg(chan2dev(chan), "Address remapping enabled on AXI port, offset=%llx\n",
+			ddata->axi_addr_offset);
 }
 
 static int stm32_dma3_lli_pool_create(struct platform_device *pdev, struct stm32_dma3_ddata *ddata)
@@ -593,7 +614,7 @@ gen_pool_free:
 
 from_dma_pool:
 	if (ddata->gen_pool)
-		dev_dbg(ddata->dma_dev.dev, "gen_pool not usable, use dma_pool as fallback\n");
+		dev_dbg(ddata2dev(ddata), "gen_pool not usable, use dma_pool as fallback\n");
 
 	/* Allocate LLIs in dma_pool */
 	for (i = 0; i < count; i++) {
@@ -611,11 +632,44 @@ err_pool_free:
 	return -ENOMEM;
 }
 
+static int stm32_dma3_chan_get_lap(struct stm32_dma3_chan *chan, struct stm32_dma3_swdesc *swdesc)
+{
+	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
+	unsigned long addr = (unsigned long)swdesc->lli[0].hwdesc;
+	size_t size = sizeof(struct stm32_dma3_hwdesc);
+	const char *str_axirmp = "Address remapping enabled on AXI port,";
+
+	if (ddata->gen_pool && gen_pool_has_addr(ddata->gen_pool, addr, size)) {
+		if (port_is_axi(ddata->ports_max_dw[ddata->lap])) {
+			if (port_is_ahb(ddata->ports_max_dw[1])) {
+				dev_notice_once(chan2dev(chan),
+						"%s force LL port on AHB to access %pad\n",
+						str_axirmp, &swdesc->lli[0].hwdesc_addr);
+				return 1;
+			}
+			/* We should not go there */
+			dev_err(chan2dev(chan), "%s %pad unreachable for LL\n",
+				str_axirmp, &swdesc->lli[0].hwdesc_addr);
+			kfree(swdesc);
+			return -EINVAL;
+		}
+	} else {
+		if (port_is_ahb(ddata->ports_max_dw[ddata->lap])) {
+			dev_notice_once(chan2dev(chan), "%s force LL port on AXI to access %pad\n",
+					str_axirmp, &swdesc->lli[0].hwdesc_addr);
+			return 0;
+		}
+	}
+
+	return ddata->lap;
+}
+
 static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_chan *chan, u32 count)
 {
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
 	struct stm32_dma3_swdesc *swdesc;
 	dma_addr_t base_addr;
+	u32 lap = ddata->lap;
 	int ret;
 
 	/*
@@ -642,35 +696,27 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 	swdesc->lli_size = count;
 
 	/*
-	 * Force using the second port (hopefully AHB) if addresses are remapped on AXI,
-	 * and LLI are in internal RAM.
+	 * If addresses are remapped on AXI, check if current linked-list allocated port allows
+	 * to address the linked-list items, if not:
+	 * - force using the second port (hopefully AHB) if LLI are in internal RAM,
+	 * - force using the first port (AXI) if LLI are not in internal RAM.
 	 */
-	if (ddata->axi_addr_offset && ddata->ports_max_dw[1] != DW_INVALID &&
-	    ddata->gen_pool && gen_pool_has_addr(ddata->gen_pool, swdesc->lli[0].hwdesc_addr,
-						 sizeof(struct stm32_dma3_hwdesc))) {
-		if (port_is_ahb(ddata->ports_max_dw[1])) {
-			dev_notice(chan2dev(chan),
-				   "Address remapping enabled on AXI port, force LL port on AHB\n");
-			ddata->lap = 1;
-		} else { /* We should not enter this condition */
-			dev_err(chan2dev(chan),
-				"Address remapping enabled on AXI port, %pad unreachable for LL\n",
-				&swdesc->lli[0].hwdesc_addr);
+	if (ddata->axi_addr_offset) {
+		ret = stm32_dma3_chan_get_lap(chan, swdesc);
+		if (ret < 0) {
 			kfree(swdesc);
 			return NULL;
 		}
+		lap = ret;
 	}
 
 	/* Set LL allocated port */
-	swdesc->ccr = FIELD_PREP(CCR_LAP, ddata->lap);
+	swdesc->ccr = FIELD_PREP(CCR_LAP, lap);
 
 	/* Set LL base address */
-	base_addr = stm32_dma3_translate_addr(ddata, ddata->lap, chan2dev(chan),
+	base_addr = stm32_dma3_translate_addr(ddata, lap, ddata2dev(ddata),
 					      swdesc->lli[0].hwdesc_addr);
 	writel_relaxed(base_addr & CLBAR_LBA, ddata->base + STM32_DMA3_CLBAR(chan->id));
-	if (ddata->axi_addr_offset)
-		dev_dbg(chan2dev(chan), "Configured LL base=%pap, real LL base=%pap\n",
-			&base_addr, &swdesc->lli[0].hwdesc_addr);
 
 	return swdesc;
 }
@@ -735,7 +781,7 @@ static void stm32_dma3_chan_prep_hwdesc(struct stm32_dma3_chan *chan,
 	struct device *client = chan->vchan.chan.slave;
 	struct stm32_dma3_hwdesc *hwdesc;
 	dma_addr_t next_lli;
-	u32 next = curr + 1;
+	u32 lap, next = curr + 1;
 
 	hwdesc = swdesc->lli[curr].hwdesc;
 	hwdesc->ctr1 = ctr1;
@@ -744,14 +790,15 @@ static void stm32_dma3_chan_prep_hwdesc(struct stm32_dma3_chan *chan,
 	hwdesc->csar = stm32_dma3_translate_addr(ddata, FIELD_GET(CTR1_SAP, ctr1), client, src);
 	hwdesc->cdar = stm32_dma3_translate_addr(ddata, FIELD_GET(CTR1_DAP, ctr1), client, dst);
 
+	lap = FIELD_GET(CCR_LAP, swdesc->ccr);
 	if (is_last) {
 		if (is_cyclic)
-			next_lli = stm32_dma3_translate_addr(ddata, ddata->lap, chan2dev(chan),
+			next_lli = stm32_dma3_translate_addr(ddata, lap, ddata2dev(ddata),
 							     swdesc->lli[0].hwdesc_addr);
 		else
 			next_lli = 0;
 	} else {
-		next_lli = stm32_dma3_translate_addr(ddata, ddata->lap, chan2dev(chan),
+		next_lli = stm32_dma3_translate_addr(ddata, lap, ddata2dev(ddata),
 						     swdesc->lli[next].hwdesc_addr);
 	}
 
@@ -1061,7 +1108,7 @@ static void stm32_dma3_chan_start(struct stm32_dma3_chan *chan)
 
 	chan->dma_status = DMA_IN_PROGRESS;
 
-	dev_dbg(chan2dev(chan), "vchan %pK: started\n", &chan->vchan);
+	dev_dbg(chan2dev(chan), "vchan %p: started\n", &chan->vchan);
 }
 
 static int stm32_dma3_chan_suspend(struct stm32_dma3_chan *chan, bool susp)
@@ -1413,7 +1460,7 @@ static int stm32_dma3_alloc_chan_resources(struct dma_chan *c)
 	 */
 	chan->dma_config.direction = DMA_TRANS_NONE;
 
-	ret = pm_runtime_resume_and_get(ddata->dma_dev.dev);
+	ret = pm_runtime_resume_and_get(ddata2dev(ddata));
 	if (ret < 0)
 		return ret;
 
@@ -1434,7 +1481,7 @@ static int stm32_dma3_alloc_chan_resources(struct dma_chan *c)
 	return 0;
 
 err_put_sync:
-	pm_runtime_put_sync(ddata->dma_dev.dev);
+	pm_runtime_put_sync(ddata2dev(ddata));
 
 	return ret;
 }
@@ -1457,7 +1504,7 @@ static void stm32_dma3_free_chan_resources(struct dma_chan *c)
 	if (chan->semaphore_mode)
 		stm32_dma3_put_chan_sem(chan);
 
-	pm_runtime_put_sync(ddata->dma_dev.dev);
+	pm_runtime_put_sync(ddata2dev(ddata));
 
 	/* Reset configuration */
 	memset(&chan->dt_config, 0, sizeof(chan->dt_config));
@@ -1493,8 +1540,7 @@ static void stm32_dma3_init_chan_config_for_memcpy(struct stm32_dma3_chan *chan,
 {
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
 	struct device *client = chan->vchan.chan.slave;
-	u32 dw = get_chan_max_dw(ddata->ports_max_dw[0], chan->max_burst); /* port 0 by default */
-	u32 burst = chan->max_burst / dw;
+	u32 sap, dap;
 
 	/* Initialize dt_config if channel not pre-configured through DT */
 	if (!(chan->config_set & STM32_DMA3_CFG_SET_DT)) {
@@ -1513,12 +1559,15 @@ static void stm32_dma3_init_chan_config_for_memcpy(struct stm32_dma3_chan *chan,
 		chan->dt_config.tr_conf |= FIELD_PREP(STM32_DMA3_DT_TCEM, CTR2_TCEM_CHANNEL);
 	}
 
+	sap = FIELD_GET(STM32_DMA3_DT_SAP, chan->dt_config.tr_conf);
+	dap = FIELD_GET(STM32_DMA3_DT_DAP, chan->dt_config.tr_conf);
+
 	/* Initialize dma_config if dmaengine_slave_config() not used */
 	if (!(chan->config_set & STM32_DMA3_CFG_SET_DMA)) {
-		chan->dma_config.src_addr_width = dw;
-		chan->dma_config.dst_addr_width = dw;
-		chan->dma_config.src_maxburst = burst;
-		chan->dma_config.dst_maxburst = burst;
+		chan->dma_config.src_addr_width = get_chan_max_dw(sap, chan->max_burst);
+		chan->dma_config.dst_addr_width = get_chan_max_dw(dap, chan->max_burst);
+		chan->dma_config.src_maxburst = chan->max_burst / chan->dma_config.src_addr_width;
+		chan->dma_config.dst_maxburst = chan->max_burst / chan->dma_config.dst_addr_width;
 		chan->dma_config.src_addr = src;
 		chan->dma_config.dst_addr = dst;
 	}
@@ -1803,7 +1852,7 @@ static int stm32_dma3_pause(struct dma_chan *c)
 
 	chan->dma_status = DMA_PAUSED;
 
-	dev_dbg(chan2dev(chan), "vchan %pK: paused\n", &chan->vchan);
+	dev_dbg(chan2dev(chan), "vchan %p: paused\n", &chan->vchan);
 
 	return 0;
 }
@@ -1816,7 +1865,7 @@ static int stm32_dma3_resume(struct dma_chan *c)
 
 	chan->dma_status = DMA_IN_PROGRESS;
 
-	dev_dbg(chan2dev(chan), "vchan %pK: resumed\n", &chan->vchan);
+	dev_dbg(chan2dev(chan), "vchan %p: resumed\n", &chan->vchan);
 
 	return 0;
 }
@@ -1841,7 +1890,7 @@ static int stm32_dma3_terminate_all(struct dma_chan *c)
 	spin_unlock_irqrestore(&chan->vchan.lock, flags);
 	vchan_dma_desc_free_list(&chan->vchan, &head);
 
-	dev_dbg(chan2dev(chan), "vchan %pK: terminated\n", &chan->vchan);
+	dev_dbg(chan2dev(chan), "vchan %p: terminated\n", &chan->vchan);
 
 	return 0;
 }
@@ -1894,7 +1943,7 @@ static void stm32_dma3_issue_pending(struct dma_chan *c)
 	spin_lock_irqsave(&chan->vchan.lock, flags);
 
 	if (vchan_issue_pending(&chan->vchan) && !chan->swdesc) {
-		dev_dbg(chan2dev(chan), "vchan %pK: issued\n", &chan->vchan);
+		dev_dbg(chan2dev(chan), "vchan %p: issued\n", &chan->vchan);
 		stm32_dma3_chan_start(chan);
 	}
 
@@ -1916,11 +1965,11 @@ static bool stm32_dma3_filter_fn(struct dma_chan *c, void *fn_param)
 		if (!(mask & BIT(chan->id)))
 			return false;
 
-	ret = pm_runtime_resume_and_get(ddata->dma_dev.dev);
+	ret = pm_runtime_resume_and_get(ddata2dev(ddata));
 	if (ret < 0)
 		return false;
 	semcr = readl_relaxed(ddata->base + STM32_DMA3_CSEMCR(chan->id));
-	pm_runtime_put_sync(ddata->dma_dev.dev);
+	pm_runtime_put_sync(ddata2dev(ddata));
 
 	/* Check if chan is free */
 	if (semcr & CSEMCR_SEM_MUTEX)
@@ -1942,7 +1991,7 @@ static struct dma_chan *stm32_dma3_of_xlate(struct of_phandle_args *dma_spec, st
 	struct dma_chan *c;
 
 	if (dma_spec->args_count < 3) {
-		dev_err(ddata->dma_dev.dev, "Invalid args count\n");
+		dev_err(ddata2dev(ddata), "Invalid args count\n");
 		return NULL;
 	}
 
@@ -1951,14 +2000,14 @@ static struct dma_chan *stm32_dma3_of_xlate(struct of_phandle_args *dma_spec, st
 	conf.tr_conf = dma_spec->args[2];
 
 	if (conf.req_line >= ddata->dma_requests) {
-		dev_err(ddata->dma_dev.dev, "Invalid request line\n");
+		dev_err(ddata2dev(ddata), "Invalid request line\n");
 		return NULL;
 	}
 
 	/* Request dma channel among the generic dma controller list */
 	c = dma_request_channel(mask, stm32_dma3_filter_fn, &conf);
 	if (!c) {
-		dev_err(ddata->dma_dev.dev, "No suitable channel found\n");
+		dev_err(ddata2dev(ddata), "No suitable channel found\n");
 		return NULL;
 	}
 
@@ -1990,9 +2039,9 @@ static int stm32_dma3_get_axi_port_config(struct platform_device *pdev,
 
 	remap = regmap_test_bits(regmap, offset, mask);
 	if (remap && pdev->dev.dma_range_map) { /* dma-ranges is required */
-		ddata->axi_addr_offset = pdev->dev.bus_dma_limit + 1;
-		dev_dbg(&pdev->dev, "Address remapping enabled on AXI port, offset=%pap\n",
-			&ddata->axi_addr_offset);
+		ddata->axi_addr_offset = pdev->dev.dma_range_map->offset;
+		dev_dbg(&pdev->dev, "Address remapping enabled on AXI port, offset=%llx\n",
+			ddata->axi_addr_offset);
 	}
 
 	return 0;
@@ -2000,6 +2049,7 @@ static int stm32_dma3_get_axi_port_config(struct platform_device *pdev,
 
 static u32 stm32_dma3_check_rif(struct stm32_dma3_ddata *ddata)
 {
+	struct device *dev = ddata2dev(ddata);
 	u32 chan_reserved, mask = 0, i, ccidcfgr, invalid_cid = 0;
 
 	/* Reserve Secure channels */
@@ -2011,7 +2061,7 @@ static u32 stm32_dma3_check_rif(struct stm32_dma3_ddata *ddata)
 	 * In case CID filtering is not configured, dma-channel-mask property can be used to
 	 * specify available DMA channels to the kernel.
 	 */
-	of_property_read_u32(ddata->dma_dev.dev->of_node, "dma-channel-mask", &mask);
+	of_property_read_u32(dev->of_node, "dma-channel-mask", &mask);
 
 	/* Reserve !CID-filtered not in dma-channel-mask, static CID != CID1, CID1 not allowed */
 	for (i = 0; i < ddata->dma_channels; i++) {
@@ -2031,7 +2081,7 @@ static u32 stm32_dma3_check_rif(struct stm32_dma3_ddata *ddata)
 				ddata->chans[i].semaphore_mode = true;
 			}
 		}
-		dev_dbg(ddata->dma_dev.dev, "chan%d: %s mode, %s\n", i,
+		dev_dbg(dev, "chan%d: %s mode, %s\n", i,
 			!(ccidcfgr & CCIDCFGR_CFEN) ? "!CID-filtered" :
 			ddata->chans[i].semaphore_mode ? "Semaphore" : "Static CID",
 			(chan_reserved & BIT(i)) ? "denied" :
@@ -2039,7 +2089,7 @@ static u32 stm32_dma3_check_rif(struct stm32_dma3_ddata *ddata)
 	}
 
 	if (invalid_cid)
-		dev_warn(ddata->dma_dev.dev, "chan%*pbl have invalid CID configuration\n",
+		dev_warn(dev, "chan%*pbl have invalid CID configuration\n",
 			 ddata->dma_channels, &invalid_cid);
 
 	return chan_reserved;
@@ -2371,12 +2421,7 @@ static struct platform_driver stm32_dma3_driver = {
 	},
 };
 
-static int __init stm32_dma3_init(void)
-{
-	return platform_driver_register(&stm32_dma3_driver);
-}
-
-subsys_initcall(stm32_dma3_init);
+module_platform_driver(stm32_dma3_driver);
 
 MODULE_DESCRIPTION("STM32 DMA3 controller driver");
 MODULE_AUTHOR("Amelie Delaunay <amelie.delaunay@foss.st.com>");

@@ -263,6 +263,14 @@ static irqreturn_t stm32_pcie_aer_msi_irq_handler(int irq, void *priv)
 	struct stm32_pcie *stm32_pcie = priv;
 
 	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEAERRCMSICR, 1);
+
+	return IRQ_WAKE_THREAD;
+}
+
+static irqreturn_t stm32_pcie_aer_msi_isr_handler(int irq, void *priv)
+{
+	struct stm32_pcie *stm32_pcie = priv;
+
 	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEAERRCMSICR, 0);
 
 	return IRQ_HANDLED;
@@ -325,9 +333,10 @@ static int stm32_add_pcie_port(struct stm32_pcie *stm32_pcie,
 		}
 
 		if (stm32_pcie->aer_irq) {
-			ret = devm_request_irq(dev, stm32_pcie->aer_irq,
-					       stm32_pcie_aer_msi_irq_handler,
-					       IRQF_SHARED, "stm32-aer-msi", stm32_pcie);
+			ret = devm_request_threaded_irq(dev, stm32_pcie->aer_irq,
+							stm32_pcie_aer_msi_irq_handler,
+							stm32_pcie_aer_msi_isr_handler,
+							IRQF_SHARED, "stm32-aer-msi", stm32_pcie);
 			if (ret < 0) {
 				dev_err(dev, "failed to request AER MSI IRQ %d\n",
 					stm32_pcie->aer_irq);
@@ -611,26 +620,6 @@ static void quirk_stm32_pcie_limit_mrrs(struct pci_dev *pci)
 
 DECLARE_PCI_FIXUP_HEADER(PCI_ANY_ID, PCI_ANY_ID,
 			 quirk_stm32_pcie_limit_mrrs);
-
-static int stm32_dma_limit(struct pci_dev *pdev, void *data)
-{
-	dev_dbg(&pdev->dev, "set bus_dma_limit");
-
-	pdev->dev.bus_dma_limit = DMA_BIT_MASK(32);
-
-	return 0;
-}
-
-static void quirk_stm32_dma_mask(struct pci_dev *pci)
-{
-	struct pci_dev *root_port;
-
-	root_port = pcie_find_root_port(pci);
-
-	if (root_port && is_stm32_pcie_driver(root_port->dev.parent))
-		pci_walk_bus(pci->bus, stm32_dma_limit, NULL);
-}
-DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_SYNOPSYS, 0x0550, quirk_stm32_dma_mask);
 
 module_platform_driver(stm32_pcie_driver);
 MODULE_DESCRIPTION("STM32MP25 PCIe Controller driver");

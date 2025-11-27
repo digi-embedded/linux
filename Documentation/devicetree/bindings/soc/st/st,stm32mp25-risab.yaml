@@ -58,10 +58,12 @@ additionalProperties: false
 
 examples:
   - |
-        risab1: risab@420f0000 {
-          compatible = "st,stm32mp25-risab";
-          reg = <0x420f0000 0x1000>;
-          clocks = <&rcc CK_ICN_LS_MCU>;
-          st,mem-map = <0xa000000 0x20000>;
-          st,srwiad;
-        };
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+
+    risab1: risab@420f0000 {
+      compatible = "st,stm32mp25-risab";
+      reg = <0x420f0000 0x1000>;
+      clocks = <&rcc CK_ICN_LS_MCU>;
+      st,mem-map = <0xa000000 0x20000>;
+      st,srwiad;
+    };

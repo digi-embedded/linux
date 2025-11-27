@@ -338,6 +338,7 @@ static int dsi_phy_141_pll_get_params(struct dw_mipi_dsi_stm *dsi,
 {
 	int i, n;
 	int delta, best_delta; /* all in khz */
+	int lane_mbps = 2 * clkout_khz / 1000; /* in Mhz */
 
 	/* Early checks preventing division by 0 & odd results */
 	if (clkin_khz <= 0 || clkout_khz <= 0)
@@ -345,10 +346,9 @@ static int dsi_phy_141_pll_get_params(struct dw_mipi_dsi_stm *dsi,
 
 	/* find frequency mapping */
 	for (i = 0; i < ARRAY_SIZE(dppa_map); i++) {
-		if (dsi->lane_mbps < dppa_map[i].data_rate) {
+		if (lane_mbps < dppa_map[i].data_rate) {
 			if (i == ARRAY_SIZE(dppa_map) - 1)
 				DRM_WARN("Could not find frequency mapped index\n");
-			i--;
 			break;
 		}
 	}
@@ -357,7 +357,17 @@ static int dsi_phy_141_pll_get_params(struct dw_mipi_dsi_stm *dsi,
 	if (index)
 		*index = i;
 
-	*odf = int_pow(2, ((dppa_map[i].odf & WRPCR1_ODF) >> 28));
+	/* ODF: Output division factor */
+	switch (dppa_map[i].odf) {
+	case(3):
+		*odf = 8; break;
+	case(2):
+		*odf = 4; break;
+	case(1):
+		*odf = 2; break;
+	default:
+		*odf = 1; break;
+	}
 
 	best_delta = 1000000; /* big started value (1000000khz) */
 
@@ -605,7 +615,10 @@ static unsigned long dw_mipi_dsi_clk_recalc_rate(struct clk_hw *hw,
 
 	clk_disable_unprepare(dsi->pclk);
 
-	return (unsigned long)pll_out_khz * 1000;
+	if (dsi->hw_version == HWVER_141)
+		return (unsigned long)pll_out_khz * 2 * 1000;
+	else
+		return (unsigned long)pll_out_khz * 1000;
 }
 
 static long dw_mipi_dsi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
@@ -644,7 +657,10 @@ static long dw_mipi_dsi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 
 	clk_disable_unprepare(dsi->pclk);
 
-	return pll_out_khz * 1000;
+	if (dsi->hw_version == HWVER_141)
+		return pll_out_khz * 2 * 1000;
+	else
+		return pll_out_khz * 1000;
 }
 
 static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
@@ -687,6 +703,7 @@ static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 		int1 = 0x00;
 		gmp = 0x01;
 		prop = dppa_map[dppa_index].prop;
+		odf = dppa_map[dppa_index].odf;
 
 		/* set DLD, HSFR & CCF */
 		val = (hsfreq << 8) | ccf;
@@ -695,8 +712,7 @@ static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 		val = ((ndiv - 2) << 4) | (idf - 1);
 		dsi_write(dsi, DSI_WRPCR0, val);
 
-		val = ((odf - 1) << 28) | (vco << 24) | (bias << 16)
-		       | (int1 << 8) | (gmp << 6) | prop;
+		val = (odf << 28) | (vco << 24) | (bias << 16) | (int1 << 8) | (gmp << 6) | prop;
 		dsi_write(dsi, DSI_WRPCR1, val);
 
 		dsi_write(dsi, DSI_PCTLR, PCTLR_CKEN);
@@ -997,7 +1013,10 @@ dw_mipi_dsi_phy_141_get_timing(void *priv_data, unsigned int lane_mbps,
 	return 0;
 }
 
-#define CLK_TOLERANCE_HZ 250000
+/* Set by default the clock tolerance to 5‰ */
+static int clock_tolerance = 5;
+module_param_named(clock_tolerance, clock_tolerance, int, 0444);
+MODULE_PARM_DESC(clock_tolerance, "Clock tolerance ‰");
 
 static enum drm_mode_status
 dw_mipi_dsi_stm_mode_valid(void *priv_data,
@@ -1038,7 +1057,7 @@ dw_mipi_dsi_stm_mode_valid(void *priv_data,
 	}
 
 	if (!(mode_flags & MIPI_DSI_MODE_VIDEO_BURST)) {
-		unsigned int px_clock_hz, target_px_clock_hz, lane_mbps;
+		unsigned int px_clock_hz, target_px_clock_min, target_px_clock_max, lane_mbps;
 		int dsi_short_packet_size_px, hfp, hsync, hbp, delay_to_lp;
 		struct dw_mipi_dsi_dphy_timing dphy_timing;
 
@@ -1046,14 +1065,19 @@ dw_mipi_dsi_stm_mode_valid(void *priv_data,
 		pll_out_khz = dsi_pll_get_clkout_khz(pll_in_khz, idf, ndiv, odf);
 
 		px_clock_hz = DIV_ROUND_CLOSEST_ULL(1000ULL * pll_out_khz * lanes, bpp);
-		target_px_clock_hz = mode->clock * 1000;
+
 		/*
 		 * Filter modes according to the clock value, particularly useful for
 		 * hdmi modes that require precise pixel clocks.
 		 */
-		if (px_clock_hz < target_px_clock_hz - CLK_TOLERANCE_HZ ||
-		    px_clock_hz > target_px_clock_hz + CLK_TOLERANCE_HZ)
-			return MODE_CLOCK_RANGE;
+		target_px_clock_min = mode->clock * (1000 - clock_tolerance);
+		target_px_clock_max = mode->clock * (1000 + clock_tolerance);
+
+		if (px_clock_hz < target_px_clock_min)
+			return MODE_CLOCK_LOW;
+
+		if (px_clock_hz > target_px_clock_max)
+			return MODE_CLOCK_HIGH;
 
 		/* sync packets are codes as DSI short packets (4 bytes) */
 		dsi_short_packet_size_px = DIV_ROUND_UP(4 * BITS_PER_BYTE, bpp);
@@ -1078,20 +1102,119 @@ dw_mipi_dsi_stm_mode_valid(void *priv_data,
 
 		lane_mbps = pll_out_khz / 1000;
 
-		if (dsi->hw_version < HWVER_141) {
-			ret = dw_mipi_dsi_phy_get_timing(priv_data, lane_mbps, &dphy_timing);
-			if (ret)
-				return MODE_ERROR;
-			/*
-			 * In non-burst mode DSI has to enter in LP during HFP
-			 * (horizontal front porch) or HBP (horizontal back porch) to
-			 * resync with LTDC pixel clock.
-			 */
-			delay_to_lp = DIV_ROUND_UP((dphy_timing.data_hs2lp + dphy_timing.data_lp2hs)
-						   * lanes * BITS_PER_BYTE, bpp);
-			if (hfp < delay_to_lp && hbp < delay_to_lp)
-				return MODE_HSYNC;
+		ret = dw_mipi_dsi_phy_get_timing(priv_data, lane_mbps, &dphy_timing);
+		if (ret)
+			return MODE_ERROR;
+		/*
+		 * In non-burst mode DSI has to enter in LP during HFP
+		 * (horizontal front porch) or HBP (horizontal back porch) to
+		 * resync with LTDC pixel clock.
+		 */
+		delay_to_lp = DIV_ROUND_UP((dphy_timing.data_hs2lp + dphy_timing.data_lp2hs)
+					   * lanes * BITS_PER_BYTE, bpp);
+		if (hfp < delay_to_lp && hbp < delay_to_lp)
+			return MODE_HSYNC;
+	}
+
+	return MODE_OK;
+}
+
+static enum drm_mode_status
+dw_mipi_dsi_stm_phy_141_mode_valid(void *priv_data,
+				   const struct drm_display_mode *mode,
+				   unsigned long mode_flags, u32 lanes, u32 format)
+{
+	struct dw_mipi_dsi_stm *dsi = priv_data;
+	unsigned int lane_kbps;
+	int bpp;
+
+	bpp = mipi_dsi_pixel_format_to_bpp(format);
+	if (bpp < 0)
+		return MODE_BAD;
+
+	/* Compute requested lane data rate */
+	lane_kbps = mode->clock * bpp / lanes;
+
+	/* Add 20% to lane data rate to be higher than pixel bw */
+	if (mode_flags & MIPI_DSI_MODE_VIDEO_BURST)
+		lane_kbps = (lane_kbps * 12) / 10;
+
+	if (lane_kbps > dsi->lane_max_kbps)
+		return MODE_CLOCK_HIGH;
+
+	if (lane_kbps < dsi->lane_min_kbps)
+		return MODE_CLOCK_LOW;
+
+	if (!(mode_flags & MIPI_DSI_MODE_VIDEO_BURST)) {
+		unsigned int idf, ndiv, odf, pll_in_khz, pll_out_khz;
+		unsigned int px_clock_hz, target_px_clock_min, target_px_clock_max;
+		int dsi_short_packet_size_px, hfp, hsync, hbp, delay_to_lp, ret;
+		struct dw_mipi_dsi_dphy_timing dphy_timing;
+
+		/* Compute best pll parameters */
+		idf = 0;
+		ndiv = 0;
+		odf = 0;
+		pll_in_khz = clk_get_rate(dsi->pllref_clk) / 1000;
+		ret = dsi_phy_141_pll_get_params(dsi, pll_in_khz, lane_kbps / 2,
+						 &idf, &ndiv, &odf, NULL);
+		if (ret) {
+			DRM_WARN("Warning dsi_phy_141_pll_get_params(): bad params\n");
+			return MODE_ERROR;
 		}
+
+		/* Get the adjusted pll out value */
+		pll_out_khz = dsi_pll_get_clkout_khz(pll_in_khz, idf, ndiv, odf);
+
+		px_clock_hz = DIV_ROUND_CLOSEST_ULL(1000ULL * pll_out_khz * lanes * 2, bpp);
+
+		/*
+		 * Filter modes according to the clock value, particularly useful for
+		 * hdmi modes that require precise pixel clocks.
+		 */
+		target_px_clock_min = mode->clock * (1000 - clock_tolerance);
+		target_px_clock_max = mode->clock * (1000 + clock_tolerance);
+
+		if (px_clock_hz < target_px_clock_min)
+			return MODE_CLOCK_LOW;
+
+		if (px_clock_hz > target_px_clock_max)
+			return MODE_CLOCK_HIGH;
+
+		/* sync packets are codes as DSI short packets (4 bytes) */
+		dsi_short_packet_size_px = DIV_ROUND_UP(4 * BITS_PER_BYTE, bpp);
+
+		hfp = mode->hsync_start - mode->hdisplay;
+		hsync = mode->hsync_end - mode->hsync_start;
+		hbp = mode->htotal - mode->hsync_end;
+
+		/* hsync must be longer than 4 bytes HSS packets */
+		if (hsync < dsi_short_packet_size_px)
+			return MODE_HSYNC_NARROW;
+
+		if (mode_flags & MIPI_DSI_MODE_VIDEO_SYNC_PULSE) {
+			/* HBP must be longer than 4 bytes HSE packets */
+			if (hbp < dsi_short_packet_size_px)
+				return MODE_HSYNC_NARROW;
+			hbp -= dsi_short_packet_size_px;
+		} else {
+			/* With sync events HBP extends in the hsync */
+			hbp += hsync - dsi_short_packet_size_px;
+		}
+
+		ret = dw_mipi_dsi_phy_141_get_timing(priv_data, lane_kbps / 1000, &dphy_timing);
+		if (ret)
+			return MODE_ERROR;
+		/*
+		 * In non-burst mode DSI has to enter in LP during HFP
+		 * (horizontal front porch) or HBP (horizontal back porch) to
+		 * resync with LTDC pixel clock.
+		 */
+		delay_to_lp = DIV_ROUND_UP((dphy_timing.data_hs2lp + dphy_timing.data_lp2hs)
+					   * lanes * BITS_PER_BYTE / 2, bpp);
+
+		if (hfp < delay_to_lp && hbp < delay_to_lp)
+			return MODE_HSYNC;
 	}
 
 	return MODE_OK;
@@ -1121,7 +1244,7 @@ static struct dw_mipi_dsi_plat_data dw_mipi_dsi_stm_plat_data = {
 
 static struct dw_mipi_dsi_plat_data dw_mipi_dsi_stm32mp25_plat_data = {
 	.max_data_lanes = 4,
-	.mode_valid = dw_mipi_dsi_stm_mode_valid,
+	.mode_valid = dw_mipi_dsi_stm_phy_141_mode_valid,
 	.phy_ops = &dw_mipi_dsi_stm_phy_141_ops,
 };
 

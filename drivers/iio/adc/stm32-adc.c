@@ -3243,7 +3243,6 @@ static const struct stm32_adc_cfg stm32mp13_adc_cfg = {
 	.vref_charac = 3300,
 };
 
-/* TODO: Update min sampling time with databrief */
 static const unsigned int stm32_adc_min_ts_mp21[] = { 34, 34, 0, 34, 34, 0 };
 static_assert(ARRAY_SIZE(stm32_adc_min_ts_mp21) == STM32_ADC_INT_CH_NB);
 

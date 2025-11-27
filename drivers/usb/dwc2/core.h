@@ -10,6 +10,7 @@
 
 #include <linux/acpi.h>
 #include <linux/phy/phy.h>
+#include <linux/power_supply.h>
 #include <linux/regulator/consumer.h>
 #include <linux/usb/gadget.h>
 #include <linux/usb/otg.h>
@@ -474,6 +475,7 @@ struct dwc2_core_params {
 	bool activate_stm32_bvaloval_en;
 	bool activate_ingenic_overcurrent_detection;
 	bool activate_stm32_otgarcr_en;
+	bool stm32_has_batt_chg_det;
 	bool ipg_isoc_en;
 	u16 max_packet_count;
 	u32 max_transfer_size;
@@ -871,6 +873,7 @@ struct dwc2_hregs_backup {
  * @hibernated:		True if core is hibernated
  * @in_ppd:		True if core is partial power down mode.
  * @bus_suspended:	True if bus is suspended
+ * @suspended_from:	The device state before the host has suspended the bus.
  * @reset_phy_on_wake:	Quirk saying that we should assert PHY reset on a
  *			remote wakeup.
  * @phy_off_for_suspend: Status of whether we turned the PHY off at suspend.
@@ -1069,6 +1072,7 @@ struct dwc2_hsotg {
 	unsigned int hibernated:1;
 	unsigned int in_ppd:1;
 	bool bus_suspended;
+	enum usb_device_state suspended_from;
 	unsigned int reset_phy_on_wake:1;
 	unsigned int need_phy_for_wake:1;
 	unsigned int phy_off_for_suspend:1;
@@ -1220,9 +1224,15 @@ struct dwc2_hsotg {
 	unsigned int enabled:1;
 	unsigned int connected:1;
 	unsigned int remote_wakeup_allowed:1;
+	unsigned int wakeup_configured:1;
 	struct dwc2_hsotg_ep *eps_in[MAX_EPS_CHANNELS];
 	struct dwc2_hsotg_ep *eps_out[MAX_EPS_CHANNELS];
 #endif /* CONFIG_USB_DWC2_PERIPHERAL || CONFIG_USB_DWC2_DUAL_ROLE */
+	struct power_supply *psy_batt_chg;
+	struct power_supply_desc batt_chg_psy_desc;
+	int chg_current;
+	enum power_supply_type batt_chg_psy_type;
+	bool has_batt_chg_det;
 };
 
 /* Normal architectures just use readl/write */
@@ -1406,11 +1416,14 @@ void dwc2_drd_exit(struct dwc2_hsotg *hsotg);
 void dwc2_dump_dev_registers(struct dwc2_hsotg *hsotg);
 void dwc2_dump_host_registers(struct dwc2_hsotg *hsotg);
 void dwc2_dump_global_registers(struct dwc2_hsotg *hsotg);
+int stm32mp2_usb2phy_batt_chg_det(struct dwc2_hsotg *hsotg);
+int stm32mp2_usb2phy_usb_chg_psy_register(struct dwc2_hsotg *hsotg);
 
 /* Gadget defines */
 #if IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) || \
 	IS_ENABLED(CONFIG_USB_DWC2_DUAL_ROLE)
 int dwc2_hsotg_remove(struct dwc2_hsotg *hsotg);
+bool dwc2_gadget_can_poweroff_phy(struct dwc2_hsotg *hsotg);
 int dwc2_hsotg_suspend(struct dwc2_hsotg *dwc2);
 int dwc2_hsotg_resume(struct dwc2_hsotg *dwc2);
 int dwc2_gadget_init(struct dwc2_hsotg *hsotg);
@@ -1429,7 +1442,7 @@ int dwc2_gadget_exit_hibernation(struct dwc2_hsotg *hsotg,
 				 int rem_wakeup, int reset);
 int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg);
 int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
-					bool restore);
+					int rem_wakeup, bool restore);
 void dwc2_gadget_enter_clock_gating(struct dwc2_hsotg *hsotg);
 void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg,
 				   int rem_wakeup);
@@ -1443,6 +1456,8 @@ static inline void dwc2_clear_fifo_map(struct dwc2_hsotg *hsotg)
 #else
 static inline int dwc2_hsotg_remove(struct dwc2_hsotg *dwc2)
 { return 0; }
+static inline bool dwc2_gadget_can_poweroff_phy(struct dwc2_hsotg *hsotg)
+{ return false; }
 static inline int dwc2_hsotg_suspend(struct dwc2_hsotg *dwc2)
 { return 0; }
 static inline int dwc2_hsotg_resume(struct dwc2_hsotg *dwc2)
@@ -1472,7 +1487,7 @@ static inline int dwc2_gadget_exit_hibernation(struct dwc2_hsotg *hsotg,
 static inline int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
 { return 0; }
 static inline int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
-						      bool restore)
+						      int rem_wakeup, bool restore)
 { return 0; }
 static inline void dwc2_gadget_enter_clock_gating(struct dwc2_hsotg *hsotg) {}
 static inline void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg,

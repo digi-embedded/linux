@@ -17,9 +17,7 @@
 #include <media/v4l2-subdev.h>
 
 #include "dcmipp-common.h"
-
-#define DCMIPP_FMT_WIDTH_DEFAULT  640
-#define DCMIPP_FMT_HEIGHT_DEFAULT 480
+#include "uapi/linux/stm32-dcmipp-config.h"
 
 #define DCMIPP_P1FCTCR	0x900
 #define DCMIPP_P2FCTCR	0xD00
@@ -466,8 +464,6 @@ static const struct v4l2_rect crop_min = {
 /*
  * Functions handling controls
  */
-#define V4L2_CID_PIXELPROC_GAMMA_CORRECTION	(V4L2_CID_USER_BASE | 0x1001)
-
 static int dcmipp_pixelproc_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct dcmipp_pixelproc_device *pixelproc =
@@ -533,9 +529,9 @@ static void dcmipp_pixelproc_adjust_fmt(struct dcmipp_pixelproc_device *pixelpro
 		fmt->code = PIXELPROC_MEDIA_BUS_FMT_DEFAULT;
 
 	fmt->width = clamp_t(u32, fmt->width, DCMIPP_FRAME_MIN_WIDTH,
-			     DCMIPP_FRAME_MAX_WIDTH);
+			     DCMIPP_PIXEL_FRAME_MAX_WIDTH);
 	fmt->height = clamp_t(u32, fmt->height, DCMIPP_FRAME_MIN_HEIGHT,
-			      DCMIPP_FRAME_MAX_HEIGHT);
+			      DCMIPP_PIXEL_FRAME_MAX_HEIGHT);
 
 	if (fmt->field == V4L2_FIELD_ANY || fmt->field == V4L2_FIELD_ALTERNATE)
 		fmt->field = V4L2_FIELD_NONE;
@@ -621,9 +617,9 @@ static int dcmipp_pixelproc_enum_frame_size(struct v4l2_subdev *sd,
 		return -EINVAL;
 
 	fse->min_width = DCMIPP_FRAME_MIN_WIDTH;
-	fse->max_width = DCMIPP_FRAME_MAX_WIDTH;
+	fse->max_width = DCMIPP_PIXEL_FRAME_MAX_WIDTH;
 	fse->min_height = DCMIPP_FRAME_MIN_HEIGHT;
-	fse->max_height = DCMIPP_FRAME_MAX_HEIGHT;
+	fse->max_height = DCMIPP_PIXEL_FRAME_MAX_HEIGHT;
 
 	return 0;
 }
@@ -821,8 +817,8 @@ dcmipp_pixelproc_enum_frame_interval(struct v4l2_subdev *sd,
 
 	if (fie->pad > 1 ||
 	    fie->index >= (IS_SRC(fie->pad) ? ARRAY_SIZE(dcmipp_frates) : 1) ||
-	    fie->width > DCMIPP_FRAME_MAX_WIDTH ||
-	    fie->height > DCMIPP_FRAME_MAX_HEIGHT)
+	    fie->width > DCMIPP_PIXEL_FRAME_MAX_WIDTH ||
+	    fie->height > DCMIPP_PIXEL_FRAME_MAX_HEIGHT)
 		return -EINVAL;
 
 	if (IS_SINK(fie->pad)) {

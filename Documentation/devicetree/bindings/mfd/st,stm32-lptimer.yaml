@@ -21,10 +21,14 @@ maintainers:
 
 properties:
   compatible:
-    enum:
-      - st,stm32-lptimer
-      - st,stm32mp21-lptimer
-      - st,stm32mp25-lptimer
+    oneOf:
+      - items:
+          - enum:
+              - st,stm32mp21-lptimer
+              - st,stm32mp25-lptimer
+          - const: st,stm32-lptimer
+      - items:
+          - const: st,stm32-lptimer
 
   reg:
     maxItems: 1
@@ -60,10 +64,14 @@ properties:
 
     properties:
       compatible:
-        enum:
-          - st,stm32-pwm-lp
-          - st,stm32mp21-pwm-lp
-          - st,stm32mp25-pwm-lp
+        oneOf:
+          - items:
+              - enum:
+                  - st,stm32mp21-pwm-lp
+                  - st,stm32mp25-pwm-lp
+              - const: st,stm32-pwm-lp
+          - items:
+              - const: st,stm32-pwm-lp
 
       "#pwm-cells":
         const: 3
@@ -78,10 +86,14 @@ properties:
 
     properties:
       compatible:
-        enum:
-          - st,stm32-lptimer-counter
-          - st,stm32mp21-lptimer-counter
-          - st,stm32mp25-lptimer-counter
+        oneOf:
+          - items:
+              - enum:
+                  - st,stm32mp21-lptimer-counter
+                  - st,stm32mp25-lptimer-counter
+              - const: st,stm32-lptimer-counter
+          - items:
+              - const: st,stm32-lptimer-counter
 
     required:
       - compatible
@@ -92,10 +104,14 @@ properties:
 
     properties:
       compatible:
-        enum:
-          - st,stm32-lptimer-timer
-          - st,stm32mp21-lptimer-timer
-          - st,stm32mp25-lptimer-timer
+        oneOf:
+          - items:
+              - enum:
+                  - st,stm32mp21-lptimer-timer
+                  - st,stm32mp25-lptimer-timer
+              - const: st,stm32-lptimer-timer
+          - items:
+              - const: st,stm32-lptimer-timer
 
     required:
       - compatible
@@ -107,16 +123,20 @@ patternProperties:
 
     properties:
       compatible:
-        enum:
-          - st,stm32-lptimer-trigger
-          - st,stm32mp21-lptimer-trigger
-          - st,stm32mp25-lptimer-trigger
+        oneOf:
+          - items:
+              - enum:
+                  - st,stm32mp21-lptimer-trigger
+                  - st,stm32mp25-lptimer-trigger
+              - const: st,stm32-lptimer-trigger
+          - items:
+              - const: st,stm32-lptimer-trigger
 
       reg:
         description: Identify trigger hardware block.
         items:
           minimum: 0
-          maximum: 2
+          maximum: 4
 
     required:
       - compatible

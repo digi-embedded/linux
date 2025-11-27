@@ -432,7 +432,7 @@ static int dw_mipi_dsi_gen_pkt_hdr_write(struct dw_mipi_dsi *dsi, u32 hdr_val)
 				 val, !(val & GEN_CMD_FULL), 1000,
 				 CMD_PKT_STATUS_TIMEOUT_US);
 	if (ret) {
-		dev_err(dsi->dev, "failed to get available command FIFO\n");
+		dev_dbg(dsi->dev, "failed to get available command FIFO\n");
 		return ret;
 	}
 
@@ -443,7 +443,7 @@ static int dw_mipi_dsi_gen_pkt_hdr_write(struct dw_mipi_dsi *dsi, u32 hdr_val)
 				 val, (val & mask) == mask,
 				 1000, CMD_PKT_STATUS_TIMEOUT_US);
 	if (ret) {
-		dev_err(dsi->dev, "failed to write command FIFO\n");
+		dev_dbg(dsi->dev, "failed to write command FIFO\n");
 		return ret;
 	}
 
@@ -709,7 +709,12 @@ static void dw_mipi_dsi_dpi_config(struct dw_mipi_dsi *dsi,
 
 static void dw_mipi_dsi_packet_handler_config(struct dw_mipi_dsi *dsi)
 {
-	dsi_write(dsi, DSI_PCKHDL_CFG, CRC_RX_EN | ECC_RX_EN | BTA_EN);
+	u32 val = CRC_RX_EN | ECC_RX_EN | BTA_EN | EOTP_TX_EN;
+
+	if (dsi->mode_flags & MIPI_DSI_MODE_NO_EOT_PACKET)
+		val &= ~EOTP_TX_EN;
+
+	dsi_write(dsi, DSI_PCKHDL_CFG, val);
 }
 
 static void dw_mipi_dsi_video_packet_config(struct dw_mipi_dsi *dsi,
@@ -1080,11 +1085,6 @@ static int dw_mipi_dsi_bridge_attach(struct drm_bridge *bridge,
 				     enum drm_bridge_attach_flags flags)
 {
 	struct dw_mipi_dsi *dsi = bridge_to_dsi(bridge);
-
-	if (!bridge->encoder) {
-		DRM_ERROR("Parent encoder object not found\n");
-		return -ENODEV;
-	}
 
 	/* Set the encoder type as caller does not know it */
 	bridge->encoder->encoder_type = DRM_MODE_ENCODER_DSI;

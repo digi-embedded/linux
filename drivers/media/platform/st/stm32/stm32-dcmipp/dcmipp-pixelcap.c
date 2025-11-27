@@ -184,7 +184,6 @@ struct dcmipp_pixelcap_device {
 
 	u32 pipe_id;
 
-	u32 cmier;
 	u32 cmsr2;
 
 	struct {
@@ -317,12 +316,12 @@ static int dcmipp_pixelcap_try_fmt_vid_cap(struct file *file, void *priv,
 	in_w = format->width;
 	in_h = format->height;
 	format->width = clamp_t(u32, format->width, DCMIPP_FRAME_MIN_WIDTH,
-				DCMIPP_FRAME_MAX_WIDTH);
+				DCMIPP_PIXEL_FRAME_MAX_WIDTH);
 	format->width = round_up(format->width,
 				 1 << hdw_pixel_alignment(format->pixelformat));
 	format->height = clamp_t(u32, format->height,
 				 DCMIPP_FRAME_MIN_HEIGHT,
-				 DCMIPP_FRAME_MAX_HEIGHT);
+				 DCMIPP_PIXEL_FRAME_MAX_HEIGHT);
 	if (format->width != in_w || format->height != in_h)
 		dev_dbg(vcap->dev,
 			"resolution updated: %dx%d -> %dx%d\n",
@@ -435,9 +434,9 @@ static int dcmipp_pixelcap_enum_framesizes(struct file *file, void *fh,
 
 	fsize->type = V4L2_FRMSIZE_TYPE_CONTINUOUS;
 	fsize->stepwise.min_width = DCMIPP_FRAME_MIN_WIDTH;
-	fsize->stepwise.max_width = DCMIPP_FRAME_MAX_WIDTH;
+	fsize->stepwise.max_width = DCMIPP_PIXEL_FRAME_MAX_WIDTH;
 	fsize->stepwise.min_height = DCMIPP_FRAME_MIN_HEIGHT;
-	fsize->stepwise.max_height = DCMIPP_FRAME_MAX_HEIGHT;
+	fsize->stepwise.max_height = DCMIPP_PIXEL_FRAME_MAX_HEIGHT;
 	fsize->stepwise.step_width = 1;
 	fsize->stepwise.step_height = 1;
 
@@ -595,9 +594,8 @@ static int dcmipp_pixelcap_start_streaming(struct vb2_queue *vq,
 	dcmipp_start_capture(vcap, vcap->next);
 
 	/* Enable interruptions */
-	vcap->cmier |= DCMIPP_CMIER_PxALL(vcap->pipe_id);
 	spin_lock(&vcap->vdev.v4l2_dev->lock);
-	reg_set(vcap, DCMIPP_CMIER, vcap->cmier);
+	reg_set(vcap, DCMIPP_CMIER, DCMIPP_CMIER_PxALL(vcap->pipe_id));
 	spin_unlock(&vcap->vdev.v4l2_dev->lock);
 
 	vcap->state = DCMIPP_RUNNING;
@@ -636,14 +634,9 @@ static void dcmipp_pixelcap_stop_streaming(struct vb2_queue *vq)
 	u32 status;
 	int ret;
 
-	dcmipp_pipeline_s_stream(vcap, 0);
-
-	/* Stop the media pipeline */
-	media_pipeline_stop(vcap->vdev.entity.pads);
-
 	/* Disable interruptions */
 	spin_lock(&vcap->vdev.v4l2_dev->lock);
-	reg_clear(vcap, DCMIPP_CMIER, vcap->cmier);
+	reg_clear(vcap, DCMIPP_CMIER, DCMIPP_CMIER_PxALL(vcap->pipe_id));
 	spin_unlock(&vcap->vdev.v4l2_dev->lock);
 
 	/* Stop capture */
@@ -660,6 +653,14 @@ static void dcmipp_pixelcap_stop_streaming(struct vb2_queue *vq)
 
 	/* Disable pipe */
 	reg_clear(vcap, DCMIPP_PxFSCR(vcap->pipe_id), DCMIPP_PxFSCR_PIPEN);
+
+	/* Clear any pending interrupts */
+	reg_write(vcap, DCMIPP_CMFCR, DCMIPP_CMIER_PxALL(vcap->pipe_id));
+
+	dcmipp_pipeline_s_stream(vcap, 0);
+
+	/* Stop the media pipeline */
+	media_pipeline_stop(vcap->vdev.entity.pads);
 
 	spin_lock_irq(&vcap->irqlock);
 
@@ -967,7 +968,7 @@ static irqreturn_t dcmipp_pixelcap_irq_callback(int irq, void *arg)
 			container_of(arg, struct dcmipp_pixelcap_device, ved);
 	struct dcmipp_ent_device *ved = arg;
 
-	vcap->cmsr2 = ved->cmsr2 & vcap->cmier;
+	vcap->cmsr2 = ved->cmsr2 & DCMIPP_CMIER_PxALL(vcap->pipe_id);
 	if (!vcap->cmsr2)
 		return IRQ_HANDLED;
 

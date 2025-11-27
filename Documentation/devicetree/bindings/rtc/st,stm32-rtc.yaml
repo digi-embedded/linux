@@ -54,14 +54,14 @@ properties:
     maxItems: 1
 
   st,lsco:
-    $ref: "/schemas/types.yaml#/definitions/uint32"
+    $ref: /schemas/types.yaml#/definitions/uint32
     description: |
       To select and enable RTC Low Speed Clock Output.
       Refer to <include/dt-bindings/rtc/rtc-stm32.h> for the supported values.
       Pinctrl state named "default" may be defined to reserve pin for RTC output.
 
   st,alarm:
-    $ref: "/schemas/types.yaml#/definitions/uint32"
+    $ref: /schemas/types.yaml#/definitions/uint32
     description: |
       To select and enable RTC Alarm A output.
       Refer to <include/dt-bindings/rtc/rtc-stm32.h> for the supported values.
@@ -93,11 +93,9 @@ allOf:
           minItems: 1
           maxItems: 1
 
-        st,lsco:
-          maxItems: 0
+        st,lsco: false
 
-        st,alarm:
-          maxItems: 0
+        st,alarm: false
 
         clock-names: false
 
@@ -116,11 +114,9 @@ allOf:
           minItems: 2
           maxItems: 2
 
-        st,lsco:
-          maxItems: 0
+        st,lsco: false
 
-        st,alarm:
-          maxItems: 0
+        st,alarm: false
 
       required:
         - clock-names

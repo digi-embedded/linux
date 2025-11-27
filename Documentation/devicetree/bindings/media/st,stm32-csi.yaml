@@ -98,7 +98,7 @@ examples:
                 reg = <0>;
                 endpoint {
                     remote-endpoint = <&imx335_ep>;
-                    data-lanes = <0 1>;
+                    data-lanes = <1 2>;
                     bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
                 };
             };

@@ -20,10 +20,20 @@
 
 #define DCMIPP_PDEV_NAME "dcmipp"
 
-#define DCMIPP_FRAME_MAX_WIDTH 4096
-#define DCMIPP_FRAME_MAX_HEIGHT 2160
 #define DCMIPP_FRAME_MIN_WIDTH 16
-#define DCMIPP_FRAME_MIN_HEIGHT 16
+#define DCMIPP_FRAME_MIN_HEIGHT 2
+
+/*
+ * Maximum frame size for input & byte pipe
+ * This is aligned with TPG maximum frame size,
+ * aligned to word access for the width
+ */
+#define DCMIPP_FRAME_MAX_WIDTH	16376
+#define DCMIPP_FRAME_MAX_HEIGHT	16383
+
+/* Maximum frame size for pixel pipes */
+#define DCMIPP_PIXEL_FRAME_MAX_WIDTH 4094
+#define DCMIPP_PIXEL_FRAME_MAX_HEIGHT 4094
 
 #define DCMIPP_FMT_WIDTH_DEFAULT  640
 #define DCMIPP_FMT_HEIGHT_DEFAULT 480
@@ -85,6 +95,38 @@ struct dcmipp_device {
 	struct v4l2_async_notifier	notifier;
 
 	struct stm32_firewall		firewall;
+};
+
+/* Structure which describes individual configuration for each entity */
+struct dcmipp_ent_config {
+	const char *name;
+	struct dcmipp_ent_device *(*init)
+		(const char *entity_name,
+		 struct dcmipp_device *dcmipp);
+	void (*release)(struct dcmipp_ent_device *ved);
+};
+
+/* Structure which describes links between entities */
+struct dcmipp_ent_link {
+	unsigned int src_ent;
+	u16 src_pad;
+	unsigned int sink_ent;
+	u16 sink_pad;
+	u32 flags;
+};
+
+/* Structure which describes the whole topology */
+struct dcmipp_pipeline_config {
+	const struct dcmipp_ent_config *ents;
+	size_t num_ents;
+	const struct dcmipp_ent_link *links;
+	size_t num_links;
+	u32 hw_revision;
+	bool has_csi2;
+	bool has_tpg;
+	bool needs_mclk;
+	bool has_histo;
+	unsigned int pipe_nb;
 };
 
 /**

@@ -16,11 +16,6 @@
 
 /dts-v1/;
 
-/* STM32MP25 CPU */
-#include "../st/stm32mp255.dtsi"
-#include "../st/stm32mp25xf.dtsi"
-#include "../st/stm32mp25-pinctrl.dtsi"
-#include "../st/stm32mp25xxai-pinctrl.dtsi"
 /* Digi ConnectCore MP25 (SOM) */
 #include "ccmp25.dtsi"
 
@@ -156,7 +151,7 @@
 			reg = <0>;
 			csi_sink: endpoint {
 				remote-endpoint = <&ov5640_mipi_ep>;
-				data-lanes = <0 1>;
+				data-lanes = <1 2>;
 				bus-type = <4>;
 			};
 		};

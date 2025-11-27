@@ -122,7 +122,6 @@
 #define DDRCFG_R	112
 #define DDR_R		113
 #define DDRPERFM_R	114
-#define CCB_R		115
 #define IWDG1_SYS_R	116
 #define IWDG2_SYS_R	117
 #define IWDG3_SYS_R	118

@@ -143,7 +143,6 @@
 #define CK_BUS_GPIOH		120
 #define CK_BUS_GPIOI		121
 #define CK_BUS_GPIOZ		122
-#define CK_BUS_CCB		123
 #define CK_BUS_RTC		124
 #define CK_BUS_LPUART1		125
 #define CK_BUS_LPTIM3		126
@@ -319,7 +318,6 @@
 #define CK_SCMI_ICN_DISPLAY	3
 #define CK_SCMI_ICN_HSL		4
 #define CK_SCMI_ICN_NIC		5
-#define CK_SCMI_ICN_VID		6
 #define CK_SCMI_FLEXGEN_07	7
 #define CK_SCMI_FLEXGEN_08	8
 #define CK_SCMI_FLEXGEN_09	9

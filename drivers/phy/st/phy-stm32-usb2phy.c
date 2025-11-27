@@ -6,6 +6,7 @@
  * Copyright (C) 2022 STMicroelectronics
  * Author(s): Pankaj Dev <pankaj.dev@st.com>.
  */
+#include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/io.h>
@@ -86,6 +87,8 @@ struct stm32_usb2phy {
 	struct clk_hw clk48_hw;
 	atomic_t en_refcnt;
 	const struct stm32mp2_usb2phy_hw_data *hw_data;
+	bool do_wakeup;
+	int wakeirq;
 };
 
 enum stm32_usb2phy_mode {
@@ -248,6 +251,21 @@ static int stm32_usb2phy_enable(struct stm32_usb2phy *phy_dev)
 		return ret;
 	}
 
+	if (phy_data->valid_mode == USB2_MODE_HOST_ONLY) {
+		/*
+		 * The clock should default to active after standby, as it is
+		 * needed when resuming OHCI to access its registers.
+		 * CMN is default reset to 1, so enforce it is cleared, when the
+		 * clock enable request from OHCI driver comes at resume time.
+		 */
+		ret = regmap_clear_bits(phy_dev->regmap, phy_data->cr_offset,
+					SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
+		if (ret) {
+			dev_err(dev, "can't clear CMN bit (%d)\n", ret);
+			return ret;
+		}
+	}
+
 	if (phy_dev->mask_trim1) {
 		ret = regmap_update_bits(phy_dev->regmap, phy_dev->hw_data->trim1_offset,
 					 phy_dev->mask_trim1, phy_dev->value_trim1);
@@ -270,10 +288,13 @@ static int stm32_usb2phy_enable(struct stm32_usb2phy *phy_dev)
 			phy_dev->value_trim2);
 	}
 
-	ret = stm32_usb2phy_regulators_enable(phy_dev);
-	if (ret) {
-		dev_err(dev, "can't enable regulators (%d)\n", ret);
-		return ret;
+	/* balance regulator_enable calls (kept ON during suspend, with wakeup enabled) */
+	if (!phy_dev->do_wakeup) {
+		ret = stm32_usb2phy_regulators_enable(phy_dev);
+		if (ret) {
+			dev_err(dev, "can't enable regulators (%d)\n", ret);
+			return ret;
+		}
 	}
 
 	ret = clk_prepare_enable(phy_dev->phyref);
@@ -314,10 +335,13 @@ static int stm32_usb2phy_disable(struct stm32_usb2phy *phy_dev)
 
 	clk_disable_unprepare(phy_dev->phyref);
 
-	ret = stm32_usb2phy_regulators_disable(phy_dev);
-	if (ret) {
-		dev_err(phy_dev->dev, "can't disable regulators (%d)\n", ret);
-		return ret;
+	if (!phy_dev->do_wakeup) {
+		/* Need to keep regulators ON for the wakeup case */
+		ret = stm32_usb2phy_regulators_disable(phy_dev);
+		if (ret) {
+			dev_err(phy_dev->dev, "can't disable regulators (%d)\n", ret);
+			return ret;
+		}
 	}
 
 	return 0;
@@ -334,6 +358,7 @@ static int stm32_usb2phy_suspend(struct device *dev)
 	 * usb2-phy is already turned off by HCD driver using exit callback
 	 */
 	if (phy_dev->is_init) {
+		phy_dev->do_wakeup = true;
 		ret = stm32_usb2phy_disable(phy_dev);
 		if (ret) {
 			dev_err(dev, "can't disable usb2phy (%d)\n", ret);
@@ -360,6 +385,7 @@ static int stm32_usb2phy_resume(struct device *dev)
 			dev_err(dev, "can't enable usb2phy (%d)\n", ret);
 			return ret;
 		}
+		phy_dev->do_wakeup = false;
 	}
 
 	return 0;
@@ -374,12 +400,16 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 
 	switch (mode) {
 	case PHY_MODE_USB_HOST:
-		if (phy_data->valid_mode == USB2_MODE_HOST_ONLY ||
-		    phy_data->valid_mode == USB2_MODE_OTG)
+		if (phy_data->valid_mode == USB2_MODE_HOST_ONLY)
 			ret = regmap_update_bits(phy_dev->regmap,
 						 phy_data->cr_offset,
 						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
 						 0);
+		else if (phy_data->valid_mode == USB2_MODE_OTG)
+			ret = regmap_update_bits(phy_dev->regmap,
+						 phy_data->cr_offset,
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
 		else {
 			if (submode == USB_ROLE_NONE) {
 				ret = regmap_update_bits(phy_dev->regmap,
@@ -408,7 +438,7 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 			ret = regmap_update_bits(phy_dev->regmap,
 						 phy_data->cr_offset,
 						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
-						 0);
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
 		else {
 			if (submode == USB_ROLE_NONE) {
 				ret = regmap_update_bits(phy_dev->regmap,
@@ -495,6 +525,14 @@ static int stm32_usb2phy_exit(struct phy *phy)
 static int stm32_usb2phy_phy_power_on(struct phy *phy)
 {
 	struct stm32_usb2phy *phy_dev = phy_get_drvdata(phy);
+	struct device *dev = &phy->dev;
+
+	if (phy_dev->wakeirq > 0) {
+		if (enable_irq_wake(phy_dev->wakeirq))
+			dev_warn(dev, "Wake irq not enabled\n");
+		if (device_wakeup_enable(phy_dev->dev))
+			dev_warn(dev, "device_wakeup_enable failed\n");
+	}
 
 	if (phy_dev->vbus)
 		return regulator_enable(phy_dev->vbus);
@@ -505,6 +543,14 @@ static int stm32_usb2phy_phy_power_on(struct phy *phy)
 static int stm32_usb2phy_phy_power_off(struct phy *phy)
 {
 	struct stm32_usb2phy *phy_dev = phy_get_drvdata(phy);
+	struct device *dev = &phy->dev;
+
+	if (phy_dev->wakeirq > 0) {
+		if (device_wakeup_disable(phy_dev->dev))
+			dev_warn(dev, "device_wakeup_disable failed\n");
+		if (disable_irq_wake(phy_dev->wakeirq))
+			dev_warn(dev, "Wake irq not disabled\n");
+	}
 
 	if (phy_dev->vbus)
 		return regulator_disable(phy_dev->vbus);
@@ -740,6 +786,16 @@ static int stm32_usb2phy_tuning(struct phy *phy)
 	return 0;
 }
 
+static irqreturn_t stm32_usb2phy_irq_wakeup_handler(int irq, void *dev_id)
+{
+	struct device *dev = dev_id;
+
+	/* Prevents remote wakeup interrupt race while suspending */
+	pm_wakeup_hard_event(dev);
+
+	return IRQ_HANDLED;
+}
+
 static int stm32_usb2phy_probe(struct platform_device *pdev)
 {
 	struct stm32_usb2phy *phy_dev;
@@ -747,6 +803,7 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	struct phy_provider *phy_provider;
 	struct phy *phy;
+	int irq;
 	int ret;
 	u32 phycr;
 
@@ -785,6 +842,22 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 		if (ret != -ENODEV)
 			return dev_err_probe(dev, ret, "failed to get vdda1v8 supply\n");
 		phy_dev->vdda18 = NULL;
+	}
+
+	if (device_property_read_bool(dev, "wakeup-source")) {
+		irq = platform_get_irq(pdev, 0);
+		if (irq < 0)
+			return dev_err_probe(dev, irq, "failed to get IRQ\n");
+		phy_dev->wakeirq = irq;
+
+		ret = devm_request_threaded_irq(dev, phy_dev->wakeirq, NULL,
+						stm32_usb2phy_irq_wakeup_handler, IRQF_ONESHOT,
+						NULL, dev);
+		if (ret)
+			return dev_err_probe(dev, ret, "unable to request wake IRQ %d\n",
+						 phy_dev->wakeirq);
+
+		device_set_wakeup_capable(dev, true);
 	}
 
 	phy_dev->hw_data = stm32_usb2phy_get_hwdata(dev, phycr);

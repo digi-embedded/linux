@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2025 - All Rights Reserved
+ * Author: Amelie Delaunay <amelie.delaunay@foss.st.com> for STMicroelectronics.
+ */
+
+/dts-v1/;
+
+#include "../../../../arm64/boot/dts/st/stm32mp257f-ev1.dts"
+
+/ {
+	model = "STMicroelectronics STM32MP257F-EV1 AARCH32 Evaluation Board";
+	compatible = "st,stm32mp257f-ev1-aarch32", "st,stm32mp257f-ev1", "st,stm32mp257";
+
+	timer {
+		arm,cpu-registers-not-fw-configured;
+	};
+};
+
+&mm_ospi1 {
+	reg = <0x0 0x60000000 0x0 0x4000000>;
+};

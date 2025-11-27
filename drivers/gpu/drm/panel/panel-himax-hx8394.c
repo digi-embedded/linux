@@ -16,6 +16,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 
 #include <video/mipi_display.h>
@@ -38,6 +39,7 @@
 #define HX8394_CMD_SETMIPI	  0xba
 #define HX8394_CMD_SETOTP	  0xbb
 #define HX8394_CMD_SETREGBANK	  0xbd
+#define HX8394_CMD_UNKNOWN0	  0xbf
 #define HX8394_CMD_UNKNOWN1	  0xc0
 #define HX8394_CMD_SETDGCLUT	  0xc1
 #define HX8394_CMD_SETID	  0xc3
@@ -52,6 +54,10 @@
 #define HX8394_CMD_SETGIP1	  0xd5
 #define HX8394_CMD_SETGIP2	  0xd6
 #define HX8394_CMD_SETGPO	  0xd6
+#define HX8394_CMD_UNKNOWN4	  0xd8
+#define HX8394_CMD_READ_ID1	  0xda
+#define HX8394_CMD_READ_ID2	  0xdb
+#define HX8394_CMD_READ_ID3	  0xdc
 #define HX8394_CMD_SETSCALING	  0xdd
 #define HX8394_CMD_SETIDLE	  0xdf
 #define HX8394_CMD_SETGAMMA	  0xe0
@@ -61,6 +67,15 @@
 #define HX8394_CMD_SET_SP_CMD	  0xe9
 #define HX8394_CMD_SETREADINDEX	  0xfe
 #define HX8394_CMD_GETSPIREAD	  0xff
+
+#define MY	BIT(7)	/* Row Address Order */
+#define MX	BIT(6)	/* Column Address Order */
+#define MV	BIT(5)	/* Row/Column Exchange */
+#define ML	BIT(4)	/* Vertical Refresh Order */
+#define RGB	BIT(3)	/* RGB-BGR Order */
+#define DDL	BIT(2)	/* Display Data Latch Order */
+#define FH	BIT(1)	/* Flip Horizontal */
+#define FV	BIT(0)	/* Flip Vertical */
 
 struct hx8394 {
 	struct device *dev;
@@ -203,6 +218,131 @@ static const struct hx8394_panel_desc hsd060bhw4_desc = {
 	.init_sequence = hsd060bhw4_init_sequence,
 };
 
+/*
+ * Some DSI writes do not always execute correctly and
+ * must be re-executed to succeed.
+ * We will allow a few attempts.
+ */
+#define MAX_DSI_WRITE_TRIES	5
+
+#define rocktech_rk055mhd042a0_dsi_write(dsi, cmd, seq...)                      \
+	do {                                                                    \
+		static const u8 d[] = { cmd, seq };                             \
+		int ret;                                                        \
+		int try;                                                        \
+		for (try = 0; try < MAX_DSI_WRITE_TRIES; try++) {               \
+			ret = mipi_dsi_dcs_write_buffer(dsi, d, ARRAY_SIZE(d)); \
+			if (ret >= 0)                                           \
+				break;                                          \
+		}                                                               \
+		if (ret < 0)                                                    \
+			return ret;                                             \
+	} while (0)
+
+static int rocktech_rk055mhd042a0_init_sequence(struct hx8394 *ctx)
+{
+	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETEXTC, 0xFF, 0x83, 0x94);
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETMIPI, 0x61, 0x03, 0x68, 0x6B,
+					 0xB2, 0xC0);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETPOWER, 0x48, 0x12, 0x72, 0x09,
+					 0x32, 0x54, 0x71, 0x71, 0x57, 0x47);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETDISP, 0x00, 0x80, 0x64, 0x0C,
+					 0x0D, 0x2F);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETCYC, 0x73, 0x74, 0x73, 0x74,
+					 0x73, 0x74, 0x01, 0x0C, 0x86, 0x75, 0x00, 0x3F,
+					 0x73, 0x74, 0x73, 0x74, 0x73, 0x74, 0x01, 0x0C,
+					 0x86);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETGIP0, 0x00, 0x00, 0x07, 0x07,
+					 0x40, 0x07, 0x0C, 0x00, 0x08, 0x10, 0x08, 0x00,
+					 0x08, 0x54, 0x15, 0x0A, 0x05, 0x0A, 0x02, 0x15,
+					 0x06, 0x05, 0x06, 0x47, 0x44, 0x0A, 0x0A, 0x4B,
+					 0x10, 0x07, 0x07, 0x0C, 0x40);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETGIP1, 0x1C, 0x1C, 0x1D, 0x1D,
+					 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+					 0x08, 0x09, 0x0A, 0x0B, 0x24, 0x25, 0x18, 0x18,
+					 0x26, 0x27, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+					 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+					 0x18, 0x18, 0x20, 0x21, 0x18, 0x18, 0x18, 0x18);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETGIP2, 0x1C, 0x1C, 0x1D, 0x1D,
+					 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00,
+					 0x0B, 0x0A, 0x09, 0x08, 0x21, 0x20, 0x18, 0x18,
+					 0x27, 0x26, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+					 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+					 0x18, 0x18, 0x25, 0x24, 0x18, 0x18, 0x18, 0x18);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETVCOM, 0x92, 0x92);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETGAMMA, 0x00, 0x0A, 0x15, 0x1B,
+					 0x1E, 0x21, 0x24, 0x22, 0x47, 0x56, 0x65, 0x66,
+					 0x6E, 0x82, 0x88, 0x8B, 0x9A, 0x9D, 0x98, 0xA8,
+					 0xB9, 0x5D, 0x5C, 0x61, 0x66, 0x6A, 0x6F, 0x7F,
+					 0x7F, 0x00, 0x0A, 0x15, 0x1B, 0x1E, 0x21, 0x24,
+					 0x22, 0x47, 0x56, 0x65, 0x65, 0x6E, 0x81, 0x87,
+					 0x8B, 0x98, 0x9D, 0x99, 0xA8, 0xBA, 0x5D, 0x5D,
+					 0x62, 0x67, 0x6B, 0x72, 0x7F,  0x7F);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_UNKNOWN1, 0x1F, 0x31);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETPANEL, 0x03);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_UNKNOWN3, 0x02);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETREGBANK, 0x02);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_UNKNOWN4, 0xFF, 0xFF, 0xFF, 0xFF,
+					 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETREGBANK, 0x00);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETREGBANK, 0x01);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETPOWER, 0x00);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_SETREGBANK, 0x00);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_UNKNOWN0, 0x40, 0x81, 0x50, 0x00,
+					 0x1A, 0xFC, 0x01);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, HX8394_CMD_UNKNOWN2, 0xED);
+
+	rocktech_rk055mhd042a0_dsi_write(dsi, MIPI_DCS_SET_ADDRESS_MODE, FH);
+
+	return 0;
+}
+
+static const struct drm_display_mode rocktech_rk055mhd042a0_mode = {
+	.hdisplay    = 720,
+	.hsync_start = 720 + 48,
+	.hsync_end   = 720 + 48 + 9,
+	.htotal	     = 720 + 48 + 9 + 49,
+	.vdisplay    = 1280,
+	.vsync_start = 1280 + 12,
+	.vsync_end   = 1280 + 12 + 5,
+	.vtotal	     = 1280 + 12 + 5 + 12,
+	.clock	     = 54000,
+	.flags	     = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
+	.width_mm    = 68,
+	.height_mm   = 122,
+};
+
+static const struct hx8394_panel_desc rocktech_rk055mhd042a0_desc = {
+	.mode = &rocktech_rk055mhd042a0_mode,
+	.lanes = 2,
+	.mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
+		      MIPI_DSI_MODE_LPM | MIPI_DSI_CLOCK_NON_CONTINUOUS |
+		      MIPI_DSI_MODE_NO_EOT_PACKET,
+	.format = MIPI_DSI_FMT_RGB888,
+	.init_sequence = rocktech_rk055mhd042a0_init_sequence,
+};
+
 static int hx8394_enable(struct drm_panel *panel)
 {
 	struct hx8394 *ctx = panel_to_hx8394(panel);
@@ -260,14 +400,14 @@ static int hx8394_disable(struct drm_panel *panel)
 static int hx8394_unprepare(struct drm_panel *panel)
 {
 	struct hx8394 *ctx = panel_to_hx8394(panel);
+	int ret;
 
 	if (!ctx->prepared)
 		return 0;
 
-	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-
-	regulator_disable(ctx->iovcc);
-	regulator_disable(ctx->vcc);
+	ret = pm_runtime_put_autosuspend(panel->dev);
+	if (ret < 0)
+		return ret;
 
 	ctx->prepared = false;
 
@@ -282,32 +422,15 @@ static int hx8394_prepare(struct drm_panel *panel)
 	if (ctx->prepared)
 		return 0;
 
-	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-
-	ret = regulator_enable(ctx->vcc);
-	if (ret) {
-		dev_err(ctx->dev, "Failed to enable vcc supply: %d\n", ret);
+	ret = pm_runtime_get_sync(panel->dev);
+	if (ret < 0) {
+		pm_runtime_put_autosuspend(panel->dev);
 		return ret;
 	}
-
-	ret = regulator_enable(ctx->iovcc);
-	if (ret) {
-		dev_err(ctx->dev, "Failed to enable iovcc supply: %d\n", ret);
-		goto disable_vcc;
-	}
-
-	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-
-	msleep(180);
 
 	ctx->prepared = true;
 
 	return 0;
-
-disable_vcc:
-	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-	regulator_disable(ctx->vcc);
-	return ret;
 }
 
 static int hx8394_get_modes(struct drm_panel *panel,
@@ -352,7 +475,11 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
 	if (!ctx)
 		return -ENOMEM;
 
-	ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+	if (device_property_read_bool(dev, "default-on"))
+		ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_LOW);
+	else
+		ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+
 	if (IS_ERR(ctx->reset_gpio))
 		return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio),
 				     "Failed to get reset gpio\n");
@@ -383,13 +510,29 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
 	if (ret)
 		return ret;
 
+	/*
+	 * We use runtime PM for prepare / unprepare since those power the panel
+	 * on and off and those can be very slow operations.
+	 */
+	pm_runtime_enable(dev);
+	pm_runtime_set_autosuspend_delay(dev, 1000);
+	pm_runtime_use_autosuspend(dev);
+
+	if (device_property_read_bool(dev, "default-on")) {
+		ret = pm_runtime_get_sync(dev);
+		if (ret < 0)
+			goto disable_pm_runtime;
+
+		ctx->prepared = true;
+	}
+
 	drm_panel_add(&ctx->panel);
 
 	ret = mipi_dsi_attach(dsi);
 	if (ret < 0) {
 		dev_err_probe(dev, ret, "mipi_dsi_attach failed\n");
 		drm_panel_remove(&ctx->panel);
-		return ret;
+		goto disable_pm_runtime;
 	}
 
 	dev_dbg(dev, "%ux%u@%u %ubpp dsi %udl - ready\n",
@@ -398,6 +541,12 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
 		mipi_dsi_pixel_format_to_bpp(dsi->format), dsi->lanes);
 
 	return 0;
+
+disable_pm_runtime:
+	pm_runtime_dont_use_autosuspend(dev);
+	pm_runtime_disable(dev);
+
+	return ret;
 }
 
 static void hx8394_shutdown(struct mipi_dsi_device *dsi)
@@ -426,10 +575,67 @@ static void hx8394_remove(struct mipi_dsi_device *dsi)
 		dev_err(&dsi->dev, "Failed to detach from DSI host: %d\n", ret);
 
 	drm_panel_remove(&ctx->panel);
+
+	pm_runtime_dont_use_autosuspend(ctx->dev);
+	pm_runtime_disable(ctx->dev);
 }
+
+static __maybe_unused int himax_hx8394_suspend(struct device *dev)
+{
+	struct hx8394 *ctx = dev_get_drvdata(dev);
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+
+	regulator_disable(ctx->iovcc);
+	regulator_disable(ctx->vcc);
+
+	return 0;
+}
+
+static __maybe_unused int himax_hx8394_resume(struct device *dev)
+{
+	struct hx8394 *ctx = dev_get_drvdata(dev);
+	int ret;
+
+	if (!device_property_read_bool(dev, "default-on"))
+		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+
+	ret = regulator_enable(ctx->vcc);
+	if (ret) {
+		dev_err(ctx->dev, "Failed to enable vcc supply: %d\n", ret);
+		return ret;
+	}
+
+	ret = regulator_enable(ctx->iovcc);
+	if (ret) {
+		dev_err(ctx->dev, "Failed to enable iovcc supply: %d\n", ret);
+		goto disable_vcc;
+	}
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+
+	msleep(180);
+
+	ctx->prepared = true;
+
+	return 0;
+
+disable_vcc:
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+	regulator_disable(ctx->vcc);
+
+	return ret;
+}
+
+static const struct dev_pm_ops himax_hx8394_pm_ops = {
+	SET_RUNTIME_PM_OPS(himax_hx8394_suspend, himax_hx8394_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+};
 
 static const struct of_device_id hx8394_of_match[] = {
 	{ .compatible = "hannstar,hsd060bhw4", .data = &hsd060bhw4_desc },
+	{ .compatible = "rocktech,rk055mhd042a0", .data = &rocktech_rk055mhd042a0_desc },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, hx8394_of_match);
@@ -441,6 +647,7 @@ static struct mipi_dsi_driver hx8394_driver = {
 	.driver = {
 		.name = DRV_NAME,
 		.of_match_table = hx8394_of_match,
+		.pm = &himax_hx8394_pm_ops,
 	},
 };
 module_mipi_dsi_driver(hx8394_driver);

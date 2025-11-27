@@ -18,6 +18,7 @@
 #include <linux/types.h>
 
 #include <linux/bus/stm32_firewall.h>
+#include <linux/bus/stm32_firewall_device.h>
 
 /*
  * RIFSC offset register
@@ -73,11 +74,10 @@
 #define RIF_CID0			0x0
 #define RIF_CID1			0x1
 
-#ifdef CONFIG_DEBUG_FS
-#define STM32MP25_RIFSC_DEVICE_ENTRIES		128
-#define STM32MP25_RIFSC_MASTER_ENTRIES	16
-#define STM32MP25_RIFSC_RISAL_SUBREGIONS	2
-#define STM32MP25_RIFSC_RISAL_GRANULARITY	8
+#define RIFSC_DEVICE_ENTRIES		128
+#define RIFSC_INITIATOR_ENTRIES		16
+#define RIFSC_RISAL_SUBREGIONS		2
+#define RIFSC_RISAL_GRANULARITY		8
 
 #define RIFSC_RIMC_ATTR0		0xC10
 
@@ -86,15 +86,15 @@
 #define RIFSC_RIMC_MSEC			BIT(8)
 #define RIFSC_RIMC_MPRIV		BIT(9)
 
-#define RIFSC_RISC_SRCID_MASK	GENMASK(6, 4)
-#define RIFSC_RISC_SRPRIV	BIT(9)
-#define RIFSC_RISC_SRSEC	BIT(8)
-#define RIFSC_RISC_SRRLOCK	BIT(1)
-#define RIFSC_RISC_SREN	BIT(0)
+#define RIFSC_RISC_SRCID_MASK		GENMASK(6, 4)
+#define RIFSC_RISC_SRPRIV		BIT(9)
+#define RIFSC_RISC_SRSEC		BIT(8)
+#define RIFSC_RISC_SRRLOCK		BIT(1)
+#define RIFSC_RISC_SREN			BIT(0)
 #define RIFSC_RISC_SRLENGTH_MASK	GENMASK(27, 16)
-#define RIFSC_RISC_SRSTART_MASK	GENMASK(10, 0)
+#define RIFSC_RISC_SRSTART_MASK		GENMASK(10, 0)
 
-static const char *stm32mp25_rifsc_master_names[STM32MP25_RIFSC_MASTER_ENTRIES] = {
+static const char *stm32mp25_rifsc_initiator_names[RIFSC_INITIATOR_ENTRIES] = {
 	"ETR",
 	"SDMMC1",
 	"SDMMC2",
@@ -106,14 +106,33 @@ static const char *stm32mp25_rifsc_master_names[STM32MP25_RIFSC_MASTER_ENTRIES] 
 	"PCIE",
 	"GPU",
 	"DMCIPP",
-	"LTDC_L0/L1",
-	"LTDC_L2",
+	"LTDC_L1/L2",
+	"LTDC_L3",
 	"LTDC_ROT",
 	"VDEC",
 	"VENC"
 };
 
-static const char *stm32mp25_rifsc_dev_names[STM32MP25_RIFSC_DEVICE_ENTRIES] = {
+static const char *stm32mp21_rifsc_initiator_names[RIFSC_INITIATOR_ENTRIES] = {
+	"ETR",
+	"SDMMC1",
+	"SDMMC2",
+	"SDMMC3",
+	"OTG_HS",
+	"USBH",
+	"ETH1",
+	"ETH2",
+	"RESERVED",
+	"RESERVED",
+	"DCMIPP",
+	"LTDC_L1/L2",
+	"LTDC_L3",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+};
+
+static const char *stm32mp25_rifsc_dev_names[RIFSC_DEVICE_ENTRIES] = {
 	"TIM1",
 	"TIM2",
 	"TIM3",
@@ -233,8 +252,8 @@ static const char *stm32mp25_rifsc_dev_names[STM32MP25_RIFSC_DEVICE_ENTRIES] = {
 	"I3C3",
 	"I3C4",
 	"ICACHE_DCACHE",
-	"LTDC_L0L1",
-	"LTDC_L2",
+	"LTDC_L1L2",
+	"LTDC_L3",
 	"LTDC_ROT",
 	"DSI_TRIG",
 	"DSI_RDFIFO",
@@ -244,7 +263,138 @@ static const char *stm32mp25_rifsc_dev_names[STM32MP25_RIFSC_DEVICE_ENTRIES] = {
 	"IAC",
 };
 
-struct rifsc_dev_debug_data {
+static const char *stm32mp21_rifsc_dev_names[RIFSC_DEVICE_ENTRIES] = {
+	"TIM1",
+	"TIM2",
+	"TIM3",
+	"TIM4",
+	"TIM5",
+	"TIM6",
+	"TIM7",
+	"TIM8",
+	"TIM10",
+	"TIM11",
+	"TIM12",
+	"TIM13",
+	"TIM14",
+	"TIM15",
+	"TIM16",
+	"TIM17",
+	"RESERVED",
+	"LPTIM1",
+	"LPTIM2",
+	"LPTIM3",
+	"LPTIM4",
+	"LPTIM5",
+	"SPI1",
+	"SPI2",
+	"SPI3",
+	"SPI4",
+	"SPI5",
+	"SPI6",
+	"RESERVED",
+	"RESERVED",
+	"SPDIFRX",
+	"USART1",
+	"USART2",
+	"USART3",
+	"UART4",
+	"UART5",
+	"USART6",
+	"UART7",
+	"RESERVED",
+	"RESERVED",
+	"LPUART1",
+	"I2C1",
+	"I2C2",
+	"I2C3",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"SAI1",
+	"SAI2",
+	"SAI3",
+	"SAI4",
+	"RESERVED",
+	"MDF1",
+	"RESERVED",
+	"FDCAN",
+	"HDP",
+	"ADC1",
+	"ADC2",
+	"ETH1",
+	"ETH2",
+	"RESERVED",
+	"USBH",
+	"RESERVED",
+	"RESERVED",
+	"OTG_HS",
+	"DDRPERFM",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"STGEN",
+	"OCTOSPI1",
+	"RESERVED",
+	"SDMMC1",
+	"SDMMC2",
+	"SDMMC3",
+	"RESERVED",
+	"LTDC_CMN",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"CSI",
+	"DCMIPP",
+	"DCMI_PSSI",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"RNG1",
+	"RNG2",
+	"PKA",
+	"SAES",
+	"HASH1",
+	"HASH2",
+	"CRYP1",
+	"CRYP2",
+	"IWDG1",
+	"IWDG2",
+	"IWDG3",
+	"IWDG4",
+	"WWDG1",
+	"RESERVED",
+	"VREFBUF",
+	"DTS",
+	"RAMCFG",
+	"CRC",
+	"SERC",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"I3C1",
+	"I3C2",
+	"I3C3",
+	"RESERVED",
+	"ICACHE_DCACHE",
+	"LTDC_L1L2",
+	"LTDC_L3",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"RESERVED",
+	"OTFDEC1",
+	"RESERVED",
+	"IAC",
+};
+
+struct stm32_rifsc_dev_debug_data {
 	char dev_name[15];
 	u8 dev_cid;
 	u8 dev_sem_cids;
@@ -255,7 +405,32 @@ struct rifsc_dev_debug_data {
 	bool dev_sec;
 };
 
-struct rifsc_master_debug_data {
+struct stm32_rifsc_resources_names {
+	const char **device_names;
+	const char **initiator_names;
+};
+
+static const struct stm32_rifsc_resources_names rifsc_mp21_res_names = {
+	.device_names = stm32mp21_rifsc_dev_names,
+	.initiator_names = stm32mp21_rifsc_initiator_names,
+};
+
+static const struct stm32_rifsc_resources_names rifsc_mp25_res_names = {
+	.device_names = stm32mp25_rifsc_dev_names,
+	.initiator_names = stm32mp25_rifsc_initiator_names,
+};
+
+struct rifsc_private {
+	const struct stm32_rifsc_resources_names *res_names;
+	u32 *risal_map_bases;
+	void __iomem *mmio;
+	unsigned int nb_risup;
+	unsigned int nb_rimu;
+	unsigned int nb_risal;
+};
+
+#ifdef CONFIG_DEBUG_FS
+struct rifsc_initiator_debug_data {
 	char m_name[11];
 	u8 m_cid;
 	bool cidsel;
@@ -273,22 +448,24 @@ struct rifsc_subreg_debug_data {
 	u16 sr_length;
 };
 
-static void stm32_rifsc_fill_master_dbg_entry(struct stm32_firewall_controller *rifsc,
-					      struct rifsc_master_debug_data *dbg_entry, int i)
+static void stm32_rifsc_fill_initiator_dbg_entry(struct rifsc_private *rifsc,
+						 struct rifsc_initiator_debug_data *dbg_entry,
+						 int i)
 {
+	const struct stm32_rifsc_resources_names *dbg_names = rifsc->res_names;
 	u32 rimc_attr = readl_relaxed(rifsc->mmio + RIFSC_RIMC_ATTR0 + 0x4 * i);
 
-	snprintf(dbg_entry->m_name, sizeof(dbg_entry->m_name), "%s",
-		 stm32mp25_rifsc_master_names[i]);
+	snprintf(dbg_entry->m_name, sizeof(dbg_entry->m_name), "%s", dbg_names->initiator_names[i]);
 	dbg_entry->m_cid = FIELD_GET(RIFSC_RIMC_MCID_MASK, rimc_attr);
 	dbg_entry->cidsel = rimc_attr & RIFSC_RIMC_CIDSEL;
 	dbg_entry->m_sec = rimc_attr & RIFSC_RIMC_MSEC;
 	dbg_entry->m_priv = rimc_attr & RIFSC_RIMC_MPRIV;
 }
 
-static void stm32_rifsc_fill_dev_dbg_entry(struct stm32_firewall_controller *rifsc,
-					   struct rifsc_dev_debug_data *dbg_entry, int i)
+static void stm32_rifsc_fill_dev_dbg_entry(struct rifsc_private *rifsc,
+					   struct stm32_rifsc_dev_debug_data *dbg_entry, int i)
 {
+	const struct stm32_rifsc_resources_names *dbg_names = rifsc->res_names;
 	u32 cid_cfgr, sec_cfgr, priv_cfgr;
 	u8 reg_id = i / IDS_PER_RISC_SEC_PRIV_REGS;
 	u8 reg_offset = i % IDS_PER_RISC_SEC_PRIV_REGS;
@@ -298,7 +475,7 @@ static void stm32_rifsc_fill_dev_dbg_entry(struct stm32_firewall_controller *rif
 	priv_cfgr = readl_relaxed(rifsc->mmio + RIFSC_RISC_PRIVCFGR0 + 0x4 * reg_id);
 
 	snprintf(dbg_entry->dev_name, sizeof(dbg_entry->dev_name), "%s",
-		 stm32mp25_rifsc_dev_names[i]);
+		 dbg_names->device_names[i]);
 	dbg_entry->dev_id = i;
 	dbg_entry->dev_cid_filt_en = cid_cfgr & CIDCFGR_CFEN;
 	dbg_entry->dev_sem_en = cid_cfgr & CIDCFGR_SEMEN;
@@ -308,9 +485,9 @@ static void stm32_rifsc_fill_dev_dbg_entry(struct stm32_firewall_controller *rif
 	dbg_entry->dev_priv = priv_cfgr & BIT(reg_offset) ?  true : false;
 }
 
-static void stm32_rifsc_fill_subreg_dbg_entry(struct stm32_firewall_controller *rifsc,
+static void stm32_rifsc_fill_subreg_dbg_entry(struct rifsc_private *rifsc,
 					      struct rifsc_subreg_debug_data *dbg_entry, int i,
-						  int j)
+					      int j)
 {
 	u32 risc_xcfgr = readl_relaxed(rifsc->mmio + RIFSC_RISC_REG0_ACFGR + 0x10 * i + 0x8 * j);
 	u32 risc_xaddr;
@@ -332,7 +509,7 @@ static void stm32_rifsc_fill_subreg_dbg_entry(struct stm32_firewall_controller *
 
 static int stm32_rifsc_conf_dump_show(struct seq_file *s, void *data)
 {
-	struct stm32_firewall_controller *rifsc = (struct stm32_firewall_controller *)s->private;
+	struct rifsc_private *rifsc = (struct rifsc_private *)s->private;
 	u32 subregion_start, subregion_end;
 	int i, j;
 
@@ -353,8 +530,8 @@ static int stm32_rifsc_conf_dump_show(struct seq_file *s, void *data)
 	seq_puts(s, "| SCID |");
 	seq_printf(s, "| %7s |\n", "SEMWL");
 
-	for (i = 0; i < STM32MP25_RIFSC_DEVICE_ENTRIES; i++) {
-		struct rifsc_dev_debug_data d_dbg_entry;
+	for (i = 0; i < RIFSC_DEVICE_ENTRIES && i < rifsc->nb_risup; i++) {
+		struct stm32_rifsc_dev_debug_data d_dbg_entry;
 
 		stm32_rifsc_fill_dev_dbg_entry(rifsc, &d_dbg_entry, i);
 
@@ -374,18 +551,18 @@ static int stm32_rifsc_conf_dump_show(struct seq_file *s, void *data)
 	seq_puts(s, "                  RIMU dump\n");
 	seq_puts(s, "=============================================\n");
 
-	seq_puts(s, "| Master name |");
+	seq_puts(s, "| Initiator name |");
 	seq_puts(s, "| CIDSEL |");
 	seq_puts(s, "| MCID |");
 	seq_puts(s, "| N/SECURE |");
 	seq_puts(s, "| N/PRIVILEGED |\n");
 
-	for (i = 0; i < STM32MP25_RIFSC_MASTER_ENTRIES; i++) {
-		struct rifsc_master_debug_data m_dbg_entry;
+	for (i = 0; i < RIFSC_INITIATOR_ENTRIES && rifsc->nb_rimu; i++) {
+		struct rifsc_initiator_debug_data m_dbg_entry;
 
-		stm32_rifsc_fill_master_dbg_entry(rifsc, &m_dbg_entry, i);
+		stm32_rifsc_fill_initiator_dbg_entry(rifsc, &m_dbg_entry, i);
 
-		seq_printf(s, "| %-11s |", m_dbg_entry.m_name);
+		seq_printf(s, "| %-14s |", m_dbg_entry.m_name);
 		seq_printf(s, "| %-6s |", m_dbg_entry.cidsel ? "CIDSEL" : "");
 		seq_printf(s, "| %-4d |", m_dbg_entry.m_cid);
 		seq_printf(s, "| %-8s |", m_dbg_entry.m_sec ? "SEC" : "NSEC");
@@ -408,7 +585,7 @@ static int stm32_rifsc_conf_dump_show(struct seq_file *s, void *data)
 		seq_puts(s, "|  Subreg. end  |\n");
 
 		for (i = 0; i < rifsc->nb_risal; i++) {
-			for (j = 0; j < STM32MP25_RIFSC_RISAL_SUBREGIONS; j++) {
+			for (j = 0; j < RIFSC_RISAL_SUBREGIONS; j++) {
 				struct rifsc_subreg_debug_data sr_dbg_entry;
 
 				stm32_rifsc_fill_subreg_dbg_entry(rifsc, &sr_dbg_entry, i, j);
@@ -424,12 +601,11 @@ static int stm32_rifsc_conf_dump_show(struct seq_file *s, void *data)
 					   sr_dbg_entry.sr_enable ? "enabled" : "disabled");
 
 				subregion_start = rifsc->risal_map_bases[2 * i] +
-					sr_dbg_entry.sr_start * STM32MP25_RIFSC_RISAL_GRANULARITY;
+					sr_dbg_entry.sr_start * RIFSC_RISAL_GRANULARITY;
 				subregion_end = rifsc->risal_map_bases[2 * i] +
 					rifsc->risal_map_bases[2 * i + 1] - 1;
 				subregion_end = min(subregion_start + sr_dbg_entry.sr_length *
-						    STM32MP25_RIFSC_RISAL_GRANULARITY - 1,
-						    subregion_end);
+						    RIFSC_RISAL_GRANULARITY - 1, subregion_end);
 
 				seq_printf(s, "| 0x%-11x |", subregion_start);
 				seq_printf(s, "| 0x%-11x |\n", subregion_end);
@@ -441,7 +617,7 @@ static int stm32_rifsc_conf_dump_show(struct seq_file *s, void *data)
 }
 DEFINE_SHOW_ATTRIBUTE(stm32_rifsc_conf_dump);
 
-static int stm32_rifsc_register_debugfs(struct stm32_firewall_controller *controller)
+static int stm32_rifsc_register_debugfs(struct rifsc_private *priv)
 {
 	struct dentry *root = NULL;
 
@@ -452,8 +628,13 @@ static int stm32_rifsc_register_debugfs(struct stm32_firewall_controller *contro
 	if (IS_ERR(root))
 		return PTR_ERR(root);
 
-	debugfs_create_file("rifsc", 0444, root, controller, &stm32_rifsc_conf_dump_fops);
+	debugfs_create_file("rifsc", 0444, root, priv, &stm32_rifsc_conf_dump_fops);
 
+	return 0;
+}
+#else /* CONFIG_DEBUG_FS */
+static int stm32_rifsc_register_debugfs(struct rifsc_private *priv __unused)
+{
 	return 0;
 }
 #endif /* CONFIG_DEBUG_FS */
@@ -514,34 +695,6 @@ static int stm32_rifsc_grant_access(struct stm32_firewall_controller *ctrl, u32 
 	sec_reg_value = readl(rifsc_controller->mmio + RIFSC_RISC_SECCFGR0 + 0x4 * reg_id);
 	cid_reg_value = readl(rifsc_controller->mmio + RIFSC_RISC_PER0_CIDCFGR + 0x8 * firewall_id);
 
-	/* First check conditions for semaphore mode, which doesn't take into account static CID. */
-	if ((cid_reg_value & CIDCFGR_SEMEN) && (cid_reg_value & CIDCFGR_CFEN)) {
-		if (cid_reg_value & BIT(RIF_CID1 + SEMWL_SHIFT)) {
-			/* Static CID is irrelevant if semaphore mode */
-			goto skip_cid_check;
-		} else {
-			dev_dbg(rifsc_controller->dev,
-				"Invalid bus semaphore configuration: index %d\n", firewall_id);
-			return -EACCES;
-		}
-	}
-
-	/*
-	 * Skip CID check if CID filtering isn't enabled or filtering is enabled on CID0, which
-	 * corresponds to whatever CID.
-	 */
-	if (!(cid_reg_value & CIDCFGR_CFEN) ||
-	    FIELD_GET(RIFSC_RISC_SCID_MASK, cid_reg_value) == RIF_CID0)
-		goto skip_cid_check;
-
-	/* Coherency check with the CID configuration */
-	if (FIELD_GET(RIFSC_RISC_SCID_MASK, cid_reg_value) != RIF_CID1) {
-		dev_dbg(rifsc_controller->dev, "Invalid CID configuration for peripheral: %d\n",
-			firewall_id);
-		return -EACCES;
-	}
-
-skip_cid_check:
 	/* Check security configuration */
 	if (sec_reg_value & BIT(reg_offset)) {
 		dev_dbg(rifsc_controller->dev,
@@ -549,19 +702,31 @@ skip_cid_check:
 		return -EACCES;
 	}
 
-	/*
-	 * If the peripheral is in semaphore mode, take the semaphore so that
-	 * the CID1 has the ownership.
-	 */
-	if ((cid_reg_value & CIDCFGR_SEMEN) && (cid_reg_value & CIDCFGR_CFEN)) {
+	/* Skip CID check if CID filtering isn't enabled */
+	if (!(cid_reg_value & CIDCFGR_CFEN))
+		goto skip_cid_check;
+
+	/* First check conditions for semaphore mode, which doesn't take into account static CID. */
+	if (cid_reg_value & CIDCFGR_SEMEN) {
+		if (!(cid_reg_value & BIT(RIF_CID1 + SEMWL_SHIFT))) {
+			dev_dbg(rifsc_controller->dev,
+				"Invalid bus semaphore configuration: index %d\n", firewall_id);
+			return -EACCES;
+		}
+
 		rc = stm32_rif_acquire_semaphore(rifsc_controller, firewall_id);
 		if (rc) {
-			dev_err(rifsc_controller->dev,
+			dev_dbg(rifsc_controller->dev,
 				"Couldn't acquire semaphore for peripheral: %d\n", firewall_id);
 			return rc;
 		}
+	} else if (FIELD_GET(RIFSC_RISC_SCID_MASK, cid_reg_value) != RIF_CID1) {
+		dev_dbg(rifsc_controller->dev, "Invalid CID configuration for peripheral: %d\n",
+			firewall_id);
+		return -EACCES;
 	}
 
+skip_cid_check:
 	return 0;
 }
 
@@ -570,9 +735,83 @@ static void stm32_rifsc_release_access(struct stm32_firewall_controller *ctrl, u
 	stm32_rif_release_semaphore(ctrl, firewall_id);
 }
 
+static void stm32_rifsc_unpriv_by_id(struct stm32_firewall_controller *ctrl, u32 firewall_id)
+{
+	u32 reg_id, reg_offset, priv_value;
+
+	reg_id = firewall_id / IDS_PER_RISC_SEC_PRIV_REGS;
+	reg_offset = firewall_id % IDS_PER_RISC_SEC_PRIV_REGS;
+
+	priv_value = readl(ctrl->mmio + RIFSC_RISC_PRIVCFGR0 + 0x4 * reg_id);
+	if (priv_value & BIT(reg_offset)) {
+		priv_value &= ~BIT(reg_offset);
+		writel(priv_value, ctrl->mmio + RIFSC_RISC_PRIVCFGR0 + 0x4 * reg_id);
+	}
+}
+
+static int stm32_rifsc_populate_bus(struct stm32_firewall_controller *ctrl)
+{
+	struct stm32_firewall *firewalls;
+	struct device_node *child;
+	struct device *parent;
+	unsigned int i;
+	int len;
+	int err;
+
+	parent = ctrl->dev;
+
+	dev_dbg(parent, "Populating %s system bus\n", dev_name(ctrl->dev));
+
+	for_each_available_child_of_node(dev_of_node(parent), child) {
+		/* The access-controllers property is mandatory for firewall bus devices */
+		len = of_count_phandle_with_args(child, "access-controllers",
+						 "#access-controller-cells");
+		if (len <= 0) {
+			of_node_put(child);
+			return -EINVAL;
+		}
+
+		firewalls = kcalloc(len, sizeof(*firewalls), GFP_KERNEL);
+		if (!firewalls) {
+			of_node_put(child);
+			return -ENOMEM;
+		}
+
+		err = stm32_firewall_get_firewall(child, firewalls, (unsigned int)len);
+		if (err) {
+			kfree(firewalls);
+			of_node_put(child);
+			return err;
+		}
+
+		for (i = 0; i < len; i++) {
+			err = firewalls[i].firewall_ctrl->grant_access(firewalls[i].firewall_ctrl,
+								       firewalls[i].firewall_id);
+			if (err) {
+				/*
+				 * Peripheral access not allowed or not defined.
+				 * Mark the node as populated so platform bus won't probe it
+				 */
+				of_detach_node(child);
+				dev_err(parent, "%s: Device driver will not be probed, error: %d\n",
+					child->full_name, err);
+			}
+			if (IS_ENABLED(CONFIG_STM32_RIFSC_DEBUG)) {
+				dev_dbg(parent, "Unprivileged %s", child->full_name);
+				stm32_rifsc_unpriv_by_id(ctrl, firewalls[i].firewall_id);
+			}
+		}
+
+		kfree(firewalls);
+	}
+
+	return 0;
+}
+
 static int stm32_rifsc_probe(struct platform_device *pdev)
 {
 	struct stm32_firewall_controller *rifsc_controller;
+	struct rifsc_private *rifsc_priv;
 	struct device_node *np = pdev->dev.of_node;
 	u32 nb_risup, nb_rimu, nb_risal;
 	struct resource *res;
@@ -581,6 +820,10 @@ static int stm32_rifsc_probe(struct platform_device *pdev)
 
 	rifsc_controller = devm_kzalloc(&pdev->dev, sizeof(*rifsc_controller), GFP_KERNEL);
 	if (!rifsc_controller)
+		return -ENOMEM;
+
+	rifsc_priv = devm_kzalloc(&pdev->dev, sizeof(*rifsc_priv), GFP_KERNEL);
+	if (!rifsc_priv)
 		return -ENOMEM;
 
 	mmio = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
@@ -602,8 +845,14 @@ static int stm32_rifsc_probe(struct platform_device *pdev)
 	nb_risal = FIELD_GET(HWCFGR2_CONF3_MASK,
 			     readl(rifsc_controller->mmio + RIFSC_RISC_HWCFGR2));
 	rifsc_controller->max_entries = nb_risup + nb_rimu + nb_risal;
-	rifsc_controller->nb_risal = nb_risal;
 
+	rifsc_priv->nb_rimu = nb_rimu;
+	rifsc_priv->nb_risup = nb_risup;
+	rifsc_priv->nb_risal = nb_risal;
+	rifsc_priv->mmio = mmio;
+	rifsc_priv->res_names = of_device_get_match_data(&pdev->dev);
+	if (!rifsc_priv->res_names)
+		return -ENODEV;
 	/*
 	 * In STM32MP21, RIFSC_RISC_HWCFGR2 shows an incorrect number of RISAL (NUM_RISAL is 3
 	 * instead of 0). A software workaround is implemented using the st,mem-map property in the
@@ -620,22 +869,21 @@ static int stm32_rifsc_probe(struct platform_device *pdev)
 	}
 
 	if (nb_risal_map_bases == 0)
-		rifsc_controller->nb_risal = 0;
+		rifsc_priv->nb_risal = 0;
 
 	/* Get RISAL map bases */
-	if (rifsc_controller->nb_risal > 0) {
-		if (nb_risal_map_bases != 2 * rifsc_controller->nb_risal) {
+	if (rifsc_priv->nb_risal > 0) {
+		if (nb_risal_map_bases != 2 * rifsc_priv->nb_risal) {
 			pr_err("RISAL count in HW configuration register and device tree mismatch");
 			return -EINVAL;
 		}
 
-		rifsc_controller->risal_map_bases = devm_kzalloc(&pdev->dev, nb_risal_map_bases *
-								sizeof(u32), GFP_KERNEL);
-		if (!rifsc_controller->risal_map_bases)
+		rifsc_priv->risal_map_bases = devm_kzalloc(&pdev->dev, nb_risal_map_bases *
+							   sizeof(u32), GFP_KERNEL);
+		if (!rifsc_priv->risal_map_bases)
 			return -ENOMEM;
 
-		err = of_property_read_u32_array(np, "st,mem-map",
-						 rifsc_controller->risal_map_bases,
+		err = of_property_read_u32_array(np, "st,mem-map", rifsc_priv->risal_map_bases,
 						 nb_risal_map_bases);
 		if (err) {
 			pr_err("Couldn't read st,mem-map property");
@@ -652,21 +900,32 @@ static int stm32_rifsc_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	rc = stm32_firewall_populate_bus(rifsc_controller);
+	rc = stm32_rifsc_populate_bus(rifsc_controller);
 	if (rc) {
 		dev_err(rifsc_controller->dev, "Couldn't populate RIFSC bus: %d",
 			rc);
 		return rc;
 	}
 
-	stm32_rifsc_register_debugfs(rifsc_controller);
+	rc = stm32_rifsc_register_debugfs(rifsc_priv);
+	if (rc) {
+		dev_err(rifsc_controller->dev, "Couldn't add RIFSC debug entry: %d", rc);
+		return rc;
+	}
 
 	/* Populate all allowed nodes */
 	return of_platform_populate(np, NULL, NULL, &pdev->dev);
 }
 
 static const struct of_device_id stm32_rifsc_of_match[] = {
-	{ .compatible = "st,stm32mp25-rifsc" },
+	{
+		.compatible = "st,stm32mp25-rifsc",
+		.data = &rifsc_mp25_res_names,
+	},
+	{
+		.compatible = "st,stm32mp21-rifsc",
+		.data = &rifsc_mp21_res_names,
+	},
 	{}
 };
 MODULE_DEVICE_TABLE(of, stm32_rifsc_of_match);

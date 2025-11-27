@@ -72,7 +72,9 @@ additionalProperties: false
 
 examples:
   - |
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     #include <dt-bindings/reset/st,stm32mp25-rcc.h>
+
     m0_rproc: m0@0 {
       compatible = "st,stm32mp2-m0";
       reg = <0 0>;

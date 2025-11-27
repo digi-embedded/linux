@@ -80,6 +80,7 @@ struct sdmmc_dlyb {
 	void __iomem *base;
 	u32 unit;
 	u32 max;
+	unsigned int min_freq;
 	struct sdmmc_tuning_ops *ops;
 };
 
@@ -411,7 +412,8 @@ static void mmci_sdmmc_set_pwrreg(struct mmci_host *host, unsigned int pwr)
 	if (dlyb && dlyb->ops->set_input_ck)
 		dlyb->ops->set_input_ck(dlyb);
 
-	if (ios.power_mode == MMC_POWER_OFF) {
+	if (ios.power_mode == MMC_POWER_OFF ||
+	    ios.power_mode == MMC_POWER_UP) {
 		/* Only a reset could power-off sdmmc */
 		reset_control_assert(host->rst);
 		udelay(2);
@@ -671,7 +673,7 @@ static int sdmmc_execute_tuning(struct mmc_host *mmc, u32 opcode)
 
 	if ((host->mmc->ios.timing != MMC_TIMING_UHS_SDR104 &&
 	     host->mmc->ios.timing != MMC_TIMING_MMC_HS200) ||
-	    host->mmc->actual_clock <= 50000000)
+	    host->mmc->actual_clock <= dlyb->min_freq)
 		return 0;
 
 	if (!dlyb || !dlyb->base)
@@ -782,10 +784,13 @@ void sdmmc_variant_init(struct mmci_host *host)
 		return;
 
 	dlyb->base = base_dlyb;
-	if (of_device_is_compatible(np, "st,stm32mp25-sdmmc2"))
+	if (of_device_is_compatible(np, "st,stm32mp25-sdmmc2")) {
 		dlyb->ops = &dlyb_tuning_mp25_ops;
-	else
+		dlyb->min_freq = 100000000;
+	} else {
 		dlyb->ops = &dlyb_tuning_mp15_ops;
+		dlyb->min_freq = 50000000;
+	}
 
 	host->variant_priv = dlyb;
 	host->mmc_ops->execute_tuning = sdmmc_execute_tuning;

@@ -30,6 +30,9 @@
 
 #define RTL8211F_PHYCR1				0x18
 #define RTL8211F_PHYCR2				0x19
+#define RTL8211F_CLKOUT_EN			BIT(0)
+#define RTL8211F_PHYCR2_PHY_EEE_ENABLE		BIT(5)
+
 #define RTL8211F_INSR				0x1d
 
 #define RTL8211F_TX_DELAY			BIT(8)
@@ -419,14 +422,22 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 	}
 
 	if (of_property_read_bool(dev->of_node, "realtek,eee-disable")) {
+		phy_lock_mdio_bus(phydev);
 		rtl821x_write_page(phydev, 0xa4b);
-		phy_write(phydev, 0x11, 0x1110);
+		__phy_write(phydev, 0x11, 0x1110);
 		rtl821x_write_page(phydev, 0);
-		phy_write(phydev, 0xd,7);
-		phy_write(phydev, 0xe,0x3c);
-		phy_write(phydev, 0xd,0x4007);
-		phy_write(phydev, 0xe,0x0);
+		__phy_write(phydev, 0xd, 7);
+		__phy_write(phydev, 0xe, 0x3c);
+		__phy_write(phydev, 0xd, 0x4007);
+		__phy_write(phydev, 0xe, 0x0);
+		phy_unlock_mdio_bus(phydev);
 	}
+
+	/* Disable PHY-mode EEE so LPI is passed to the MAC */
+	ret = phy_modify_paged(phydev, 0xa43, RTL8211F_PHYCR2,
+			       RTL8211F_PHYCR2_PHY_EEE_ENABLE, 0);
+	if (ret)
+		return ret;
 
 	if (priv->has_phycr2) {
 		ret = phy_modify_paged(phydev, 0xa43, RTL8211F_PHYCR2,

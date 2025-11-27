@@ -143,6 +143,8 @@ static void hantro_h1_h264_enc_set_params(struct hantro_dev *vpu, struct hantro_
 		| H1_REG_ENC_CTRL2_INTRA16X16_MODE(h264_intra16_favor[qp]);
 	if (params->flags & V4L2_H264_ENCODE_FLAG_ENTROPY_CABAC)
 		reg |= H1_REG_ENC_CTRL2_ENTROPY_CABAC;
+	if (params->flags & V4L2_H264_ENCODE_FLAG_TRANSFORM_8X8_MODE)
+		reg |= H1_REG_ENC_CTRL2_TRANS8X8_MODE_EN;
 	vepu_write_relaxed(vpu, reg, H1_REG_ENC_CTRL2);
 
 	reg = H1_REG_ENC_CTRL3_MV_PENALTY_1P(h264_diff_mv_penalty[qp])

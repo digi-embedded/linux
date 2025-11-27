@@ -112,6 +112,12 @@ static void dwc2_handle_otg_intr(struct dwc2_hsotg *hsotg)
 					"Device Not Connected/Responding!\n");
 			}
 
+			/* Exit gadget mode clock gating. */
+			if (hsotg->params.power_down ==
+			    DWC2_POWER_DOWN_PARAM_NONE && hsotg->bus_suspended &&
+			    !hsotg->params.no_clock_gating)
+				dwc2_gadget_exit_clock_gating(hsotg, 0);
+
 			/*
 			 * If Session End Detected the B-Cable has been
 			 * disconnected
@@ -377,6 +383,7 @@ void dwc2_wakeup_from_lpm_l1(struct dwc2_hsotg *hsotg, bool remotewakeup)
 		}
 
 		/* Inform gadget to exit from L1 */
+		usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
 		call_gadget(hsotg, resume);
 		/* Change to L0 state */
 		hsotg->lx_state = DWC2_L0;
@@ -433,6 +440,9 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 			    !hsotg->params.no_clock_gating)
 				dwc2_gadget_exit_clock_gating(hsotg, 0);
 
+			/* Change to L0 state, when no_clock_gating == true */
+			hsotg->lx_state = DWC2_L0;
+			usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
 			call_gadget(hsotg, resume);
 		} else {
 			/* Change to L0 state */
@@ -499,8 +509,24 @@ static void dwc2_handle_disconnect_intr(struct dwc2_hsotg *hsotg)
  */
 static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 {
+	u32 gintsts = dwc2_readl(hsotg, GINTSTS) & dwc2_readl(hsotg, GINTMSK);
 	u32 dsts;
 	int ret;
+
+	if (gintsts & GINTSTS_ERLYSUSP) {
+		dev_dbg(hsotg->dev, "USBSUSP temporarily ignored, raced with ERLYSUSP\n");
+		return;
+	}
+
+	if (gintsts & (GINTSTS_OEPINT | GINTSTS_IEPINT)) {
+		u32 daint = dwc2_readl(hsotg, DAINT);
+		u32 daintmsk = dwc2_readl(hsotg, DAINTMSK);
+
+		if (daint & daintmsk) {
+			dev_dbg(hsotg->dev, "USBSUSP temporarily ignored, before EP IRQ\n");
+			return;
+		}
+	}
 
 	/* Clear interrupt */
 	dwc2_writel(hsotg, GINTSTS_USBSUSP, GINTSTS);
@@ -560,6 +586,9 @@ static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 			 * spinlock
 			 */
 			hsotg->lx_state = DWC2_L2;
+
+			hsotg->suspended_from = hsotg->gadget.state;
+			usb_gadget_set_state(&hsotg->gadget, USB_STATE_SUSPENDED);
 
 			/* Call gadget suspend callback */
 			call_gadget(hsotg, suspend);
@@ -637,6 +666,9 @@ static void dwc2_handle_lpm_intr(struct dwc2_hsotg *hsotg)
 			dev_dbg(hsotg->dev,
 				"Core is in L1 sleep glpmcfg=%08x\n", glpmcfg);
 
+			hsotg->suspended_from = hsotg->gadget.state;
+			usb_gadget_set_state(&hsotg->gadget, USB_STATE_SUSPENDED);
+
 			/* Inform gadget that we are in L1 state */
 			call_gadget(hsotg, suspend);
 		}
@@ -645,6 +677,12 @@ static void dwc2_handle_lpm_intr(struct dwc2_hsotg *hsotg)
 
 #define GINTMSK_COMMON	(GINTSTS_WKUPINT | GINTSTS_SESSREQINT |		\
 			 GINTSTS_CONIDSTSCHNG | GINTSTS_OTGINT |	\
+			 GINTSTS_MODEMIS | GINTSTS_DISCONNINT |		\
+			 GINTSTS_USBSUSP | GINTSTS_PRTINT |		\
+			 GINTSTS_LPMTRANRCVD)
+
+#define GINTMSK_COMMON_NO_HNP_SRP (GINTSTS_WKUPINT | \
+			 GINTSTS_CONIDSTSCHNG |	\
 			 GINTSTS_MODEMIS | GINTSTS_DISCONNINT |		\
 			 GINTSTS_USBSUSP | GINTSTS_PRTINT |		\
 			 GINTSTS_LPMTRANRCVD)
@@ -662,6 +700,11 @@ static u32 dwc2_read_common_intr(struct dwc2_hsotg *hsotg)
 	gintsts = dwc2_readl(hsotg, GINTSTS);
 	gintmsk = dwc2_readl(hsotg, GINTMSK);
 	gahbcfg = dwc2_readl(hsotg, GAHBCFG);
+
+	if (hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_HNP_SRP_CAPABLE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_DEVICE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_HOST)
+		gintmsk_common = GINTMSK_COMMON_NO_HNP_SRP;
 
 	/* If any common interrupts set */
 	if (gintsts & gintmsk_common)
@@ -777,6 +820,8 @@ static int dwc2_handle_gpwrdn_intr(struct dwc2_hsotg *hsotg)
 				if (ret)
 					dev_err(hsotg->dev,
 						"exit hibernation failed.\n");
+
+				usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
 				call_gadget(hsotg, resume);
 			} else {
 				ret = dwc2_exit_hibernation(hsotg, 1, 0, 1);

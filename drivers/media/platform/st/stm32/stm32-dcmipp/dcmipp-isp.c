@@ -24,13 +24,7 @@
 
 #define DCMIPP_ISP_DRV_NAME "dcmipp-isp"
 
-#define DCMIPP_FMT_WIDTH_DEFAULT  640
-#define DCMIPP_FMT_HEIGHT_DEFAULT 480
-
 #define DCMIPP_CMSR2_P1VSYNCF BIT(18)
-
-#define DCMIPP_P1FSCR	0x804
-#define DCMIPP_P1FSCR_PIPEDIFF BIT(18)
 
 #define DCMIPP_P1SRCR	0x820
 #define DCMIPP_P1SRCR_LASTLINE_SHIFT	0
@@ -54,18 +48,6 @@
 #define DCMIPP_P1DMCR_TYPE_GRBG		0x1
 #define DCMIPP_P1DMCR_TYPE_GBRG		0x2
 #define DCMIPP_P1DMCR_TYPE_BGGR		0x3
-
-#define DCMIPP_P1CCCR	0x880
-#define DCMIPP_P1CCCR_ENABLE		BIT(0)
-#define DCMIPP_P1CCCR_TYPE_YUV		0
-#define DCMIPP_P1CCCR_TYPE_RGB		BIT(1)
-#define DCMIPP_P1CCCR_CLAMP		BIT(2)
-#define DCMIPP_P1CCRR1	0x884
-#define DCMIPP_P1CCRR2	0x888
-#define DCMIPP_P1CCGR1	0x88C
-#define DCMIPP_P1CCGR2	0x890
-#define DCMIPP_P1CCBR1	0x894
-#define DCMIPP_P1CCBR2	0x898
 
 #define IS_SINK(pad) (!(pad))
 #define IS_SRC(pad)  ((pad))
@@ -188,9 +170,9 @@ static void dcmipp_isp_adjust_fmt(struct v4l2_mbus_framefmt *fmt, u32 pad)
 					  ISP_MEDIA_BUS_SINK_FMT_DEFAULT;
 
 	fmt->width = clamp_t(u32, fmt->width, DCMIPP_FRAME_MIN_WIDTH,
-			     DCMIPP_FRAME_MAX_WIDTH) & ~1;
+			     DCMIPP_PIXEL_FRAME_MAX_WIDTH) & ~1;
 	fmt->height = clamp_t(u32, fmt->height, DCMIPP_FRAME_MIN_HEIGHT,
-			      DCMIPP_FRAME_MAX_HEIGHT);
+			      DCMIPP_PIXEL_FRAME_MAX_HEIGHT);
 
 	if (fmt->field == V4L2_FIELD_ANY || fmt->field == V4L2_FIELD_ALTERNATE)
 		fmt->field = V4L2_FIELD_NONE;
@@ -260,9 +242,9 @@ static int dcmipp_isp_enum_frame_size(struct v4l2_subdev *sd,
 		return -EINVAL;
 
 	fse->min_width = DCMIPP_FRAME_MIN_WIDTH;
-	fse->max_width = DCMIPP_FRAME_MAX_WIDTH;
+	fse->max_width = DCMIPP_PIXEL_FRAME_MAX_WIDTH;
 	fse->min_height = DCMIPP_FRAME_MIN_HEIGHT;
-	fse->max_height = DCMIPP_FRAME_MAX_HEIGHT;
+	fse->max_height = DCMIPP_PIXEL_FRAME_MAX_HEIGHT;
 
 	return 0;
 }
@@ -518,24 +500,6 @@ static void dcmipp_isp_config_demosaicing(struct dcmipp_isp_device *isp,
 	reg_set(isp, DCMIPP_P1DMCR, val);
 }
 
-static bool dcmipp_isp_is_aux_output_enabled(struct dcmipp_isp_device *isp)
-{
-	struct media_link *link;
-
-	for_each_media_entity_data_link(isp->ved.ent, link) {
-		if (link->source != &isp->ved.pads[1])
-			continue;
-
-		if (!(link->flags & MEDIA_LNK_FL_ENABLED))
-			continue;
-
-		if (!strcmp(link->sink->entity->name, "dcmipp_aux_postproc"))
-			return true;
-	}
-
-	return false;
-}
-
 static void dcmipp_isp_config_decimation(struct dcmipp_isp_device *isp,
 					 struct v4l2_rect *crop,
 					 struct v4l2_rect *compose)
@@ -550,6 +514,35 @@ static void dcmipp_isp_config_decimation(struct dcmipp_isp_device *isp,
 	dev_dbg(isp->dev, "%s: config decr: 0x%x\n", __func__, decr);
 
 	reg_write(isp, DCMIPP_P1DECR, decr);
+}
+
+/* Histogram block - only available starting from stm32mp21 */
+#define DCMIPP_P1HSCR			0x8b0
+/* 4 Comp / 64 bins per comp / 1 region / decimated by 2*/
+#define DCMIPP_P1HSCR_DEFAULT		0x08411000
+
+#define DCMIPP_P1HSSTR			0x8b4
+#define DCMIPP_P1HSSTR_START(x, y)	((x) | ((y) << 16))
+
+#define DCMIPP_P1HSSZR			0x8b8
+#define DCMIPP_P1HSSZR_SIZE(w, h)	((w) | ((h) << 16))
+static void dcmipp_isp_config_histo(struct dcmipp_isp_device *isp,
+				    struct v4l2_rect *compose)
+{
+	if (!isp->ved.dcmipp->pipe_cfg->has_histo)
+		return;
+
+	/*
+	 * Configure a default setting for histogram
+	 * In order to be able to capture statistics even if histogram settings
+	 * aren't yet done, perform initial settings of histogram with always
+	 * valid settings
+	 */
+	reg_write(isp, DCMIPP_P1HSCR, DCMIPP_P1HSCR_DEFAULT);
+	reg_write(isp, DCMIPP_P1HSSTR,
+		  DCMIPP_P1HSSTR_START(compose->width / 4, compose->height / 4));
+	reg_write(isp, DCMIPP_P1HSSZR,
+		  DCMIPP_P1HSSZR_SIZE(compose->width / 2, compose->height / 2));
 }
 
 static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
@@ -581,12 +574,6 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		compose = v4l2_subdev_state_get_compose(state, 0);
 		v4l2_subdev_unlock_state(state);
 
-		/* Check if link between ISP & Pipe2 postproc is enabled */
-		if (dcmipp_isp_is_aux_output_enabled(isp))
-			reg_clear(isp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
-		else
-			reg_set(isp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
-
 		/* Configure Statistic Removal */
 		reg_write(isp, DCMIPP_P1SRCR,
 			  ((crop->top << DCMIPP_P1SRCR_FIRSTLINEDEL_SHIFT) |
@@ -598,9 +585,17 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 
 		/* Configure Demosaicing */
 		dcmipp_isp_config_demosaicing(isp, sink_fmt);
+
+		/* Configure default ISP Histo area */
+		dcmipp_isp_config_histo(isp, compose);
 	} else {
 		if (isp->usecnt > 1)
 			goto out;
+
+		/* Disable all blocks */
+		reg_write(isp, DCMIPP_P1SRCR, 0);
+		reg_write(isp, DCMIPP_P1DECR, 0);
+		reg_write(isp, DCMIPP_P1DMCR, 0);
 	}
 
 	ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);

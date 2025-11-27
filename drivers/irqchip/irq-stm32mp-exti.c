@@ -19,7 +19,6 @@
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
-#include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
@@ -280,16 +279,21 @@ static int stm32mp_exti_convert_type(struct irq_data *d,
 }
 
 static void stm32mp_chip_suspend(struct stm32mp_exti_chip_data *chip_data,
-				 u32 wake_active)
+				 u32 mask_cache, u32 wake_active)
 {
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
 	void __iomem *base = chip_data->host_data->base;
+	u32 val;
 
 	/* save rtsr, ftsr registers */
 	chip_data->rtsr_cache = readl_relaxed(base + bank->rtsr_ofst);
 	chip_data->ftsr_cache = readl_relaxed(base + bank->ftsr_ofst);
 
-	writel_relaxed(wake_active, base + bank->imr_ofst);
+	/* mask active and set wakeup, preserve bits set by secure world */
+	val = readl_relaxed(base + bank->imr_ofst);
+	val &= ~mask_cache;
+	val |= wake_active;
+	writel_relaxed(val, base + bank->imr_ofst);
 
 	/* wakeup for IRQ power domain for S2IDLE */
 	if (wake_active)
@@ -297,19 +301,21 @@ static void stm32mp_chip_suspend(struct stm32mp_exti_chip_data *chip_data,
 }
 
 static void stm32mp_chip_resume(struct stm32mp_exti_chip_data *chip_data,
-				u32 mask_cache)
+				u32 mask_cache, u32 wake_active)
 {
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
 	void __iomem *base = chip_data->host_data->base;
+	u32 val;
 
 	/* restore rtsr, ftsr, registers */
 	writel_relaxed(chip_data->rtsr_cache, base + bank->rtsr_ofst);
 	writel_relaxed(chip_data->ftsr_cache, base + bank->ftsr_ofst);
 
-	writel_relaxed(mask_cache, base + bank->imr_ofst);
-
-	if (mask_cache)
-		pm_runtime_get(chip_data->host_data->dev);
+	/* mask wakeup and set active, preserve bits set by secure world */
+	val = readl_relaxed(base + bank->imr_ofst);
+	val &= ~wake_active;
+	val |= mask_cache;
+	writel_relaxed(val, base + bank->imr_ofst);
 }
 
 /* directly set the target bit without reading first. */
@@ -326,26 +332,28 @@ static inline u32 stm32mp_exti_set_bit(struct irq_data *d, u32 reg)
 {
 	struct stm32mp_exti_chip_data *chip_data = irq_data_get_irq_chip_data(d);
 	void __iomem *base = chip_data->host_data->base;
-	u32 val;
+	u32 val, mask;
 
+	mask = BIT(d->hwirq % IRQS_PER_BANK);
 	val = readl_relaxed(base + reg);
-	val |= BIT(d->hwirq % IRQS_PER_BANK);
+	val |= mask;
 	writel_relaxed(val, base + reg);
 
-	return val;
+	return mask;
 }
 
 static inline u32 stm32mp_exti_clr_bit(struct irq_data *d, u32 reg)
 {
 	struct stm32mp_exti_chip_data *chip_data = irq_data_get_irq_chip_data(d);
 	void __iomem *base = chip_data->host_data->base;
-	u32 val;
+	u32 val, mask;
 
+	mask = BIT(d->hwirq % IRQS_PER_BANK);
 	val = readl_relaxed(base + reg);
-	val &= ~BIT(d->hwirq % IRQS_PER_BANK);
+	val &= ~mask;
 	writel_relaxed(val, base + reg);
 
-	return val;
+	return mask;
 }
 
 static void stm32mp_exti_eoi(struct irq_data *d)
@@ -358,11 +366,7 @@ static void stm32mp_exti_eoi(struct irq_data *d)
 	stm32mp_exti_write_bit(d, bank->rpr_ofst);
 	stm32mp_exti_write_bit(d, bank->fpr_ofst);
 
-	/* power domain is ON when IMR change from 0 */
-	if (!chip_data->mask_cache)
-		pm_runtime_get(chip_data->host_data->dev);
-
-	chip_data->mask_cache = stm32mp_exti_set_bit(d, bank->imr_ofst);
+	chip_data->mask_cache |= stm32mp_exti_set_bit(d, bank->imr_ofst);
 
 	raw_spin_unlock(&chip_data->rlock);
 
@@ -375,12 +379,7 @@ static void stm32mp_exti_mask(struct irq_data *d)
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
 
 	raw_spin_lock(&chip_data->rlock);
-	chip_data->mask_cache = stm32mp_exti_clr_bit(d, bank->imr_ofst);
-
-	/* power domain is OFF when IMR becomes 0 */
-	if (!chip_data->mask_cache)
-		pm_runtime_put(chip_data->host_data->dev);
-
+	chip_data->mask_cache &= ~stm32mp_exti_clr_bit(d, bank->imr_ofst);
 	raw_spin_unlock(&chip_data->rlock);
 
 	irq_chip_mask_parent(d);
@@ -392,12 +391,7 @@ static void stm32mp_exti_unmask(struct irq_data *d)
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
 
 	raw_spin_lock(&chip_data->rlock);
-
-	/* power domain is ON when IMR change from 0 */
-	if (!chip_data->mask_cache)
-		pm_runtime_get(chip_data->host_data->dev);
-
-	chip_data->mask_cache = stm32mp_exti_set_bit(d, bank->imr_ofst);
+	chip_data->mask_cache |= stm32mp_exti_set_bit(d, bank->imr_ofst);
 	raw_spin_unlock(&chip_data->rlock);
 
 	irq_chip_unmask_parent(d);
@@ -470,7 +464,7 @@ static int stm32mp_exti_suspend(struct device *dev)
 
 	for (i = 0; i < host_data->drv_data->bank_nr; i++) {
 		chip_data = &host_data->chips_data[i];
-		stm32mp_chip_suspend(chip_data, chip_data->wake_active);
+		stm32mp_chip_suspend(chip_data, chip_data->mask_cache, chip_data->wake_active);
 	}
 
 	return 0;
@@ -505,7 +499,7 @@ static int stm32mp_exti_resume(struct device *dev)
 	stm32mp_exti_resume_gpio_mux(host_data);
 	for (i = 0; i < host_data->drv_data->bank_nr; i++) {
 		chip_data = &host_data->chips_data[i];
-		stm32mp_chip_resume(chip_data, chip_data->mask_cache);
+		stm32mp_chip_resume(chip_data, chip_data->mask_cache, chip_data->wake_active);
 	}
 
 	return 0;
@@ -534,7 +528,6 @@ static struct irq_chip stm32mp_exti_chip = {
 	.irq_retrigger		= stm32mp_exti_retrigger,
 	.irq_set_type		= stm32mp_exti_set_type,
 	.irq_set_wake		= stm32mp_exti_set_wake,
-	.flags			= IRQCHIP_MASK_ON_SUSPEND,
 	.irq_set_affinity	= IS_ENABLED(CONFIG_SMP) ? irq_chip_set_affinity_parent : NULL,
 };
 
@@ -549,7 +542,6 @@ static struct irq_chip stm32mp_exti_chip_direct = {
 	.irq_retrigger		= irq_chip_retrigger_hierarchy,
 	.irq_set_type		= irq_chip_set_type_parent,
 	.irq_set_wake		= stm32mp_exti_set_wake,
-	.flags			= IRQCHIP_MASK_ON_SUSPEND,
 	.irq_set_affinity	= IS_ENABLED(CONFIG_SMP) ? irq_chip_set_affinity_parent : NULL,
 };
 
@@ -830,63 +822,6 @@ static void stm32mp_exti_check_rif(struct stm32mp_exti_host_data *host_data)
 	}
 }
 
-static void stm32mp_exti_genpd_remove(void *data)
-{
-	struct generic_pm_domain *genpd = data;
-
-	pm_genpd_remove(genpd);
-}
-
-/* manage WakeUp capable device with EXTI domain, registered on PSCI CPUIdle domain */
-static int stm32mp_exti_add_domain(struct device *dev)
-{
-	struct device_node *np = dev->of_node;
-	struct generic_pm_domain *genpd;
-	int ret;
-
-	/* The PM domain core automatically attaches a single power domain to a device */
-	if (!dev->pm_domain)
-		return 0;
-
-	genpd = devm_kzalloc(dev, sizeof(*genpd), GFP_KERNEL);
-	if (!genpd)
-		return -ENOMEM;
-
-	/* Simple PM domain: only manage the wakeup path for EXTI */
-	genpd->name = np->full_name;
-	genpd->flags = GENPD_FLAG_ACTIVE_WAKEUP;
-	ret = pm_genpd_init(genpd, &pm_domain_always_on_gov, false);
-	if (ret) {
-		dev_err(dev, "Failed to add genpd %d\n", ret);
-		return ret;
-	}
-	ret = devm_add_action_or_reset(dev, stm32mp_exti_genpd_remove, genpd);
-	if (ret)
-		return ret;
-
-	/* Use the same parent for IRQ domain */
-	ret = pm_genpd_add_subdomain(pd_to_genpd(dev->pm_domain), genpd);
-	if (ret) {
-		dev_err(dev, "Failed to add PM subdomain to parent %s\n",
-			pd_to_genpd(dev->pm_domain)->name);
-		return ret;
-	}
-
-	/* Move EXTI device in the created IRQ domain to manage wakeup path */
-	ret = pm_genpd_remove_device(dev);
-	if (ret)  {
-		dev_err(dev, "Failed to remove dev to genpd %d\n", ret);
-		return ret;
-	}
-	ret = pm_genpd_add_device(genpd, dev);
-	if (ret)  {
-		dev_err(dev, "Failed to add dev to genpd %d\n", ret);
-		return ret;
-	}
-
-	return 0;
-}
-
 static void stm32mp_exti_remove_irq(void *data)
 {
 	struct irq_domain *domain = data;
@@ -981,6 +916,8 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	irq_domain_set_pm_device(domain, dev);
+
 	if (of_property_read_bool(np, "interrupts-extended"))
 		host_data->dt_has_irqs_desc = true;
 
@@ -1020,11 +957,9 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 		ret = devm_add_action_or_reset(dev, stm32mp_exti_remove_irq, domain);
 		if (ret)
 			return ret;
-	}
 
-	ret = stm32mp_exti_add_domain(dev);
-	if (ret)
-		return ret;
+		irq_domain_set_pm_device(domain, dev);
+	}
 
 	devm_pm_runtime_enable(dev);
 
