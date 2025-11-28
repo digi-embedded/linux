@@ -41,19 +41,17 @@
  * i.MX8X ADC channels on Expansion connector:
  *  - ADC_IN0 (channel 0)
  *  - ADC_IN1 (channel 1)
- *  - ADC_IN2 (channel 2)
- *  - ADC_IN3 (channel 3)
+ *  - ADC_IN2 (channel 2) multiplexed with M40 UART RX
+ *  - ADC_IN3 (channel 3) multiplexed with M40 UART TX
  *  - ADC_IN4 (channel 4)
  *  - ADC_IN5 (channel 5)
- * Include in digi,adc-ch-list the ADC channels (from 0 to 5) that you want to
- * enable. Note that the iomux has to be configured accordingly in pinctrl_adc0
- * to configure the pads for ADC operation. Make sure to remove them from
- * pinctrl_expansion where they may already be configured with another use.
+ *
+ * To enable the i.MX8QXP SoC ADC channels configure the pads for ADC function
+ * on the associated pinctrl_adc0
  */
 &adc0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_adc0>;
-	digi,adc-ch-list = <0>;
 	status = "okay";
 };
 
@@ -486,37 +484,40 @@
 			/* GPIO5_09 */
 			IMX8QXP_ENET0_REFCLK_125M_25M_LSIO_GPIO5_IO09	0x06000020
 
-			/* Remove the pads you wish to use as ADCs */
-			/* ADC_IN0 */
+			/* GPIO1_IO10: commented out; configured as ADC_IN0 */
 	//		IMX8QXP_ADC_IN0_LSIO_GPIO1_IO10			0x06000020
-			/* ADC_IN1 */
-			IMX8QXP_ADC_IN1_LSIO_GPIO1_IO09			0x06000020
+			/* GPIO1_IO09: commented out; configured as ADC_IN1 */
+	//		IMX8QXP_ADC_IN1_LSIO_GPIO1_IO09			0x06000020
 			/* M40_UART_RX */
 			IMX8QXP_ADC_IN2_LSIO_GPIO1_IO12			0x06000020
 			/* M40_UART_TX */
 			IMX8QXP_ADC_IN3_LSIO_GPIO1_IO11			0x06000020
-			/* ADC_IN4 */
-			IMX8QXP_ADC_IN4_LSIO_GPIO1_IO14			0x06000020
-			/* ADC_IN5 */
-			IMX8QXP_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
+			/* GPIO1_IO14: commented out; configured as ADC_IN4 */
+	//		IMX8QXP_ADC_IN4_LSIO_GPIO1_IO14			0x06000020
+			/* GPIO1_IO13: commented out; configured as ADC_IN5 */
+	//		IMX8QXP_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
 		>;
 	};
 
-	/* Uncomment the pads you wish to use as ADCs */
+	/*
+	 * Configure pads as ADC function to have them work as ADC.
+	 * or uncomment preset ones (pads available on the expansion
+	 * connector)
+	 */
 	pinctrl_adc0: adc0grp {
 		fsl,pins = <
 			/* ADC_IN0 */
 			IMX8QXP_ADC_IN0_ADMA_ADC_IN0		0xc0000060
-	//		/* ADC_IN1 */
-	//		IMX8QXP_ADC_IN1_ADMA_ADC_IN1		0xc0000060
-	//		/* M40_UART_RX */
+			/* ADC_IN1 */
+			IMX8QXP_ADC_IN1_ADMA_ADC_IN1		0xc0000060
+			/* ADC_IN2: commented out, conflicts with M40_UART_RX */
 	//		IMX8QXP_ADC_IN2_ADMA_ADC_IN2		0xc0000060
-	//		/* M40_UART_TX */
+			/* ADC_IN3: commented out, conflicts with M40_UART_TX */
 	//		IMX8QXP_ADC_IN3_ADMA_ADC_IN3		0xc0000060
-	//		/* ADC_IN4 */
-	//		IMX8QXP_ADC_IN4_ADMA_ADC_IN4		0xc0000060
-	//		/* ADC_IN5 */
-	//		IMX8QXP_ADC_IN5_ADMA_ADC_IN5		0xc0000060
+			/* ADC_IN4 */
+			IMX8QXP_ADC_IN4_ADMA_ADC_IN4		0xc0000060
+			/* ADC_IN5 */
+			IMX8QXP_ADC_IN5_ADMA_ADC_IN5		0xc0000060
 		>;
 	};
 };

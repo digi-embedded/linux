@@ -3,14 +3,13 @@
  * GPIO Driver for Dialog DA9063 PMICs.
  *
  * Copyright(c) 2012 Dialog Semiconductor Ltd.
+ * Copyright (C) 2025, Digi International Inc.
  *
  * Author: David Dajun Chen <dchen@diasemi.com>
  */
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/gpio/driver.h>
-#include <linux/irqdomain.h>
-#include <linux/regulator/consumer.h>
 
 #include <linux/mfd/da9063/core.h>
 #include <linux/mfd/da9063/registers.h>
@@ -40,17 +39,11 @@
 struct da9063_gpio {
 	struct da9063 *da9063;
 	struct gpio_chip gp;
-	struct regulator *reg;
 };
-
-static inline struct da9063_gpio *to_da9063_gpio(struct gpio_chip *chip)
-{
-	return container_of(chip, struct da9063_gpio, gp);
-}
 
 static int da9063_gpio_get(struct gpio_chip *gc, unsigned offset)
 {
-	struct da9063_gpio *gpio = to_da9063_gpio(gc);
+	struct da9063_gpio *gpio = gpiochip_get_data(gc);
 	int gpio_direction = 0;
 	int ret;
 	unsigned int val, reg;
@@ -84,7 +77,7 @@ static int da9063_gpio_get(struct gpio_chip *gc, unsigned offset)
 
 static void da9063_gpio_set(struct gpio_chip *gc, unsigned offset, int value)
 {
-	struct da9063_gpio *gpio = to_da9063_gpio(gc);
+	struct da9063_gpio *gpio = gpiochip_get_data(gc);
 	unsigned int reg = (offset >= 8) ?
 			    DA9063_REG_GPIO_MODE8_15 :
 			    DA9063_REG_GPIO_MODE0_7;
@@ -96,7 +89,7 @@ static void da9063_gpio_set(struct gpio_chip *gc, unsigned offset, int value)
 
 static int da9063_gpio_direction_input(struct gpio_chip *gc, unsigned offset)
 {
-	struct da9063_gpio *gpio = to_da9063_gpio(gc);
+	struct da9063_gpio *gpio = gpiochip_get_data(gc);
 	unsigned char reg_byte;
 
 	reg_byte = (DA9063_ACT_LOW | DA9063_GPI)
@@ -112,7 +105,7 @@ static int da9063_gpio_direction_input(struct gpio_chip *gc, unsigned offset)
 static int da9063_gpio_direction_output(struct gpio_chip *gc,
 					unsigned offset, int value)
 {
-	struct da9063_gpio *gpio = to_da9063_gpio(gc);
+	struct da9063_gpio *gpio = gpiochip_get_data(gc);
 	unsigned char reg_byte;
 	int ret;
 
@@ -134,11 +127,11 @@ static int da9063_gpio_direction_output(struct gpio_chip *gc,
 
 static int da9063_gpio_to_irq(struct gpio_chip *gc, u32 offset)
 {
-	struct da9063_gpio *gpio = to_da9063_gpio(gc);
+	struct da9063_gpio *gpio = gpiochip_get_data(gc);
 	struct da9063 *da9063 = gpio->da9063;
 
-	return irq_find_mapping(da9063->irq_domain,
-				  DA9063_IRQ_GPI0 + offset);
+	return regmap_irq_get_virq(da9063->regmap_irq,
+				   DA9063_IRQ_GPI0 + offset);
 }
 
 static const struct gpio_chip reference_gp = {
@@ -151,27 +144,14 @@ static const struct gpio_chip reference_gp = {
 	.to_irq = da9063_gpio_to_irq,
 	.can_sleep = true,
 	.ngpio = 16,
-	.base = 240,
+	.base = -1,
 };
 
 static const struct of_device_id da9063_gpio_dt_ids[] = {
 	{ .compatible = "dlg,da9063-gpio", },
 	{ /* sentinel */ }
 };
-
-static int da9063_reg_init(struct da9063_gpio *gpio)
-{
-	int ret = -ENODEV;
-
-	gpio->reg = regulator_get(NULL, "gpio-ext-reg");
-	if (!IS_ERR(gpio->reg))
-		/* The regulator use count needs to be incremented.
-		 * otherwise we get an unbalanced call if we call
-		 * regulator_disable(). */
-		ret = regulator_enable(gpio->reg);
-
-	return ret;
-}
+MODULE_DEVICE_TABLE(of, da9063_gpio_dt_ids);
 
 static int da9063_gpio_probe(struct platform_device *pdev)
 {
@@ -187,6 +167,7 @@ static int da9063_gpio_probe(struct platform_device *pdev)
 		return -EPROBE_DEFER;
 
 	gpio->gp = reference_gp;
+	gpio->gp.parent = &pdev->dev;
 
 	ret = devm_gpiochip_add_data(&pdev->dev, &gpio->gp, gpio);
 	if (ret < 0) {
@@ -194,57 +175,11 @@ static int da9063_gpio_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	platform_set_drvdata(pdev, gpio);
-
-	if (da9063_reg_init(gpio))
-		/* We should -EPROBE_DEFER, but there is machine code like
-		 * the BT & wireless reset lines, that need this driver so
-		 * we can't with the current machine code. */
-		gpio->reg = NULL;
-
 	return 0;
-}
-
-static int da9063_gpio_remove(struct platform_device *pdev)
-{
-	struct da9063_gpio *gpio = platform_get_drvdata(pdev);
-	gpiochip_remove(&gpio->gp);
-
-	return 0;
-}
-
-static int da9063_gpio_suspend(struct platform_device *pdev, pm_message_t state)
-{
-	struct da9063_gpio *gpio = platform_get_drvdata(pdev);
-	int ret = 0;
-
-	if (gpio->reg == NULL) {
-		/* Try again in case the probe() was too early */
-		if (da9063_reg_init(gpio))
-			gpio->reg = NULL;
-	}
-	if (gpio->reg)
-		ret = regulator_disable(gpio->reg);
-
-	return ret;
-}
-
-static int da9063_gpio_resume(struct platform_device *pdev)
-{
-	struct da9063_gpio *gpio = platform_get_drvdata(pdev);
-	int ret = 0;
-
-	if (gpio->reg)
-		ret = regulator_enable(gpio->reg);
-	return ret;
-
 }
 
 static struct platform_driver da9063_gpio_driver = {
 	.probe = da9063_gpio_probe,
-	.remove = da9063_gpio_remove,
-	.suspend = da9063_gpio_suspend,
-	.resume = da9063_gpio_resume,
 	.driver = {
 		.name	= "da9063-gpio",
 		.owner	= THIS_MODULE,
@@ -252,17 +187,7 @@ static struct platform_driver da9063_gpio_driver = {
 	},
 };
 
-static int da9063_gpio_init(void)
-{
-	return platform_driver_register(&da9063_gpio_driver);
-}
-subsys_initcall(da9063_gpio_init);
-
-static void da9063_gpio_exit(void)
-{
-	platform_driver_unregister(&da9063_gpio_driver);
-}
-module_exit(da9063_gpio_exit);
+module_platform_driver(da9063_gpio_driver);
 
 MODULE_AUTHOR("Digi International <support@digi.com>");
 MODULE_DESCRIPTION("DA9063 GPIO Device Driver");

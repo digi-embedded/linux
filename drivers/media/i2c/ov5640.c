@@ -16,6 +16,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/types.h>
@@ -443,6 +444,7 @@ struct ov5640_dev {
 	struct regulator_bulk_data supplies[OV5640_NUM_SUPPLIES];
 	struct gpio_desc *reset_gpio;
 	struct gpio_desc *pwdn_gpio;
+	bool use_pm_ops;
 	bool   upside_down;
 
 	/* lock to protect all members below */
@@ -2748,6 +2750,22 @@ power_off:
 	return ret;
 }
 
+static int ov5640_sensor_suspend(struct device *dev)
+{
+	struct v4l2_subdev *sd = dev_get_drvdata(dev);
+	struct ov5640_dev *ov5640 = to_ov5640_dev(sd);
+
+	return ov5640_set_power(ov5640, false);
+}
+
+static int ov5640_sensor_resume(struct device *dev)
+{
+	struct v4l2_subdev *sd = dev_get_drvdata(dev);
+	struct ov5640_dev *ov5640 = to_ov5640_dev(sd);
+
+	return ov5640_set_power(ov5640, true);
+}
+
 /* --------------- Subdev Operations --------------- */
 
 static int ov5640_s_power(struct v4l2_subdev *sd, int on)
@@ -3361,6 +3379,9 @@ static int ov5640_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 
 	/* v4l2_ctrl_lock() locks our own mutex */
 
+	if (!pm_runtime_get_if_in_use(&sensor->i2c_client->dev))
+		return 0;
+
 	switch (ctrl->id) {
 	case V4L2_CID_AUTOGAIN:
 		val = ov5640_get_gain(sensor);
@@ -3375,6 +3396,9 @@ static int ov5640_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 		sensor->ctrls.exposure->val = val;
 		break;
 	}
+
+	pm_runtime_mark_last_busy(&sensor->i2c_client->dev);
+	pm_runtime_put_autosuspend(&sensor->i2c_client->dev);
 
 	return 0;
 }
@@ -3407,8 +3431,13 @@ static int ov5640_s_ctrl(struct v4l2_ctrl *ctrl)
 	 * not apply any controls to H/W at this time. Instead
 	 * the controls will be restored right after power-up.
 	 */
-	if (sensor->power_count == 0)
-		return 0;
+	if (sensor->use_pm_ops) {
+		if (!pm_runtime_get_if_in_use(&sensor->i2c_client->dev))
+			return 0;
+	} else {
+		if (sensor->power_count == 0)
+			return 0;
+	}
 
 	switch (ctrl->id) {
 	case V4L2_CID_AUTOGAIN:
@@ -3447,6 +3476,11 @@ static int ov5640_s_ctrl(struct v4l2_ctrl *ctrl)
 	default:
 		ret = -EINVAL;
 		break;
+	}
+
+	if (sensor->use_pm_ops) {
+		pm_runtime_mark_last_busy(&sensor->i2c_client->dev);
+		pm_runtime_put_autosuspend(&sensor->i2c_client->dev);
 	}
 
 	return ret;
@@ -3727,6 +3761,18 @@ static int ov5640_s_stream(struct v4l2_subdev *sd, int enable)
 	int delay;
 	int ret = 0;
 
+	if (sensor->use_pm_ops && enable) {
+		ret = pm_runtime_resume_and_get(&sensor->i2c_client->dev);
+		if (ret < 0)
+			return ret;
+
+		ret = v4l2_ctrl_handler_setup(&sensor->ctrls.handler);
+		if (ret) {
+			pm_runtime_put(&sensor->i2c_client->dev);
+			return ret;
+		}
+	}
+
 	mutex_lock(&sensor->lock);
 
 	if (sensor->streaming == !enable) {
@@ -3757,6 +3803,12 @@ static int ov5640_s_stream(struct v4l2_subdev *sd, int enable)
 	}
 out:
 	mutex_unlock(&sensor->lock);
+
+	if (sensor->use_pm_ops && (!enable || ret)) {
+		pm_runtime_mark_last_busy(&sensor->i2c_client->dev);
+		pm_runtime_put_autosuspend(&sensor->i2c_client->dev);
+	}
+
 	return ret;
 }
 
@@ -3837,9 +3889,11 @@ static int ov5640_check_chip_id(struct ov5640_dev *sensor)
 	int ret = 0;
 	u16 chip_id;
 
-	ret = ov5640_set_power_on(sensor);
-	if (ret)
-		return ret;
+	if (!sensor->use_pm_ops) {
+		ret = ov5640_set_power_on(sensor);
+		if (ret)
+			return ret;
+	}
 
 	ret = ov5640_read_reg16(sensor, OV5640_REG_CHIP_ID, &chip_id);
 	if (ret) {
@@ -3855,7 +3909,8 @@ static int ov5640_check_chip_id(struct ov5640_dev *sensor)
 	}
 
 power_off:
-	ov5640_set_power_off(sensor);
+	if (!sensor->use_pm_ops)
+		ov5640_set_power_off(sensor);
 	return ret;
 }
 
@@ -3938,6 +3993,9 @@ static int ov5640_probe(struct i2c_client *client)
 	if (IS_ERR(sensor->reset_gpio))
 		return PTR_ERR(sensor->reset_gpio);
 
+	/* request optional digi,use-pm-ops */
+	sensor->use_pm_ops = device_property_read_bool(dev, "digi,use-pm-ops");
+
 	v4l2_i2c_subdev_init(&sensor->sd, client, &ov5640_subdev_ops);
 
 	sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE |
@@ -3955,22 +4013,48 @@ static int ov5640_probe(struct i2c_client *client)
 
 	mutex_init(&sensor->lock);
 
-	ret = ov5640_check_chip_id(sensor);
-	if (ret)
-		goto entity_cleanup;
-
 	ret = ov5640_init_controls(sensor);
 	if (ret)
 		goto entity_cleanup;
+
+	if (sensor->use_pm_ops) {
+		ret = ov5640_sensor_resume(dev);
+		if (ret) {
+			dev_err(dev, "failed to power on\n");
+			goto entity_cleanup;
+		}
+
+		pm_runtime_set_active(dev);
+		pm_runtime_get_noresume(dev);
+		pm_runtime_enable(dev);
+	}
+
+	ret = ov5640_check_chip_id(sensor);
+	if (ret)
+		goto free_ctrls;
+
 
 	ret = v4l2_async_register_subdev_sensor(&sensor->sd);
 	if (ret)
 		goto free_ctrls;
 
+	if (sensor->use_pm_ops) {
+		pm_runtime_set_autosuspend_delay(dev, 1000);
+		pm_runtime_use_autosuspend(dev);
+		pm_runtime_mark_last_busy(dev);
+		pm_runtime_put_autosuspend(dev);
+	}
+
 	return 0;
 
 free_ctrls:
+	if (sensor->use_pm_ops) {
+		pm_runtime_put_noidle(dev);
+		pm_runtime_disable(dev);
+	}
 	v4l2_ctrl_handler_free(&sensor->ctrls.handler);
+	if (sensor->use_pm_ops)
+		ov5640_sensor_suspend(dev);
 entity_cleanup:
 	media_entity_cleanup(&sensor->sd.entity);
 	mutex_destroy(&sensor->lock);
@@ -3981,12 +4065,23 @@ static void ov5640_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct ov5640_dev *sensor = to_ov5640_dev(sd);
+	struct device *dev = &client->dev;
 
+	if (sensor->use_pm_ops) {
+		pm_runtime_disable(dev);
+		if (!pm_runtime_status_suspended(dev))
+			ov5640_sensor_suspend(dev);
+		pm_runtime_set_suspended(dev);
+	}
 	v4l2_async_unregister_subdev(&sensor->sd);
 	media_entity_cleanup(&sensor->sd.entity);
 	v4l2_ctrl_handler_free(&sensor->ctrls.handler);
 	mutex_destroy(&sensor->lock);
 }
+
+static const struct dev_pm_ops ov5640_pm_ops = {
+	SET_RUNTIME_PM_OPS(ov5640_sensor_suspend, ov5640_sensor_resume, NULL)
+};
 
 static const struct i2c_device_id ov5640_id[] = {
 	{"ov5640", 0},
@@ -4004,6 +4099,7 @@ static struct i2c_driver ov5640_i2c_driver = {
 	.driver = {
 		.name  = "ov5640",
 		.of_match_table	= ov5640_dt_ids,
+		.pm = &ov5640_pm_ops,
 	},
 	.id_table = ov5640_id,
 	.probe    = ov5640_probe,

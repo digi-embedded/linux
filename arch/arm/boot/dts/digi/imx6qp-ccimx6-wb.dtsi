@@ -1,5 +1,5 @@
 /*
- * Copyright 2017, Digi International Inc.
+ * Copyright (C) 2017-2025, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,8 +22,13 @@
 		/* U-Boot will fill in the MAC address here */
 	};
 
+	usdhc1_wifi_pwrseq: usdhc1-wifi-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		post-power-on-delay-ms = <5>;
+		reset-gpios = <&gpio_extender 3 GPIO_ACTIVE_LOW>; /* WL_DISABLE */
+	};
+
 	wireless {
-		digi,pwrdown-gpios = <&gpio_extender 3 0>;
 		/* U-Boot will fill in the MAC address here */
 	};
 };
@@ -50,5 +55,6 @@
 /* USDHC1 (Wireless) */
 &usdhc1 {
 	no-1-8-v;
+	mmc-pwrseq = <&usdhc1_wifi_pwrseq>;
 	status = "okay";
 };

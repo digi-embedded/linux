@@ -22,17 +22,14 @@
 #include <linux/mutex.h>
 #include <linux/mfd/core.h>
 #include <linux/regmap.h>
+#include <linux/reboot.h>
 
 #include <linux/mfd/da9063/core.h>
-#include <linux/mfd/da9063/pdata.h>
 #include <linux/mfd/da9063/registers.h>
 
 #include <linux/proc_fs.h>
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
-#include <linux/of.h>
-
-static struct da9063 * da9063_data;
 
 static const struct resource da9063_regulators_resources[] = {
 	{
@@ -163,7 +160,7 @@ static const struct mfd_cell da9063_common_devs[] = {
 		.name		= DA9063_DRVNAME_REGULATORS,
 		.num_resources	= ARRAY_SIZE(da9063_regulators_resources),
 		.resources	= da9063_regulators_resources,
-		.of_compatible  = "dlg,da9063-regulators",
+		.of_compatible  = "dlg,da9063-regulator",
 	},
 	{
 		.name		= DA9063_DRVNAME_LEDS,
@@ -306,31 +303,33 @@ int da9063_dump(struct da9063 *da9063)
 	return 0;
 }
 
-void da9063_power_off ( void ) {
-	BUG_ON(!da9063_data);
+static int da9063_power_off(struct sys_off_data *data)
+{
+	struct da9063 *da9063 = data->cb_data;
+
+	if (!da9063)
+		return NOTIFY_DONE;
 
 	/* Disable timer events */
 	clockevents_suspend();
 
 	/* Configure LDO11, BIO and BPERI not to follow sequencer */
-	regmap_update_bits(da9063_data->regmap, DA9063_REG_BPERI_CONT,
+	regmap_update_bits(da9063->regmap, DA9063_REG_BPERI_CONT,
 			   DA9063_BUCK_CONF, 0);
-	regmap_update_bits(da9063_data->regmap, DA9063_REG_LDO11_CONT,
+	regmap_update_bits(da9063->regmap, DA9063_REG_LDO11_CONT,
 			   DA9063_LDO_CONF, 0);
-	regmap_update_bits(da9063_data->regmap, DA9063_REG_BIO_CONT,
+	regmap_update_bits(da9063->regmap, DA9063_REG_BIO_CONT,
 			   DA9063_BUCK_CONF, 0);
 
 	/* Configure to read OTP settings after power down */
-	regmap_update_bits(da9063_data->regmap, DA9063_REG_CONTROL_C,
+	regmap_update_bits(da9063->regmap, DA9063_REG_CONTROL_C,
 			   DA9063_OTPREAD_EN, DA9063_OTPREAD_EN);
 
 	/* Power down */
-	regmap_update_bits(da9063_data->regmap, DA9063_REG_CONTROL_F,
+	regmap_update_bits(da9063->regmap, DA9063_REG_CONTROL_F,
 			   DA9063_SHUTDOWN, DA9063_SHUTDOWN);
 
-	// Do not unlock mutex to avoid further accesses
-	// Do not return
-	while(1);
+	return NOTIFY_DONE;
 }
 
 int da9063_device_init(struct da9063 *da9063, unsigned int irq)
@@ -372,17 +371,26 @@ int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 		}
 	}
 
-	da9063_data = da9063;
+	ret = devm_register_sys_off_handler(da9063->dev,
+					    SYS_OFF_MODE_POWER_OFF_PREPARE,
+					    SYS_OFF_PRIO_DEFAULT,
+					    da9063_power_off, da9063);
+	if (ret) {
+		dev_err(da9063->dev,
+			"Failed to register power-off prepare handler: %d\n",
+			ret);
+		goto err;
+	}
 
-	pm_power_off = da9063_power_off;
+	ret = devm_register_sys_off_handler(da9063->dev, SYS_OFF_MODE_POWER_OFF,
+					    SYS_OFF_PRIO_DEFAULT,
+					    da9063_power_off, NULL);
+	if (ret)
+		dev_err(da9063->dev,
+			"Failed to register power-off handler: %d\n", ret);
 
+err:
 	return ret;
-}
-
-void da9063_device_exit(struct da9063 *da9063)
-{
-	mfd_remove_devices(da9063->dev);
-	da9063_irq_exit(da9063);
 }
 
 MODULE_DESCRIPTION("PMIC driver for Dialog DA9063");

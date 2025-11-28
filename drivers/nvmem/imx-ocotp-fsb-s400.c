@@ -6,8 +6,7 @@
 #include <linux/of_address.h>
 #include <linux/dev_printk.h>
 #include <linux/errno.h>
-#include <linux/firmware/imx/ele_base_msg.h>
-#include <linux/firmware/imx/se_fw_inc.h>
+#include <linux/firmware/imx/se_api.h>
 #include <linux/io.h>
 #include <linux/etherdevice.h>
 #include <linux/kernel.h>
@@ -41,7 +40,8 @@ struct bank_2_reg {
 struct imx_fsb_s400_hw {
 	enum soc_type soc;
 	unsigned int fsb_otp_shadow;
-	const uint8_t se_pdev_name[20];
+	const u16 se_soc;
+	const u8 se_if_idx;
 	const struct bank_2_reg fsb_bank_reg[MAPPING_SIZE];
 	bool oscca_fuse_read;
 	bool reverse_mac_address;
@@ -66,7 +66,7 @@ static int read_words_via_s400_api(u32 *buf, unsigned int fuse_base,
 	int err = 0;
 
 	for (i = 0; i < num; i++)
-		err = read_common_fuse(se_dev, fuse_base + i, buf + i);
+		err = imx_se_read_fuse(se_dev, fuse_base + i, buf + i);
 
 	return err;
 }
@@ -119,7 +119,7 @@ static int fsb_s400_fuse_read(void *priv, unsigned int offset, void *val,
 	u32 *buf;
 	int err, i;
 
-	num_bytes = round_up(2048, 4);
+	num_bytes = round_up(fuse->config.size, 4);
 	buf = kzalloc(num_bytes, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
@@ -145,14 +145,14 @@ static int fsb_s400_fuse_read(void *priv, unsigned int offset, void *val,
 					goto ret;
 				break;
 			case UNIQ_ID:
-				err = read_common_fuse(fuse->se_dev,
+				err = imx_se_read_fuse(fuse->se_dev,
 						       OTP_UNIQ_ID,
 						       &buf[56]);
 				if (err)
 					goto ret;
 				break;
 			case OTFAD_CFG:
-				err = read_common_fuse(fuse->se_dev,
+				err = imx_se_read_fuse(fuse->se_dev,
 						       OTFAD_CONFIG, &buf[184]);
 				if (err)
 					goto ret;
@@ -241,10 +241,14 @@ static int fsb_s400_fuse_read(void *priv, unsigned int offset, void *val,
 		buf[318] = readl_relaxed(regs + 318 * 4) & 0xffff;
 		for (i = 320; i < 327; i++)
 			buf[i] = readl_relaxed(regs + i * 4);
-		for (i = 328; i < 512; i++)
+		for (i = 328; i < 392; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+		for (i = 448; i < 591; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+		buf[591] = readl_relaxed(regs + 591 * 4) & 0xffff;
+		for (i = 592; i < 608; i++)
 			buf[i] = readl_relaxed(regs + i * 4);
 
-		read_words_via_s400_api(&buf[63], 63, 1, fuse->se_dev);
 		read_words_via_s400_api(&buf[128], 128, 16, fuse->se_dev);
 		read_words_via_s400_api(&buf[188], 188, 1, fuse->se_dev);
 
@@ -304,10 +308,11 @@ static int fsb_s400_fuse_write(void *priv, unsigned int offset, void *val, size_
 	if (bytes != 4)
 		return -EINVAL;
 
-	index = offset;
+	/* divide the offset by the word size to get the word count */
+	index = offset / 4;
 
 	mutex_lock(&fuse->lock);
-	ret = ele_write_fuse(fuse->se_dev, index, *buf, false);
+	ret = imx_se_write_fuse(fuse->se_dev, index, *buf, false);
 	mutex_unlock(&fuse->lock);
 
 	return ret;
@@ -358,6 +363,10 @@ static int imx_fsb_s400_fuse_probe(struct platform_device *pdev)
 	mutex_init(&fuse->lock);
 	fuse->hw = of_device_get_match_data(&pdev->dev);
 
+	if (of_device_is_compatible(pdev->dev.of_node, "fsl,imx95-ocotp"))
+		fuse->config.size = 2440; /* 610 words */
+
+
 	if (fuse->hw->reverse_mac_address || fuse->hw->increase_mac_address)
 		fuse->config.layout = &imx_fsb_s400_fuse_layout;
 
@@ -385,7 +394,12 @@ static int imx_fsb_s400_fuse_probe(struct platform_device *pdev)
 		return PTR_ERR(nvmem);
 	}
 
-	fuse->se_dev = get_se_dev(fuse->hw->se_pdev_name);
+	fuse->se_dev = imx_get_se_data_info(fuse->hw->se_soc, fuse->hw->se_if_idx);
+	if (IS_ERR_OR_NULL(fuse->se_dev)) {
+		dev_err(&pdev->dev, "failed to get the se-fw2 device\n");
+		return -EPROBE_DEFER;
+	}
+
 	dev_dbg(&pdev->dev, "fuse nvmem device registered successfully\n");
 
 	return 0;
@@ -424,7 +438,8 @@ static const struct imx_fsb_s400_hw imx8ulp_fsb_s400_hw = {
 	.reverse_mac_address = false,
 	.increase_mac_address = false,
 	.pf_mac_offset_list = NULL,
-	.se_pdev_name = "se-fw2",
+	.se_soc = SOC_ID_OF_IMX8ULP,
+	.se_if_idx = 0,
 };
 
 static const struct imx_fsb_s400_hw imx93_fsb_s400_hw = {
@@ -434,7 +449,8 @@ static const struct imx_fsb_s400_hw imx93_fsb_s400_hw = {
 	.reverse_mac_address = true,
 	.increase_mac_address = false,
 	.pf_mac_offset_list = NULL,
-	.se_pdev_name = "se-fw2",
+	.se_soc = SOC_ID_OF_IMX93,
+	.se_if_idx = 0,
 };
 
 static const struct imx_fsb_s400_hw imx95_fsb_s400_hw = {
@@ -444,7 +460,8 @@ static const struct imx_fsb_s400_hw imx95_fsb_s400_hw = {
 	.reverse_mac_address = false,
 	.increase_mac_address = true,
 	.pf_mac_offset_list = imx95_pf_mac_offset_list,
-	.se_pdev_name = "se-fw2",
+	.se_soc = SOC_ID_OF_IMX95,
+	.se_if_idx = 0,
 };
 
 static const struct of_device_id imx_fsb_s400_fuse_match[] = {

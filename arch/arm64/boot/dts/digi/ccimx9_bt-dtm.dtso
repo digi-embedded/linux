@@ -27,6 +27,8 @@
 	fragment@1 {
 		target = <&lpuart1>;
 		__overlay__ {
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_uart1>;
 			status = "okay";
 			bluetooth {
 				status = "disabled";

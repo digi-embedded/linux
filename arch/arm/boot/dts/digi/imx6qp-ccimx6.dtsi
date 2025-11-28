@@ -1,5 +1,5 @@
 /*
- * Copyright 2017, Digi International Inc.
+ * Copyright (C) 2017-2025, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -36,6 +36,13 @@
 
 	memory: memory {
 		/* U-boot to fill memory details here */
+	};
+
+	reserved-memory {
+		linux,cma {
+			/* CMA allowed range: 512MB from 0x10000000 */
+			alloc-ranges = <0x10000000 0x20000000>;
+		};
 	};
 };
 
@@ -203,10 +210,6 @@
 	};
 };
 
-&gpu {
-	contiguous-size-percentage = <12>;
-};
-
 &iomuxc {
 	pmic_dialog {
 		pinctrl_pmic_dialog: pmic_dialoggrp {
@@ -220,6 +223,16 @@
 &ocotp {
 	/* By default, make the OTP bits read-only */
 	read-only;
+};
+
+&soc {
+	ipu1: ipu@2400000 {
+		bypass_reset = <1>;
+	};
+
+	ipu2: ipu@2800000 {
+		bypass_reset = <1>;
+	};
 };
 
 /* Connected to wireless chip */

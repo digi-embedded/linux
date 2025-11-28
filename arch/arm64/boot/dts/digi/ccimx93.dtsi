@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2024, Digi International Inc.
+ * Copyright 2022-2025, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -81,14 +81,6 @@
 				};
 			};
 		};
-	};
-
-	wlan_pwrseq: wlan_pwrseq {
-		compatible = "mmc-pwrseq-simple";
-		/* Note that this is connected to the PDn line */
-
-		reset-gpios = <&gpio2 7 GPIO_ACTIVE_LOW>;
-		status = "disabled";
 	};
 };
 
@@ -214,13 +206,6 @@
 	};
 };
 
-/* Bluetooth UART */
-&lpuart1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart1>;
-	status = "disabled";
-};
-
 /* Messaging Units for inter-processors communication */
 &mu1 {
 	status = "okay";
@@ -239,28 +224,6 @@
 	bus-width = <8>;
 	non-removable;
 	status = "okay";
-};
-
-/* Wifi MAC */
-&usdhc3 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc3>, <&pinctrl_usdhc3_wlan>;
-	pinctrl-1 = <&pinctrl_usdhc3_100mhz>, <&pinctrl_usdhc3_wlan>;
-	pinctrl-2 = <&pinctrl_usdhc3_200mhz>, <&pinctrl_usdhc3_wlan>;
-
-	mmc-pwrseq = <&wlan_pwrseq>;
-	bus-width = <4>;
-	non-removable;
-	wakeup-source;
-	status = "disabled";
-
-	// TODO enable when IO is defined
-	//wifi_wake_host {
-	//	compatible = "nxp,wifi-wake-host";
-	//	interrupt-parent = <&gpio3>;
-	//	interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
-	//	interrupt-names = "host-wake";
-	//};
 };
 
 /* IOMUX */
@@ -373,10 +336,9 @@
 		>;
 	};
 
-	/* Wifi/BT control lines */
-	pinctrl_usdhc3_wlan: usdhc3wlangrp {
+	/* Wi-Fi PDn line */
+	pinctrl_wlan_pdn: wlanpdngrp {
 		fsl,pins = <
-			/* WLAN_PDn */
 			MX93_PAD_GPIO_IO07__GPIO2_IO07			0x31e
 		>;
 	};

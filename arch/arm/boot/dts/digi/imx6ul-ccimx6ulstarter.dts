@@ -20,14 +20,12 @@
 #include "imx6ul-ccimx6ulstarter.dtsi"
 
 /*
- * Include in adc-ch-list the ADC channels (from 0 to 9) that you want to
- * enable. Note that the iomux has to be configured accordingly in pinctrl_adc1
- * to configure the pad for ADC operation
+ * To enable the i.MX6UL SoC ADC channels configure the pads for ADC function
+ * on the associated pinctrl_adc1
  */
 &adc1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_adc1>;
-	adc-ch-list = <4>;
 	status = "okay";
 };
 
@@ -105,10 +103,14 @@
 	pinctrl-0 =  <&pinctrl_hog>, <&pinctrl_expansion>;
 
 	imx6ul-ccimx6ul {
+		/*
+		 * Configure pads as GPIO function to have them work as ADC.
+		 * Preset ones are pads available on the expansion connector)
+		 */
 		pinctrl_adc1: adc1grp {
 			fsl,pins = <
 				/* GPIO1_4/ADC1_IN4 (pin 7 of the expansion header) */
-				MX6UL_PAD_GPIO1_IO04__GPIO1_IO04        0xb0
+				MX6UL_PAD_GPIO1_IO04__GPIO1_IO04	0x0
 			>;
 		};
 

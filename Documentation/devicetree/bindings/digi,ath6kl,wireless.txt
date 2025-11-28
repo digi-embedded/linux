@@ -6,8 +6,6 @@ Required properties:
 
 Optional properties:
 
-  - digi,pwrdown-gpios: GPIOs used to power down the wireless chip.
-  - digi,pwrdown_delay: Delay in ms between power down GPIO toggling.
   - ath6kl-p2p-enable: boolean to enable driver's 'p2p' support (wifi direct).
   - ath6kl-softmac-enable: boolean to enable setting interface's MAC address
                            from 'softmac' firmware file.
@@ -28,7 +26,5 @@ Example:
 		ath6kl-softmac-enable;
 		ath6kl-reg-domain = /bits/ 16 <0xd7>;
 		ath6kl-debug-mask = <0x00000040>;
-		digi,pwrdown-gpios = <&gpio_extender 3 0>;
-		digi,pwrdown_delay = <5>;
 		/* U-Boot will fill in the MAC address here */
 	};

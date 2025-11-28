@@ -10,16 +10,6 @@
  */
 
 / {
-	5v_reg {
-		compatible = "regulator-fixed";
-		gpio = <&gpio_extender 7 0>;
-		regulator-name = "gpio-ext-reg";
-		regulator-always-on;
-		enable-active-high;
-		regulator-min-microvolt = <5000000>;
-		regulator-max-microvolt = <5000000>;
-	};
-
 	/* SGTL5000 codec is powered by 3V3 BUCK_PERI, but controlled
 	 * by GPIO2_25 via a FET transistor
 	 */
@@ -40,6 +30,52 @@
 		regulator-state-disk {
 			regulator-off-in-suspend;
 		};
+	};
+
+	reg_3v3_pcie: fixedregulator@1 {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pcie_reg>;
+		regulator-name = "PCIe_VCC";
+		regulator-always-on;
+		vin-supply = <&bperi>;
+		startup-delay-us = <100000>;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio6 10 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		status = "okay";
+	};
+
+	reg_5v_board: fixedregulator@2 {
+		compatible = "regulator-fixed";
+		regulator-name = "5v_board";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-always-on;
+		gpio = <&gpio_extender 7 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		status = "okay";
+	};
+
+	reg_can1_xcvr: regulator-can1 {
+		compatible = "regulator-fixed";
+		regulator-name = "can1_xcvr";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_enable_can1_xcvr>;
+		gpio = <&gpio1 2 GPIO_ACTIVE_LOW>;
+		vin-supply = <&bperi>;
+		enable-active-low;
+	};
+
+	reg_can2_xcvr: regulator-can2 {
+		compatible = "regulator-fixed";
+		regulator-name = "can2_xcvr";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_enable_can2_xcvr>;
+		gpio = <&gpio1 5 GPIO_ACTIVE_LOW>;
+		vin-supply = <&bperi>;
+		enable-active-low;
 	};
 
 	/* Parallel display */
@@ -80,20 +116,6 @@
 		int_clk = <0>;
 		late_init = <0>;
 		status = "disabled";
-	};
-
-	reg_3v3_pcie: fixedregulator@1 {
-		compatible = "regulator-fixed";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_pcie_reg>;
-		regulator-name = "PCIe_VCC";
-		regulator-always-on;
-		startup-delay-us = <100000>;
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&gpio6 10 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		status = "okay";
 	};
 
 	sound_sgtl5000: sound-sgtl5000 {
@@ -145,13 +167,13 @@
 &can1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
-	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+	xceiver-supply = <&reg_can1_xcvr>;
 };
 
 &can2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
-	stby-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;
+	xceiver-supply = <&reg_can2_xcvr>;
 };
 
 &clks {
@@ -436,7 +458,6 @@
 			fsl,pins = <
 				MX6QDL_PAD_GPIO_7__FLEXCAN1_TX 0x1b0b0
 				MX6QDL_PAD_GPIO_8__FLEXCAN1_RX 0x1b0b0
-				MX6QDL_PAD_GPIO_2__GPIO1_IO02  0x1b0b0
 			>;
 		};
 	};
@@ -446,7 +467,6 @@
 			fsl,pins = <
 				MX6QDL_PAD_SD3_DAT0__FLEXCAN2_TX 0x1b0b0
 				MX6QDL_PAD_SD3_DAT1__FLEXCAN2_RX 0x1b0b0
-				MX6QDL_PAD_GPIO_5__GPIO1_IO05    0x1b0b0
 			>;
 		};
 	};
@@ -588,9 +608,15 @@
 		};
 	};
 
-	pinctrl_pcie_reg: pciereggrp {
+	pinctrl_enable_can1_xcvr: enablecan1stbrgrp {
 		fsl,pins = <
-			MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
+			MX6QDL_PAD_GPIO_2__GPIO1_IO02  0x1b0b0
+		>;
+	};
+
+	pinctrl_enable_can2_xcvr: enablecan2stbrgrp {
+		fsl,pins = <
+			MX6QDL_PAD_GPIO_5__GPIO1_IO05    0x1b0b0
 		>;
 	};
 
@@ -600,6 +626,15 @@
 				MX6QDL_PAD_SD3_DAT3__GPIO7_IO07 0x80000000
 				MX6QDL_PAD_GPIO_4__GPIO1_IO04   0x80000000
 				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
+			>;
+		};
+
+		pinctrl_pcie_reg: pciereggrp {
+			fsl,pins = <
+				/* PCIe_VCC_EN */
+				MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
+				/* PCIe_VCC_OG */
+				MX6QDL_PAD_EIM_LBA__GPIO2_IO27 0x00000800
 			>;
 		};
 	};
@@ -661,6 +696,15 @@
 				MX6QDL_PAD_KEY_COL1__UART5_TX_DATA 0x1b0b1
 				MX6QDL_PAD_KEY_COL4__UART5_RTS_B   0x1b0b1
 				MX6QDL_PAD_KEY_ROW4__UART5_CTS_B   0x1b0b1
+			>;
+		};
+	};
+
+	usb_hub_pads: usb-hub-pads {
+		/* Group node (this is what pinctrl references) */
+		pinctrl_usb_hub_reset: usb_hub_resetgrp {
+			fsl,pins = <
+				MX6QDL_PAD_EIM_DA10__GPIO3_IO10 0x80000000
 			>;
 		};
 	};
@@ -817,8 +861,6 @@
 				MX6QDL_PAD_EIM_D26__GPIO3_IO26 0x80000000
 				/* BT_DISABLE_N */
 				MX6QDL_PAD_GPIO_9__GPIO1_IO09 0x80000000
-				/* USB_HUB_RESET_N */
-				MX6QDL_PAD_EIM_DA10__GPIO3_IO10 0x80000000
 				/* XBEE_ON / SLEEP_N  */
 				MX6QDL_PAD_EIM_D27__GPIO3_IO27 0x80000000
 				/* XBEE_RESET_N  */
@@ -903,6 +945,21 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart5>;
 	uart-has-rtscts;
+};
+
+&usbh1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usb_hub_reset>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	hub@1 {
+		compatible = "usb424,2514";       /* example: Microchip USB2514 */
+		vdd-supply = <&bperi>;
+		reg = <1>;                         /* upstream port number on root hub */
+		reset-gpios = <&gpio3 10 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
 };
 
 &usbotg {
