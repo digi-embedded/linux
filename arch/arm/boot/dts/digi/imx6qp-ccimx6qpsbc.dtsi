@@ -66,6 +66,7 @@
 	reg_5v_board: fixedregulator@2 {
 		compatible = "regulator-fixed";
 		regulator-name = "5v_board";
+		startup-delay-us = <6000>;
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
@@ -272,6 +273,7 @@
 &hdmi_video {
 	fsl,phy_reg_vlev = <0x0294>;
 	fsl,phy_reg_cksymtx = <0x800d>;
+	HDMI-supply = <&reg_5v_board>;
 };
 
 &ldb {
