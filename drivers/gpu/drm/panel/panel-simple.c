@@ -4616,8 +4616,8 @@ static void panel_simple_platform_shutdown(struct platform_device *pdev)
 
 static const struct dev_pm_ops panel_simple_pm_ops = {
 	SET_RUNTIME_PM_OPS(panel_simple_suspend, panel_simple_resume, NULL)
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
-				pm_runtime_force_resume)
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				     pm_runtime_force_resume)
 };
 
 static struct platform_driver panel_simple_platform_driver = {
