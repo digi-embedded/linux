@@ -30,7 +30,7 @@
 					scmi_vdd_ldo1: regulator@7 {
 						reg = <VOLTD_SCMI_PF09_LDO1>;
 						regulator-name = "vdd_ldo1";
-						regulator-min-microvolt = <750000>;
+						regulator-min-microvolt = <3300000>;
 						regulator-max-microvolt = <3300000>;
 					};
 
