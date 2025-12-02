@@ -526,6 +526,12 @@
 				MX6QDL_PAD_GPIO_8__FLEXCAN1_RX 0x1b0b0
 			>;
 		};
+
+		pinctrl_enable_can1_xcvr: enablecan1stbrgrp {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_2__GPIO1_IO02  0x1b0b0
+			>;
+		};
 	};
 
 	can2 {
@@ -533,6 +539,12 @@
 			fsl,pins = <
 				MX6QDL_PAD_SD3_DAT0__FLEXCAN2_TX 0x1b0b0
 				MX6QDL_PAD_SD3_DAT1__FLEXCAN2_RX 0x1b0b0
+			>;
+		};
+
+		pinctrl_enable_can2_xcvr: enablecan2stbrgrp {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_5__GPIO1_IO05    0x1b0b0
 			>;
 		};
 	};
@@ -724,19 +736,6 @@
 				MX6QDL_PAD_SD3_DAT2__GPIO7_IO06 0x80000000
 			>;
 		};
-	};
-
-
-	pinctrl_enable_can1_xcvr: enablecan1stbrgrp {
-		fsl,pins = <
-			MX6QDL_PAD_GPIO_2__GPIO1_IO02  0x1b0b0
-		>;
-	};
-
-	pinctrl_enable_can2_xcvr: enablecan2stbrgrp {
-		fsl,pins = <
-			MX6QDL_PAD_GPIO_5__GPIO1_IO05    0x1b0b0
-		>;
 	};
 
 	pcie {
