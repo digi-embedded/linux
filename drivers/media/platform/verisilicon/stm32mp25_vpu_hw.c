@@ -77,7 +77,7 @@ static const struct hantro_fmt stm32mp25_vdec_fmts[] = {
 			.step_width = MB_DIM,
 			.min_height = 48,
 			.max_height = FMT_4K_HEIGHT,
-			.step_height = MB_DIM,
+			.step_height = 8,
 		},
 	},
 };

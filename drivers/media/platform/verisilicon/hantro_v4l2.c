@@ -655,9 +655,14 @@ static int vidioc_g_selection(struct file *file, void *priv,
 {
 	struct hantro_ctx *ctx = fh_to_ctx(priv);
 
-	/* Crop only supported on source. */
-	if (!ctx->is_encoder ||
+	/* Crop only supported on encoder source. */
+	if (ctx->is_encoder &&
 	    sel->type != V4L2_BUF_TYPE_VIDEO_OUTPUT)
+		return -EINVAL;
+
+	/* Compose only supported on decoder destination. */
+	if (!ctx->is_encoder &&
+	    sel->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return -EINVAL;
 
 	switch (sel->target) {
@@ -673,6 +678,15 @@ static int vidioc_g_selection(struct file *file, void *priv,
 		sel->r.left = 0;
 		sel->r.width = ctx->dst_fmt.width;
 		sel->r.height = ctx->dst_fmt.height;
+		break;
+	case V4L2_SEL_TGT_COMPOSE:
+	case V4L2_SEL_TGT_COMPOSE_DEFAULT:
+	case V4L2_SEL_TGT_COMPOSE_BOUNDS:
+		/* Returns the visible region of video within the MB aligned frame */
+		sel->r.top = 0;
+		sel->r.left = 0;
+		sel->r.width = ctx->src_fmt.width;
+		sel->r.height = ctx->src_fmt.height;
 		break;
 	default:
 		return -EINVAL;
