@@ -282,33 +282,16 @@ skip:
 		role == USB_ROLE_NONE ? "No" :
 		role == USB_ROLE_HOST ? "A" : "B");
 
-	spin_lock_irqsave(&hsotg->lock, flags);
-	if (role == USB_ROLE_NONE &&
-	    (hsotg->lx_state == DWC2_L0 || hsotg->lx_state == DWC2_L3)) {
+	if (role == USB_ROLE_NONE && !hsotg->rpm_suspended) {
 		/*
 		 * With none role, the controller can be put in low power mode,
 		 * in case of a new event, e.g. usb-role-switch, role_sw_set
 		 * will be called, to resume.
 		 */
-		switch (hsotg->params.power_down) {
-			int ret;
-		case DWC2_POWER_DOWN_PARAM_PARTIAL:
-			ret = dwc2_enter_partial_power_down(hsotg);
-			if (ret)
-				dev_err(hsotg->dev, "enter partial_power_down failed %d\n", ret);
-			spin_unlock_irqrestore(&hsotg->lock, flags);
-			return ret;
-
-		case DWC2_POWER_DOWN_PARAM_NONE:
-			/*
-			 * If neither hibernation nor partial power down are supported,
-			 * clock gating is used to save power.
-			 */
-			if (!hsotg->params.no_clock_gating)
-				dwc2_gadget_enter_clock_gating(hsotg);
-		}
+		spin_lock_irqsave(&hsotg->lock, flags);
+		dwc2_gadget_enter_lp(hsotg);
+		spin_unlock_irqrestore(&hsotg->lock, flags);
 	}
-	spin_unlock_irqrestore(&hsotg->lock, flags);
 
 	return 0;
 }

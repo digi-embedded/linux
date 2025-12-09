@@ -3316,34 +3316,10 @@ int dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)
 		hsotg->op_state = OTG_STATE_A_SUSPEND;
 	}
 
-	switch (hsotg->params.power_down) {
-	case DWC2_POWER_DOWN_PARAM_PARTIAL:
-		ret = dwc2_enter_partial_power_down(hsotg);
-		if (ret)
-			dev_err(hsotg->dev,
-				"enter partial_power_down failed.\n");
-		break;
-	case DWC2_POWER_DOWN_PARAM_HIBERNATION:
-		/*
-		 * Perform spin unlock and lock because in
-		 * "dwc2_host_enter_hibernation()" function there is a spinlock
-		 * logic which prevents servicing of any IRQ during entering
-		 * hibernation.
-		 */
+	if (!hsotg->rpm_suspended) {
 		spin_unlock_irqrestore(&hsotg->lock, flags);
-		ret = dwc2_enter_hibernation(hsotg, 1);
-		if (ret)
-			dev_err(hsotg->dev, "enter hibernation failed.\n");
+		dwc2_host_enter_lp(hsotg);
 		spin_lock_irqsave(&hsotg->lock, flags);
-		break;
-	case DWC2_POWER_DOWN_PARAM_NONE:
-		/*
-		 * If not hibernation nor partial power down are supported,
-		 * clock gating is used to save power.
-		 */
-		if (!hsotg->params.no_clock_gating)
-			dwc2_host_enter_clock_gating(hsotg);
-		break;
 	}
 
 	/* For HNP the bus must be suspended for at least 200ms */
@@ -4384,48 +4360,14 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)
 	if (!(dwc2_read_hprt0(hsotg) & HPRT0_CONNSTS))
 		goto skip_power_saving;
 
-	switch (hsotg->params.power_down) {
-	case DWC2_POWER_DOWN_PARAM_PARTIAL:
-		/* Enter partial_power_down */
-		ret = dwc2_enter_partial_power_down(hsotg);
-		if (ret)
-			dev_err(hsotg->dev,
-				"enter partial_power_down failed\n");
-		/* After entering suspend, hardware is not accessible */
-		clear_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
-		break;
-	case DWC2_POWER_DOWN_PARAM_HIBERNATION:
-		/* Enter hibernation */
+	if (!hsotg->rpm_suspended) {
 		spin_unlock_irqrestore(&hsotg->lock, flags);
-		ret = dwc2_enter_hibernation(hsotg, 1);
-		if (ret)
-			dev_err(hsotg->dev, "enter hibernation failed\n");
+		dwc2_host_enter_lp(hsotg);
 		spin_lock_irqsave(&hsotg->lock, flags);
 
 		/* After entering suspend, hardware is not accessible */
-		clear_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
-		break;
-	case DWC2_POWER_DOWN_PARAM_NONE:
-		/*
-		 * If not hibernation nor partial power down are supported,
-		 * clock gating is used to save power.
-		 */
-		if (!hsotg->params.no_clock_gating) {
-			dwc2_host_enter_clock_gating(hsotg);
-
-			/* After entering suspend, hardware is not accessible */
+		if (hsotg->lx_state == DWC2_L2)
 			clear_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
-		}
-		break;
-	default:
-		goto skip_power_saving;
-	}
-
-	/* Ask phy to be suspended */
-	if (!IS_ERR_OR_NULL(hsotg->uphy)) {
-		spin_unlock_irqrestore(&hsotg->lock, flags);
-		usb_phy_set_suspend(hsotg->uphy, true);
-		spin_lock_irqsave(&hsotg->lock, flags);
 	}
 
 skip_power_saving:
@@ -5506,7 +5448,7 @@ int dwc2_restore_host_registers(struct dwc2_hsotg *hsotg)
  *
  * @hsotg: Programming view of the DWC_otg controller
  */
-int dwc2_host_enter_hibernation(struct dwc2_hsotg *hsotg)
+static int dwc2_host_enter_hibernation(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
 	int ret = 0;
@@ -5774,7 +5716,7 @@ bool dwc2_host_can_poweroff_phy(struct dwc2_hsotg *dwc2)
  *
  * This function is for entering Host mode partial power down.
  */
-int dwc2_host_enter_partial_power_down(struct dwc2_hsotg *hsotg)
+static int dwc2_host_enter_partial_power_down(struct dwc2_hsotg *hsotg)
 {
 	u32 pcgcctl;
 	u32 hprt0;
@@ -5952,7 +5894,7 @@ out:
  *
  * This function is for entering Host mode clock gating.
  */
-void dwc2_host_enter_clock_gating(struct dwc2_hsotg *hsotg)
+static void dwc2_host_enter_clock_gating(struct dwc2_hsotg *hsotg)
 {
 	u32 hprt0;
 	u32 pcgctl;
@@ -6052,4 +5994,51 @@ void dwc2_host_exit_clock_gating(struct dwc2_hsotg *hsotg, int flags)
 		mod_timer(&hsotg->wkp_timer,
 			  jiffies + msecs_to_jiffies(71));
 	}
+}
+
+int dwc2_host_enter_lp(struct dwc2_hsotg *hsotg)
+{
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&hsotg->lock, flags);
+	switch (hsotg->params.power_down) {
+	case DWC2_POWER_DOWN_PARAM_PARTIAL:
+		/* Enter partial_power_down */
+		ret = dwc2_host_enter_partial_power_down(hsotg);
+		if (ret) {
+			spin_unlock_irqrestore(&hsotg->lock, flags);
+			dev_err(hsotg->dev, "enter partial_power_down failed %d\n", ret);
+			return ret;
+		}
+		break;
+	case DWC2_POWER_DOWN_PARAM_HIBERNATION:
+		/* Enter hibernation */
+		spin_unlock_irqrestore(&hsotg->lock, flags);
+		ret = dwc2_host_enter_hibernation(hsotg);
+		if (ret) {
+			dev_err(hsotg->dev, "enter hibernation failed %d\n", ret);
+			return ret;
+		}
+		spin_lock_irqsave(&hsotg->lock, flags);
+		break;
+	case DWC2_POWER_DOWN_PARAM_NONE:
+		/*
+		 * If not hibernation nor partial power down are supported,
+		 * clock gating is used to save power.
+		 */
+		if (!hsotg->params.no_clock_gating)
+			dwc2_host_enter_clock_gating(hsotg);
+		break;
+	}
+	spin_unlock_irqrestore(&hsotg->lock, flags);
+
+	/* Core hasn't been put into one of the power saving modes: simply return */
+	if (!(hsotg->bus_suspended || hsotg->in_ppd || hsotg->hibernated))
+		return 0;
+
+	if (!IS_ERR_OR_NULL(hsotg->uphy))
+		usb_phy_set_suspend(hsotg->uphy, true);
+
+	return 0;
 }

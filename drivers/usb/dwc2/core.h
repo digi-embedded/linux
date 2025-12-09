@@ -1331,10 +1331,8 @@ static inline bool dwc2_is_hs_iot(struct dwc2_hsotg *hsotg)
  * and the DWC_otg controller
  */
 int dwc2_core_reset(struct dwc2_hsotg *hsotg, bool skip_wait);
-int dwc2_enter_partial_power_down(struct dwc2_hsotg *hsotg);
 int dwc2_exit_partial_power_down(struct dwc2_hsotg *hsotg, int rem_wakeup,
 				 bool restore);
-int dwc2_enter_hibernation(struct dwc2_hsotg *hsotg, int is_host);
 int dwc2_exit_hibernation(struct dwc2_hsotg *hsotg, int rem_wakeup,
 		int reset, int is_host);
 void dwc2_init_fs_ls_pclk_sel(struct dwc2_hsotg *hsotg);
@@ -1449,15 +1447,13 @@ int dwc2_hsotg_set_test_mode(struct dwc2_hsotg *hsotg, int testmode);
 #define dwc2_is_device_enabled(hsotg) (hsotg->enabled)
 int dwc2_backup_device_registers(struct dwc2_hsotg *hsotg);
 int dwc2_restore_device_registers(struct dwc2_hsotg *hsotg, int remote_wakeup);
-int dwc2_gadget_enter_hibernation(struct dwc2_hsotg *hsotg);
 int dwc2_gadget_exit_hibernation(struct dwc2_hsotg *hsotg,
 				 int rem_wakeup, int reset);
-int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg);
 int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
 					int rem_wakeup, bool restore);
-void dwc2_gadget_enter_clock_gating(struct dwc2_hsotg *hsotg);
 void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg,
 				   int rem_wakeup);
+int dwc2_gadget_enter_lp(struct dwc2_hsotg *hsotg);
 int dwc2_hsotg_tx_fifo_count(struct dwc2_hsotg *hsotg);
 int dwc2_hsotg_tx_fifo_total_depth(struct dwc2_hsotg *hsotg);
 int dwc2_hsotg_tx_fifo_average_depth(struct dwc2_hsotg *hsotg);
@@ -1491,19 +1487,16 @@ static inline int dwc2_backup_device_registers(struct dwc2_hsotg *hsotg)
 static inline int dwc2_restore_device_registers(struct dwc2_hsotg *hsotg,
 						int remote_wakeup)
 { return 0; }
-static inline int dwc2_gadget_enter_hibernation(struct dwc2_hsotg *hsotg)
-{ return 0; }
 static inline int dwc2_gadget_exit_hibernation(struct dwc2_hsotg *hsotg,
 					       int rem_wakeup, int reset)
-{ return 0; }
-static inline int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
 { return 0; }
 static inline int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
 						      int rem_wakeup, bool restore)
 { return 0; }
-static inline void dwc2_gadget_enter_clock_gating(struct dwc2_hsotg *hsotg) {}
 static inline void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg,
 						 int rem_wakeup) {}
+static inline int dwc2_gadget_enter_lp(struct dwc2_hsotg *hsotg)
+{ return 0; }
 static inline int dwc2_hsotg_tx_fifo_count(struct dwc2_hsotg *hsotg)
 { return 0; }
 static inline int dwc2_hsotg_tx_fifo_total_depth(struct dwc2_hsotg *hsotg)
@@ -1526,14 +1519,12 @@ int dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex);
 int dwc2_port_resume(struct dwc2_hsotg *hsotg);
 int dwc2_backup_host_registers(struct dwc2_hsotg *hsotg);
 int dwc2_restore_host_registers(struct dwc2_hsotg *hsotg);
-int dwc2_host_enter_hibernation(struct dwc2_hsotg *hsotg);
 int dwc2_host_exit_hibernation(struct dwc2_hsotg *hsotg,
 			       int rem_wakeup, int reset);
-int dwc2_host_enter_partial_power_down(struct dwc2_hsotg *hsotg);
 int dwc2_host_exit_partial_power_down(struct dwc2_hsotg *hsotg,
 				      int rem_wakeup, bool restore);
-void dwc2_host_enter_clock_gating(struct dwc2_hsotg *hsotg);
 void dwc2_host_exit_clock_gating(struct dwc2_hsotg *hsotg, int rem_wakeup);
+int dwc2_host_enter_lp(struct dwc2_hsotg *hsotg);
 bool dwc2_host_can_poweroff_phy(struct dwc2_hsotg *dwc2);
 static inline void dwc2_host_schedule_phy_reset(struct dwc2_hsotg *hsotg)
 { schedule_work(&hsotg->phy_reset_work); }
@@ -1559,19 +1550,16 @@ static inline int dwc2_backup_host_registers(struct dwc2_hsotg *hsotg)
 { return 0; }
 static inline int dwc2_restore_host_registers(struct dwc2_hsotg *hsotg)
 { return 0; }
-static inline int dwc2_host_enter_hibernation(struct dwc2_hsotg *hsotg)
-{ return 0; }
 static inline int dwc2_host_exit_hibernation(struct dwc2_hsotg *hsotg,
 					     int rem_wakeup, int reset)
-{ return 0; }
-static inline int dwc2_host_enter_partial_power_down(struct dwc2_hsotg *hsotg)
 { return 0; }
 static inline int dwc2_host_exit_partial_power_down(struct dwc2_hsotg *hsotg,
 						    int rem_wakeup, bool restore)
 { return 0; }
-static inline void dwc2_host_enter_clock_gating(struct dwc2_hsotg *hsotg) {}
 static inline void dwc2_host_exit_clock_gating(struct dwc2_hsotg *hsotg,
 					       int rem_wakeup) {}
+static inline int dwc2_host_enter_lp(struct dwc2_hsotg *hsotg)
+{ return 0; }
 static inline bool dwc2_host_can_poweroff_phy(struct dwc2_hsotg *dwc2)
 { return false; }
 static inline void dwc2_host_schedule_phy_reset(struct dwc2_hsotg *hsotg) {}
