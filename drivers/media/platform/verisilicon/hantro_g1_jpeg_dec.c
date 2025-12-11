@@ -390,8 +390,12 @@ int hantro_g1_jpeg_dec_run(struct hantro_ctx *ctx)
 
 	reg |= G1_REG_DEC_CTRL2_STRM_START_BIT(stream_bit_offset(&header));
 
-	if (header.restart_interval)
+	if (header.restart_interval) {
 		reg |= G1_REG_DEC_CTRL2_SYNC_MARKER_E;
+		vdpu_write_relaxed(vpu,
+				   G1_REG_DEC_CTRL5_PJPEG_REST_FREQ(header.restart_interval),
+				   G1_REG_DEC_CTRL5);
+	}
 
 	vdpu_write_relaxed(vpu, reg, G1_REG_DEC_CTRL2);
 
