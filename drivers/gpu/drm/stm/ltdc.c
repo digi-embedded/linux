@@ -2570,18 +2570,21 @@ int ltdc_load(struct drm_device *ddev)
 		goto err;
 	}
 
-	pm_runtime_set_active(ddev->dev);
-	pm_runtime_enable(ddev->dev);
-
 	/* Check if the ltdc has been activated */
 	if (gcr & GCR_LTDCEN) {
 		/* keep runtime active after the probe */
+		pm_runtime_set_active(ddev->dev);
+		pm_runtime_enable(ddev->dev);
+
 		ret = pm_runtime_resume_and_get(ddev->dev);
 		if (ret) {
 			DRM_ERROR("Failed to load driver, cannot resume pm\n");
 			return ret;
 		}
 	} else {
+		/* suspend device to disable the clocks */
+		ltdc_suspend(ldev);
+
 		/* set to sleep state the pinctrl to stop data trasfert */
 		pinctrl_pm_select_sleep_state(ddev->dev);
 
@@ -2596,6 +2599,8 @@ int ltdc_load(struct drm_device *ddev)
 				return dev_err_probe(dev, PTR_ERR(ldev->lvds_clk),
 						     "Could not set parent clock\n");
 		}
+
+		pm_runtime_enable(ddev->dev);
 	}
 
 	/* Get the secure rotation buffer memory resource */
