@@ -316,8 +316,8 @@
 	digi,buffer-time-us = <35>;
 	pinctrl-0 = <&pinctrl_lpi2c0>;
 	pinctrl-1 = <&pinctrl_lpi2c0_gpio>;
-	scl-gpios = <&lsio_gpio3 8 GPIO_ACTIVE_HIGH>;
-	sda-gpios = <&lsio_gpio3 7 GPIO_ACTIVE_HIGH>;
+	scl-gpios = <&lsio_gpio3 8 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+	sda-gpios = <&lsio_gpio3 7 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 	status = "okay";
 
 	mca_cc8x: mca@63 {

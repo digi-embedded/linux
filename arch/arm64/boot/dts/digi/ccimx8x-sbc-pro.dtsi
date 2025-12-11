@@ -602,8 +602,8 @@
 	pinctrl-names = "default", "gpio";
 	pinctrl-0 = <&pinctrl_i2c0_mipi_lvds0>;
 	pinctrl-1 = <&pinctrl_i2c0_lvds0_gpio>;
-	scl-gpios = <&lsio_gpio1 25 GPIO_ACTIVE_HIGH>;
-	sda-gpios = <&lsio_gpio1 26 GPIO_ACTIVE_HIGH>;
+	scl-gpios = <&lsio_gpio1 25 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+	sda-gpios = <&lsio_gpio1 26 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 	clock-frequency = <100000>;
 	status = "disabled";
 
@@ -733,8 +733,8 @@
 	pinctrl-names = "default", "gpio";
 	pinctrl-0 = <&pinctrl_csi0_lpi2c0>;
 	pinctrl-1 = <&pinctrl_csi0_lpi2c0_gpio>;
-	scl-gpios = <&lsio_gpio3 6 GPIO_ACTIVE_HIGH>;
-	sda-gpios = <&lsio_gpio3 5 GPIO_ACTIVE_HIGH>;
+	scl-gpios = <&lsio_gpio3 6 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+	sda-gpios = <&lsio_gpio3 5 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 	clock-frequency = <100000>;
 	status = "disabled";
 
@@ -824,8 +824,8 @@
 	pinctrl-names = "default", "gpio";
 	pinctrl-0 = <&pinctrl_i2c0_mipi_lvds1>;
 	pinctrl-1 = <&pinctrl_i2c0_lvds1_gpio>;
-	scl-gpios = <&lsio_gpio1 29 GPIO_ACTIVE_HIGH>;
-	sda-gpios = <&lsio_gpio1 30 GPIO_ACTIVE_HIGH>;
+	scl-gpios = <&lsio_gpio1 29 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+	sda-gpios = <&lsio_gpio1 30 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 	clock-frequency = <100000>;
 	status = "disabled";
 
