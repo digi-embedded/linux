@@ -3279,7 +3279,10 @@ static void dwc2_gadget_enum_timeout(struct work_struct *work)
 	dev_dbg(hsotg->dev, "%s enumeration timeout\n",  __func__);
 
 	spin_lock_irqsave(&hsotg->lock, flags);
-	dwc2_gadget_enter_lp(hsotg);
+	if (!hsotg->rpm_suspended) {
+		pm_runtime_put(hsotg->dev);
+		hsotg->rpm_suspended = true;
+	}
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 }
 
@@ -4788,7 +4791,10 @@ static int dwc2_hsotg_udc_stop(struct usb_gadget *gadget)
 	if (!IS_ERR_OR_NULL(hsotg->uphy))
 		otg_set_peripheral(hsotg->uphy->otg, NULL);
 
-	dwc2_gadget_enter_lp(hsotg);
+	if (!hsotg->rpm_suspended) {
+		hsotg->rpm_suspended = true;
+		pm_runtime_put_sync(hsotg->dev);
+	}
 
 	if (hsotg->dr_mode == USB_DR_MODE_PERIPHERAL)
 		dwc2_lowlevel_hw_disable(hsotg);
@@ -6019,12 +6025,15 @@ void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg, int rem_wakeup)
  */
 int dwc2_gadget_enter_lp(struct dwc2_hsotg *hsotg)
 {
+	unsigned long flags;
 	int ret;
 
+	spin_lock_irqsave(&hsotg->lock, flags);
 	switch (hsotg->params.power_down) {
 	case DWC2_POWER_DOWN_PARAM_HIBERNATION:
 		ret = dwc2_gadget_enter_hibernation(hsotg);
 		if (ret) {
+			spin_unlock_irqrestore(&hsotg->lock, flags);
 			dev_err(hsotg->dev, "enter hibernation failed %d\n", ret);
 			return ret;
 		}
@@ -6033,6 +6042,7 @@ int dwc2_gadget_enter_lp(struct dwc2_hsotg *hsotg)
 	case DWC2_POWER_DOWN_PARAM_PARTIAL:
 		ret = dwc2_gadget_enter_partial_power_down(hsotg);
 		if (ret) {
+			spin_unlock_irqrestore(&hsotg->lock, flags);
 			dev_err(hsotg->dev, "enter partial_power_down failed %d\n", ret);
 			return ret;
 		}
@@ -6046,6 +6056,7 @@ int dwc2_gadget_enter_lp(struct dwc2_hsotg *hsotg)
 		if (!hsotg->params.no_clock_gating)
 			dwc2_gadget_enter_clock_gating(hsotg);
 	}
+	spin_unlock_irqrestore(&hsotg->lock, flags);
 
 	/* Core hasn't been put into one of the power saving modes: simply return */
 	if (!(hsotg->bus_suspended || hsotg->in_ppd || hsotg->hibernated))
@@ -6054,11 +6065,6 @@ int dwc2_gadget_enter_lp(struct dwc2_hsotg *hsotg)
 	/* Ask phy to be suspended */
 	if (!IS_ERR_OR_NULL(hsotg->uphy))
 		usb_phy_set_suspend(hsotg->uphy, true);
-
-	if (!hsotg->rpm_suspended) {
-		pm_runtime_put(hsotg->dev);
-		hsotg->rpm_suspended = true;
-	}
 
 	return 0;
 }
