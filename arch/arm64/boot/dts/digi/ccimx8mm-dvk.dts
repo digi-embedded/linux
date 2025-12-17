@@ -425,9 +425,6 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lvds>;
 		reg = <0x2c>;
-		/* MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
-		   MIPI_DSI_MODE_NO_EOT_PACKET */
-		digi,mipi-mode-flags = <0x203>;
 		status = "disabled";
 
 		ports {
