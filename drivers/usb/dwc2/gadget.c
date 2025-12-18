@@ -4878,9 +4878,6 @@ static int dwc2_hsotg_wakeup(struct usb_gadget *gadget)
 		hsotg->lx_state = DWC2_L0;
 	}
 
-	usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
-	call_gadget(hsotg, resume);
-
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 
 	return 0;

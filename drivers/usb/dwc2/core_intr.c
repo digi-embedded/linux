@@ -450,12 +450,12 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 
 			/* Change to L0 state, when no_clock_gating == true */
 			hsotg->lx_state = DWC2_L0;
-			usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
-			call_gadget(hsotg, resume);
 		} else {
 			/* Change to L0 state */
 			hsotg->lx_state = DWC2_L0;
 		}
+		usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
+		call_gadget(hsotg, resume);
 	} else {
 		if (hsotg->lx_state == DWC2_L2) {
 			if (hsotg->in_ppd) {
