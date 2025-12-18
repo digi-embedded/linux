@@ -75,6 +75,8 @@
 	fragment@3 {
 		target = <&scmi_ldo8_1v8_rf>;
 		__overlay__ {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
 			regulator-always-on;
 		};
 	};
