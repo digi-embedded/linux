@@ -50,6 +50,7 @@
 	reg_5v_board: fixedregulator@2 {
 		compatible = "regulator-fixed";
 		regulator-name = "5v_board";
+		startup-delay-us = <6000>;
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
@@ -231,6 +232,7 @@
 &hdmi_video {
 	fsl,phy_reg_vlev = <0x0294>;
 	fsl,phy_reg_cksymtx = <0x800d>;
+	HDMI-supply = <&reg_5v_board>;
 };
 
 &ldb {
@@ -460,6 +462,12 @@
 				MX6QDL_PAD_GPIO_8__FLEXCAN1_RX 0x1b0b0
 			>;
 		};
+
+		pinctrl_enable_can1_xcvr: enablecan1stbrgrp {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_2__GPIO1_IO02  0x1b0b0
+			>;
+		};
 	};
 
 	can2 {
@@ -467,6 +475,12 @@
 			fsl,pins = <
 				MX6QDL_PAD_SD3_DAT0__FLEXCAN2_TX 0x1b0b0
 				MX6QDL_PAD_SD3_DAT1__FLEXCAN2_RX 0x1b0b0
+			>;
+		};
+
+		pinctrl_enable_can2_xcvr: enablecan2stbrgrp {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_5__GPIO1_IO05    0x1b0b0
 			>;
 		};
 	};
@@ -606,18 +620,6 @@
 				MX6QDL_PAD_SD3_DAT2__GPIO7_IO06 0x80000000
 			>;
 		};
-	};
-
-	pinctrl_enable_can1_xcvr: enablecan1stbrgrp {
-		fsl,pins = <
-			MX6QDL_PAD_GPIO_2__GPIO1_IO02  0x1b0b0
-		>;
-	};
-
-	pinctrl_enable_can2_xcvr: enablecan2stbrgrp {
-		fsl,pins = <
-			MX6QDL_PAD_GPIO_5__GPIO1_IO05    0x1b0b0
-		>;
 	};
 
 	pcie {

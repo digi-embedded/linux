@@ -425,6 +425,13 @@
 	status = "okay";
 };
 
+/* PWM line on MikroBUS connector */
+&tpm3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_tpm3>;
+	status = "okay";
+};
+
 &usb2 {
 	dr_mode = "host";
 	vbus-supply = <&reg_5v_dvk>;
@@ -706,6 +713,14 @@
 			IMX95_PAD_GPIO_IO26__GPIO2_IO_BIT26		0x200
 			IMX95_PAD_GPIO_IO20__GPIO2_IO_BIT20		0x200
 			IMX95_PAD_GPIO_IO21__GPIO2_IO_BIT21		0x200
+		>;
+	};
+
+	/* PWM */
+	pinctrl_tpm3: tpm3grp {
+		fsl,pins = <
+			/* MIKROBUS_PWM */
+			IMX95_PAD_GPIO_IO24__TPM3_CH3			0x51e
 		>;
 	};
 

@@ -132,6 +132,12 @@
 				reg = <0>;
 				status = "okay";
 			};
+
+			/* Disable LVDS1 */
+			channel@1 {
+				reg = <1>;
+				status = "disabled";
+			};
 		};
 	};
 
