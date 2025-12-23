@@ -114,10 +114,6 @@
 	};
 };
 
-&hash1 {
-	status = "okay";
-};
-
 &ldo2 {
 	regulator-min-microvolt = <2800000>;
 	regulator-max-microvolt = <2800000>;
@@ -132,6 +128,7 @@
 
 /* Display Controller for MIPI-DSI to HDMI */
 &ltdc {
+	default-on;
 	status = "okay";
 
 	port {
@@ -144,27 +141,8 @@
 &dsi {
 	#address-cells = <1>;
 	#size-cells = <0>;
+	default-on;
 	status = "okay";
-
-	ports {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		port@0 {
-			reg = <0>;
-			dsi_in: endpoint {
-				remote-endpoint = <&ltdc_ep0_out>;
-			};
-		};
-
-		port@1 {
-			reg = <1>;
-			dsi_out: endpoint {
-				remote-endpoint = <&panel_in>;
-			};
-		};
-
-	};
 
 	panel@0 {
 		compatible = "dlc,dlc0200ccp04df";
@@ -181,6 +159,14 @@
 		};
 	};
 
+};
+
+&dsi_in {
+	remote-endpoint = <&ltdc_ep0_out>;
+};
+
+&dsi_out {
+	remote-endpoint = <&panel_in>;
 };
 
 &usbh_ehci {

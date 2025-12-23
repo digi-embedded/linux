@@ -27,7 +27,7 @@
 	};
 
 	aliases {
-		serial1 = "/soc/serial@5c000000";
+		serial1 = "/soc/bus@5c007000/serial@5c000000";
 	};
 };
 
@@ -74,12 +74,13 @@
 	st,neg-edge;
 	bus-width = <4>;
 	vmmc-supply = <&reg_rf_wl_en>;
-	max-frequency = <1000000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 	status = "okay";
 
-	brcmf {
+	brcmf: brcmf@1 {
+		reg = <1>;
 		compatible = "brcm,bcm4329-fmac";
-
 		brcm,broken_sg_support;
 		brcm,sd_head_align = /bits/  16 <8>;
 		brcm,sd_sgentry_align = /bits/ 16 <32>;
@@ -91,6 +92,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp15_usart1_pins_c>, <&ccmp15_usart1_pins_z>;
 	pinctrl-1 = <&ccmp15_usart1_sleep_pins_c>, <&ccmp15_usart1_sleep_pins_z>;
+	clocks = <&scmi_clk CK_SCMI_USART1>;
 	uart-has-rtscts;
 	status = "okay";
 
