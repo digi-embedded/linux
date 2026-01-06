@@ -24,7 +24,6 @@ static int brcmf_cfg80211_vndr_cmds_dcmd_handler(struct wiphy *wiphy,
 {
 	struct brcmf_cfg80211_vif *vif;
 	struct brcmf_if *ifp;
-	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
 	const struct brcmf_vndr_dcmd_hdr *cmdhdr = data;
 	struct sk_buff *reply;
 	unsigned int payload, ret_len;
@@ -65,17 +64,6 @@ static int brcmf_cfg80211_vndr_cmds_dcmd_handler(struct wiphy *wiphy,
 
 		memcpy(dcmd_buf, (void *)cmdhdr + cmdhdr->offset, len);
 		*(char *)(dcmd_buf + len)  = '\0';
-	}
-	/* Check for country setting command (wl country) */
-	if (cmdhdr->cmd == BRCMF_C_SET_VAR && cmdhdr->set && dcmd_buf) {
-		char *var_name = (char *)dcmd_buf;
-
-		if (strncmp(var_name, "country", 7) == 0) {
-			if (cfg) {
-				cfg->bands_reset_required = true;
-				brcmf_dbg(INFO, "Marking bands for reset due to country change\n");
-			}
-		}
 	}
 
 	if (cmdhdr->cmd == BRCMF_C_SET_AP) {
