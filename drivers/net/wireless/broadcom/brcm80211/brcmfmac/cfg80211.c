@@ -10836,7 +10836,11 @@ static void brcmf_cfg80211_reg_notifier(struct wiphy *wiphy,
 		bphy_err(drvr, "Firmware rejected country setting\n");
 		return;
 	}
-	brcmf_setup_wiphybands(cfg);
+	drvr->config->bands_reset_required = true;
+	brcmf_dbg(INFO, "Marking bands for reset due to country change\n");
+	err = brcmf_setup_wiphybands(cfg);
+	if (err)
+		drvr->config->bands_reset_required = false;
 }
 
 static void brcmf_free_wiphy(struct wiphy *wiphy)
