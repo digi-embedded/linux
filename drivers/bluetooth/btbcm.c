@@ -37,7 +37,7 @@
 typedef char bcm_fw_name[BCM_FW_NAME_LEN];
 
 #define MAX_REGDMN_LEN					10
-static char btbcm_regdmn[MAX_REGDMN_LEN] = "FCC.CE";
+static char btbcm_regdmn[MAX_REGDMN_LEN] = "FCC";
 module_param_string(regdmn, btbcm_regdmn, MAX_REGDMN_LEN, 0444);
 MODULE_PARM_DESC(regdmn, "Regulatory domain");
 
