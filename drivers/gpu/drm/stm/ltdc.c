@@ -2113,48 +2113,7 @@ static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 	return MODE_OK;
 }
 
-static bool ltdc_encoder_mode_fixup(struct drm_encoder *encoder,
-				    const struct drm_display_mode *mode,
-				    struct drm_display_mode *adjusted_mode)
-{
-	struct drm_device *ddev = encoder->dev;
-	struct ltdc_device *ldev =  ddev->dev_private;
-	int rate = mode->clock * 1000;
-	int ret;
-
-	if (encoder->encoder_type == DRM_MODE_ENCODER_LVDS) {
-		if (ldev->lvds_clk) {
-			ret = clk_set_parent(ldev->pixel_clk, ldev->lvds_clk);
-			if (ret) {
-				DRM_ERROR("Could not set parent clock: %d\n", ret);
-				return false;
-			}
-		}
-	} else {
-		if (ldev->ltdc_clk) {
-			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
-			if (ret) {
-				DRM_ERROR("Could not set parent clock: %d\n", ret);
-				return false;
-			}
-		}
-	}
-
-	if (clk_set_rate(ldev->pixel_clk, rate) < 0) {
-		DRM_ERROR("Cannot set rate (%dHz) for pixel clk\n", rate);
-		return false;
-	}
-
-	adjusted_mode->clock = clk_get_rate(ldev->pixel_clk) / 1000;
-
-	DRM_DEBUG_DRIVER("requested clock %dkHz, adjusted clock %dkHz\n",
-			 mode->clock, adjusted_mode->clock);
-
-	return true;
-}
-
 static const struct drm_encoder_helper_funcs ltdc_encoder_helper_funcs = {
-	.mode_fixup = ltdc_encoder_mode_fixup,
 	.mode_valid = ltdc_encoder_mode_valid,
 };
 
