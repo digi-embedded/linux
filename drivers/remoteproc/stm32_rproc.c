@@ -1371,7 +1371,7 @@ static void stm32_rproc_shutdown(struct platform_device *pdev)
 {
 	struct rproc *rproc = platform_get_drvdata(pdev);
 
-	if (atomic_read(&rproc->power) > 0)
+	if (atomic_read(&rproc->power) > 0 && rproc->state == RPROC_RUNNING)
 		dev_warn(&pdev->dev,
 			 "Warning: remote fw is still running with possible side effect!!!\n");
 }
