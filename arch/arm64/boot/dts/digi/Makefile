@@ -44,7 +44,8 @@ ccimx93_dvk_overlays := ccimx9-dvk_mikroe-accel2-click.dtbo \
 			ccimx9-dvk_mikroe-gyro-click.dtbo \
 			ccimx93_emulate-ccimx91.dtbo \
 			ccimx93-dvk_dlc0200ccp04df-mipi-dsi.dtbo \
-			ccimx93-dvk_lvds.dtbo
+			ccimx93-dvk_lvds.dtbo \
+			ccimx93-dvk_nhd-3-5-640480ef-msxp-mipi-dsi.dtbo
 
 ccimx8mm-dtbs :=	ccimx8mm-dvk.dtb \
 			$(ccimx8m_dvk_overlays) \
