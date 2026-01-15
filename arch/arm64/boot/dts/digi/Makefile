@@ -31,6 +31,9 @@ ccimx9_som_overlays := ccimx9_bt.dtbo \
 			ccimx9_bt-dtm.dtbo \
 			ccimx9_wifi.dtbo
 
+ccimx95_som_overlays := ccimx95_bt.dtbo \
+			ccimx9_wifi.dtbo
+
 ccimx9_dvk_overlays := ccimx9-dvk_enet2.dtbo \
 			ccimx9-dvk_eqos-tsn.dtbo
 
@@ -85,7 +88,7 @@ ccimx95_dvk_overlays := ccimx95-dvk_enet2.dtbo \
 			ccimx95-dvk_pcam5c.dtbo
 
 ccimx95-dtbs := 	ccimx95-dvk.dtb \
-			$(ccimx9_som_overlays) \
+			$(ccimx95_som_overlays) \
 			$(ccimx95_dvk_overlays)
 
 dtb-$(CONFIG_ARCH_MXC) += ccimx8mm.dtb \

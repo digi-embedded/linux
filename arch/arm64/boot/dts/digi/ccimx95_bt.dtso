@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2026 Digi International Inc.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "../freescale/imx95-pinfunc.h"
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: Bluetooth";
+			bluetooth {
+				/* U-Boot will fill in the MAC address here */
+			};
+		};
+	};
+
+	/* Enable LPUART5 (Bluetooth) */
+	fragment@1 {
+		target = <&lpuart5>;
+		__overlay__ {
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_uart5>;
+			status = "okay";
+
+			bluetooth {
+				compatible = "nxp,88w8987-bt";
+			};
+		};
+	};
+
+	/* LPUART5 pinctrl (SOM HV >= 2) */
+	fragment@2 {
+		target = <&scmi_iomuxc>;
+		__overlay__ {
+			pinctrl_uart5: uart5grp {
+				fsl,pins = <
+					IMX95_PAD_DAP_TDO_TRACESWO__LPUART5_TX	0x31e
+					IMX95_PAD_DAP_TDI__LPUART5_RX		0x31e
+					IMX95_PAD_DAP_TCLK_SWCLK__LPUART5_CTS_B	0x31e
+					IMX95_PAD_DAP_TMS_SWDIO__LPUART5_RTS_B	0x31e
+				>;
+			};
+		};
+	};
+};
