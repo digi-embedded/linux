@@ -677,6 +677,12 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	if (retval)
 		return dev_err_probe(&dev->dev, retval, "Failed to enable pm runtime\n");
 
+	/*
+	 * Disable runtime PM until the device is fully initialized.
+	 * This prevents the device from being suspended prematurely.
+	 */
+	pm_runtime_forbid(&dev->dev);
+
 	spin_lock_init(&hsotg->lock);
 
 	hsotg->vbus_supply = devm_regulator_get_optional(hsotg->dev, "vbus");
@@ -857,6 +863,9 @@ static int dwc2_driver_probe(struct platform_device *dev)
 
 	platform_set_drvdata(dev, hsotg);
 	hsotg->hibernated = 0;
+
+	/* Now that the hcd is fully initialized, allow runtime PM */
+	pm_runtime_allow(&dev->dev);
 
 	dwc2_debugfs_init(hsotg);
 
