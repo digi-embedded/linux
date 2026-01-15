@@ -24,7 +24,7 @@
 	};
 
 	chosen {
-		stdout-path = &lpuart6;
+		stdout-path = &lpuart1;
 	};
 
 	hdmi_connector: hdmi-connector {
@@ -298,6 +298,13 @@
 	};
 };
 
+&lpuart1 {
+	/* console */
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart1>;
+	status = "okay";
+};
+
 /*
  * XBee interface
  * LPUART4 lines conflict with ENET2.
@@ -306,13 +313,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart4>, <&pinctrl_xbee_rf_gpios>;
 	fsl,uart-has-rtscts;
-	status = "okay";
-};
-
-&lpuart6 {
-	/* console */
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart6>;
 	status = "okay";
 };
 
@@ -736,6 +736,13 @@
 		>;
 	};
 
+	pinctrl_uart1: uart1grp {
+		fsl,pins = <
+			IMX95_PAD_UART1_RXD__AONMIX_TOP_LPUART1_RX      0x31e
+			IMX95_PAD_UART1_TXD__AONMIX_TOP_LPUART1_TX      0x31e
+		>;
+	};
+
 	/* XBee */
 	pinctrl_uart4: uart4grp {
 		fsl,pins = <
@@ -751,13 +758,6 @@
 		fsl,pins = <
 			/* XBEE_RESET_N */
 			IMX95_PAD_ENET2_TXC__GPIO4_IO_BIT21		0x31e
-		>;
-	};
-
-	pinctrl_uart6: uart6grp {
-		fsl,pins = <
-			IMX95_PAD_GPIO_IO05__LPUART6_RX			0x31e
-			IMX95_PAD_GPIO_IO04__LPUART6_TX			0x31e
 		>;
 	};
 
