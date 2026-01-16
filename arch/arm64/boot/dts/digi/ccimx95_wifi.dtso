@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2026 Digi International Inc.
+ */
+
+/dts-v1/;
+/plugin/;
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	/* Add the "wireless" node so the wifi driver gets loaded */
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: Wi-Fi";
+			wireless {
+				/* U-Boot will fill in the MAC address here */
+			};
+		};
+	};
+
+	/* Enable USDHC3 (Wireless) */
+	fragment@1 {
+		target = <&usdhc3>;
+		__overlay__ {
+			pinctrl-names = "default", "state_100mhz", "state_200mhz", "sleep";
+			pinctrl-0 = <&pinctrl_usdhc3>;
+			pinctrl-1 = <&pinctrl_usdhc3_100mhz>;
+			pinctrl-2 = <&pinctrl_usdhc3_200mhz>;
+			pinctrl-3 = <&pinctrl_usdhc3>;
+			mmc-pwrseq = <&wlan_pwrseq>;
+			bus-width = <4>;
+			non-removable;
+			wakeup-source;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			brcmf: bcrmf@1 {
+				reg = <1>;
+				compatible = "brcm,bcm4329-fmac";
+			};
+		};
+	};
+
+	/* Enable WLAN PWR control */
+	fragment@2 {
+		target-path = "/";
+		__overlay__ {
+			wlan_pwrseq: wlan-pwrseq {
+				compatible = "mmc-pwrseq-simple";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_wlan_pdn>;
+				/* WLAN_PDn */
+				reset-gpios = <&gpio2 7 GPIO_ACTIVE_LOW>;
+				status = "okay";
+			};
+		};
+	};
+};
