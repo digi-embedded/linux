@@ -175,7 +175,7 @@ static int rpmsg_i2c_read(struct rpmsg_i2c_dev *ri2c_dev, struct i2c_msg *msg)
 	ri2c_dev->is_read = false;
 	if (time_left) {
 		if (r_msg->result & RPMSG_I2C_NACK)
-			ret = -ENXIO;
+			return -ENXIO;
 
 		if (msg->len != r_msg->count)
 			dev_warn(&rpdev->dev, "Unexpected read size (%u), expected (%u)\n",
