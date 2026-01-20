@@ -75,12 +75,15 @@
 			st,neg-edge;
 			bus-width = <4>;
 			vmmc-supply = <&reg_rf_wl_en>;
+			#address-cells = <1>;
+			#size-cells = <0>;
 			status = "okay";
 
-			brcmf {
+			brcmf: brcmf@1 {
+				reg = <1>;
 				compatible = "brcm,bcm4329-fmac";
 				brcm,broken_sg_support;
-		                brcm,sd_head_align = /bits/  16 <8>;
+				brcm,sd_head_align = /bits/  16 <8>;
 				brcm,sd_sgentry_align = /bits/ 16 <32>;
 			};
 		};
