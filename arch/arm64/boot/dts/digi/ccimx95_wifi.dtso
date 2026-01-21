@@ -5,14 +5,31 @@
 
 /dts-v1/;
 /plugin/;
+
+#include "../freescale/imx95-pinfunc.h"
+#include <dt-bindings/clock/fsl,imx95-clock.h>
 #include <dt-bindings/gpio/gpio.h>
 
 / {
-	/* Add the "wireless" node so the wifi driver gets loaded */
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
 			overlay-description = "SOM: Wi-Fi";
+
+			wlan_pwrseq: wlan-pwrseq {
+				compatible = "mmc-pwrseq-simple";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_wifi_ctrl>;
+				reset-gpios = <&gpio2 19 GPIO_ACTIVE_LOW>; /* WL_REG_ON */
+				/* Use CCM CKO3 to clock the Wi-Fi chipset */
+				clocks = <&scmi_clk IMX95_CLK_CCMCKO3>;
+				clock-names = "ext_clock";
+				/* Configure CCMCKO3 to be sourced from 32K */
+				assigned-clocks = <&scmi_clk IMX95_CLK_CCMCKO3>;
+				assigned-clock-parents = <&scmi_clk IMX95_CLK_32K>;
+				status = "okay";
+			};
+
 			wireless {
 				/* U-Boot will fill in the MAC address here */
 			};
@@ -29,9 +46,11 @@
 			pinctrl-2 = <&pinctrl_usdhc3_200mhz>;
 			pinctrl-3 = <&pinctrl_usdhc3>;
 			mmc-pwrseq = <&wlan_pwrseq>;
+			vqmmc-supply = <&reg_1v8_rf>;
 			bus-width = <4>;
 			non-removable;
 			wakeup-source;
+			max-frequency = <100000000>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
@@ -43,17 +62,24 @@
 		};
 	};
 
-	/* Enable WLAN PWR control */
+	/* Enable 1V8_RF regulator */
 	fragment@2 {
-		target-path = "/";
+		target = <&reg_1v8_rf>;
 		__overlay__ {
-			wlan_pwrseq: wlan-pwrseq {
-				compatible = "mmc-pwrseq-simple";
-				pinctrl-names = "default";
-				pinctrl-0 = <&pinctrl_wlan_pdn>;
-				/* WLAN_PDn */
-				reset-gpios = <&gpio2 7 GPIO_ACTIVE_LOW>;
-				status = "okay";
+			status = "okay";
+		};
+	};
+
+	fragment@3 {
+		target = <&scmi_iomuxc>;
+		__overlay__ {
+			pinctrl_wifi_ctrl: wifictrl {
+				fsl,pins = <
+					/* 32 kHz clock */
+					IMX95_PAD_CCM_CLKO3__CCMSRCGPCMIX_TOP_CLKO_3	0x111e
+					/* WL_REG_ON */
+					IMX95_PAD_GPIO_IO19__GPIO2_IO_BIT19	0x31e
+				>;
 			};
 		};
 	};
