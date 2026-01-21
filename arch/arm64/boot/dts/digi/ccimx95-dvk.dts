@@ -33,7 +33,7 @@
 		pinctrl-0 = <&pinctrl_hdmi_hpd>;
 		ddc-i2c-bus = <&lpi2c4>;
 		hdmi-pwr-supply = <&reg_5v_dvk>;
-		hpd-gpios = <&gpio4 28 GPIO_ACTIVE_HIGH>;
+		hpd-gpios = <&gpio2 7 GPIO_ACTIVE_HIGH>;
 		label = "hdmi";
 		type = "a";
 
@@ -623,7 +623,7 @@
 	/* HDMI HPD */
 	pinctrl_hdmi_hpd: hdmi_hpd_grp {
 		fsl,pins = <
-			IMX95_PAD_CCM_CLKO3__GPIO4_IO_BIT28		0x31e
+			IMX95_PAD_GPIO_IO07__GPIO2_IO_BIT7		0x31e
 		>;
 	};
 
