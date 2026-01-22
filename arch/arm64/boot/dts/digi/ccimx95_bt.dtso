@@ -7,12 +7,15 @@
 /plugin/;
 
 #include "../freescale/imx95-pinfunc.h"
+#include <dt-bindings/clock/fsl,imx95-clock.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
 			overlay-description = "SOM: Bluetooth";
+
 			bluetooth {
 				/* U-Boot will fill in the MAC address here */
 			};
@@ -24,19 +27,48 @@
 		target = <&lpuart5>;
 		__overlay__ {
 			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_uart5>;
+			pinctrl-0 = <&pinctrl_uart5>, <&pinctrl_bt_ctrl>;
 			status = "okay";
 
 			bluetooth {
-				compatible = "nxp,88w8987-bt";
+				compatible = "infineon,cyw55572-bt";
+				shutdown-gpios = <&gpio2 18 GPIO_ACTIVE_HIGH>; /* BT_REG_EN */
+				max-speed = <3000000>;
+				brcm,requires-autobaud-mode;
+				vbatt-supply = <&reg_vdd_3v3_dummy>;
+				vddio-supply = <&reg_1v8_rf>;
+				/* Use CCM CKO3 to clock the Wi-Fi chipset */
+				clocks = <&scmi_clk IMX95_CLK_CCMCKO3>;
+				clock-names = "txco";
+				/* Configure CCMCKO3 to be sourced from 32K */
+				assigned-clocks = <&scmi_clk IMX95_CLK_CCMCKO3>;
+				assigned-clock-parents = <&scmi_clk IMX95_CLK_32K>;
+				status = "okay";
 			};
 		};
 	};
 
-	/* LPUART5 pinctrl (SOM HV >= 2) */
+	/* Enable 1V8_RF regulator */
 	fragment@2 {
+		target = <&reg_1v8_rf>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Pinctrl */
+	fragment@3 {
 		target = <&scmi_iomuxc>;
 		__overlay__ {
+			pinctrl_bt_ctrl: btctrl {
+				fsl,pins = <
+					/* 32 kHz clock */
+					IMX95_PAD_CCM_CLKO3__CCMSRCGPCMIX_TOP_CLKO_3	0x111e
+					/* BT_REG_EN */
+					IMX95_PAD_GPIO_IO18__GPIO2_IO_BIT18	0x31e
+				>;
+			};
+
 			pinctrl_uart5: uart5grp {
 				fsl,pins = <
 					IMX95_PAD_DAP_TDO_TRACESWO__LPUART5_TX	0x31e
