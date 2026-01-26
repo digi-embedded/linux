@@ -54,48 +54,54 @@
 		status = "disabled";
 	};
 
-	reg_3v3_dvk: regulator-3v3-dvk {
-		compatible = "regulator-fixed";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_reg_3v3_dvk>;
-		regulator-max-microvolt = <3300000>;
-		regulator-min-microvolt = <3300000>;
-		regulator-name = "3v3_dvk";
-		gpio = <&gpio5 14 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-	};
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
 
-	reg_5v_dvk: regulator-5v-dvk {
-		compatible = "regulator-fixed";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_reg_5v_dvk>;
-		regulator-max-microvolt = <5000000>;
-		regulator-min-microvolt = <5000000>;
-		regulator-name = "5v_dvk";
-		gpio = <&gpio1 14 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-	};
+		reg_3v3_dvk: regulator-3v3-dvk {
+			compatible = "regulator-fixed";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_3v3_dvk>;
+			regulator-max-microvolt = <3300000>;
+			regulator-min-microvolt = <3300000>;
+			regulator-name = "3v3_dvk";
+			gpio = <&gpio5 14 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+		};
 
-	reg_can1_stby: regulator-can1-stby {
-		compatible = "regulator-fixed";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_reg_can1_stby>;
-		regulator-name = "can1-stby";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&gpio1 11 GPIO_ACTIVE_LOW>;
-		vin-supply = <&reg_5v_dvk>;
-	};
+		reg_5v_dvk: regulator-5v-dvk {
+			compatible = "regulator-fixed";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_5v_dvk>;
+			regulator-max-microvolt = <5000000>;
+			regulator-min-microvolt = <5000000>;
+			regulator-name = "5v_dvk";
+			gpio = <&gpio1 14 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+		};
 
-	reg_can2_stby: regulator-can2-stby {
-		compatible = "regulator-fixed";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_reg_can2_stby>;
-		regulator-name = "can2-stby";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&gpio1 13 GPIO_ACTIVE_LOW>;
-		vin-supply = <&reg_5v_dvk>;
+		reg_can1_stby: regulator-can1-stby {
+			compatible = "regulator-fixed";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_can1_stby>;
+			regulator-name = "can1-stby";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio1 11 GPIO_ACTIVE_LOW>;
+			vin-supply = <&reg_5v_dvk>;
+		};
+
+		reg_can2_stby: regulator-can2-stby {
+			compatible = "regulator-fixed";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_can2_stby>;
+			regulator-name = "can2-stby";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio1 13 GPIO_ACTIVE_LOW>;
+			vin-supply = <&reg_5v_dvk>;
+		};
 	};
 
 	sound_max98089: sound-max98089 {

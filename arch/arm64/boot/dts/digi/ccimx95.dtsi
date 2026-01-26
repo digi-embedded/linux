@@ -101,25 +101,31 @@
 		};
 	};
 
-	/*
-	 * Dummy regulators to satisfy drivers supplies.
-	 * These should really be the PMIC's regulators (via SCMI), but the
-	 * current System Manager (SM) firmware is not able to:
-	 * - not switch them off during a reboot sequence
-	 * - switch them off during a poweroff sequence
-	 */
-	reg_vdd_3v3_dummy: reg-vdd-3v3-dummy {
-		compatible = "regulator-fixed";
-		regulator-max-microvolt = <3300000>;
-		regulator-min-microvolt = <3300000>;
-		regulator-name = "vdd-3v3-dummy";
-	};
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
 
-	reg_vdd_1v8_dummy: reg-vdd-1v8-dummy {
-		compatible = "regulator-fixed";
-		regulator-max-microvolt = <1800000>;
-		regulator-min-microvolt = <1800000>;
-		regulator-name = "vdd-1v8-dummy";
+		/*
+		 * Dummy regulators to satisfy drivers supplies.
+		 * These should really be the PMIC's regulators (via SCMI), but the
+		 * current System Manager (SM) firmware is not able to:
+		 * - not switch them off during a reboot sequence
+		 * - switch them off during a poweroff sequence
+		 */
+		reg_vdd_3v3_dummy: reg-vdd-3v3-dummy {
+			compatible = "regulator-fixed";
+			regulator-max-microvolt = <3300000>;
+			regulator-min-microvolt = <3300000>;
+			regulator-name = "vdd-3v3-dummy";
+		};
+
+		reg_vdd_1v8_dummy: reg-vdd-1v8-dummy {
+			compatible = "regulator-fixed";
+			regulator-max-microvolt = <1800000>;
+			regulator-min-microvolt = <1800000>;
+			regulator-name = "vdd-1v8-dummy";
+		};
 	};
 };
 
