@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 - 2022 Digi International Inc
+ *  Copyright 2016 - 2026 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -33,12 +33,6 @@
 #define MCA_NVRAM_SIZE	(MCA_MPU_NVRAM_END - MCA_MPU_NVRAM_START + 1)
 
 extern int digi_get_som_hv(void);
-
-struct dyn_attribute {
-	u16			since_kl03;	/* Minimum firmware version required for KL03 */
-	u16			since_kl17;	/* Minimum firmware version required for KL17 */
-	struct attribute	*attr;
-};
 
 struct mca_reason {
 	u32 		flag;
@@ -223,17 +217,17 @@ static struct resource mca_gpios_resources[] = {
 		.end    = MCA_IRQ_GPIO_BANK_0,
 		.flags  = IORESOURCE_IRQ,
 	},
-	/* GPIO banks 1 and 2 are exclusive to the KL17 */
+	/* GPIO banks 1 and 2 are exclusive to the KL17 and STM32U031 */
 	{
 		.name   = MCA_IRQ_GPIO_BANK_1_NAME,
-		.start  = MCA_KL17_IRQ_GPIO_BANK_1,
-		.end    = MCA_KL17_IRQ_GPIO_BANK_1,
+		.start  = MCA_IRQ_GPIO_BANK_1,
+		.end    = MCA_IRQ_GPIO_BANK_1,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_GPIO_BANK_2_NAME,
-		.start  = MCA_KL17_IRQ_GPIO_BANK_2,
-		.end    = MCA_KL17_IRQ_GPIO_BANK_2,
+		.start  = MCA_IRQ_GPIO_BANK_2,
+		.end    = MCA_IRQ_GPIO_BANK_2,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -379,6 +373,21 @@ static const struct mfd_cell mca_kl17_devs[] = {
 	{
 		.name           = MCA_DRVNAME_LED,
 		.of_compatible	= "digi,mca-led",
+	},
+};
+
+static const struct mfd_cell mca_stm32u031_devs[] = {
+	{
+		.name           = MCA_DRVNAME_RTC,
+		.num_resources  = ARRAY_SIZE(mca_rtc_resources),
+		.resources      = mca_rtc_resources,
+		.of_compatible  = "digi,mca-rtc",
+	},
+	{
+		.name           = MCA_DRVNAME_GPIO,
+		.num_resources	= ARRAY_SIZE(mca_gpios_resources),
+		.resources	= mca_gpios_resources,
+		.of_compatible = "digi,mca-gpio",
 	},
 };
 
@@ -617,8 +626,10 @@ static ssize_t fw_update_store(struct device *dev,
 	if (!gpio_is_valid(mca->fw_update_gpio))
 		return -EINVAL;
 
-	/* set i2c bus speed to 100kbps during firmware update */
-	set_i2c_speed(mca, 100000);
+	if (mca->dev_id != MCA_STM32U031_DEVICE_ID) {
+		/* set i2c bus speed to 100kbps during firmware update */
+		set_i2c_speed(mca, 100000);
+	}
 
 	status = kstrtol(buf, 0, &value);
 	if (status == 0) {
@@ -906,39 +917,32 @@ static struct attribute_group mca_attr_group = {
 
 static struct dyn_attribute mca_sysfs_dyn_entries[] = {
 	{
-		.since_kl03 =	TICK_COUNT_KL03_FW_VER,
-		.since_kl17 =	TICK_COUNT_KL17_FW_VER,
-		.attr =		&dev_attr_tick_cnt.attr,
+		.func =			MCA_FUNC_TICK_COUNT,
+		.attr =			&dev_attr_tick_cnt.attr,
 	},
 	{
-		.since_kl03 =	VREF_KL03_FW_VER,
-		.since_kl17 =	VREF_KL17_FW_VER,
-		.attr =		&dev_attr_vref.attr,
+		.func =			MCA_FUNC_VREF,
+		.attr =			&dev_attr_vref.attr,
 	},
 	{
-		.since_kl03 =	LAST_WAKEUP_KL03_FW_VER,
-		.since_kl17 =	LAST_WAKEUP_KL17_FW_VER,
-		.attr =		&dev_attr_last_wakeup_reason.attr,
+		.func =			MCA_FUNC_LAST_WAKEUP,
+		.attr =			&dev_attr_last_wakeup_reason.attr,
 	},
 	{
-		.since_kl03 =	LAST_WAKEUP_KL03_FW_VER,
-		.since_kl17 =	LAST_WAKEUP_KL17_FW_VER,
-		.attr =		&dev_attr_last_mca_reset.attr,
+		.func =			MCA_FUNC_LAST_WAKEUP,
+		.attr =			&dev_attr_last_mca_reset.attr,
 	},
 	{
-		.since_kl03 =	LAST_WAKEUP_KL03_FW_VER,
-		.since_kl17 =	LAST_WAKEUP_KL17_FW_VER,
-		.attr =		&dev_attr_last_mpu_reset.attr,
+		.func =			MCA_FUNC_LAST_WAKEUP,
+		.attr =			&dev_attr_last_mpu_reset.attr,
 	},
 	{
-		.since_kl03 =	REBOOT_SAFE_KL03_FW_VER,
-		.since_kl17 =	REBOOT_SAFE_KL17_FW_VER,
-		.attr =		&dev_attr_reboot_safe.attr,
+		.func =			MCA_FUNC_REBOOT_SAFE,
+		.attr =			&dev_attr_reboot_safe.attr,
 	},
 	{
-		.since_kl03 =	REBOOT_SAFE_KL03_FW_VER,
-		.since_kl17 =	REBOOT_SAFE_KL17_FW_VER,
-		.attr =		&dev_attr_pwroff_safe.attr,
+		.func =			MCA_FUNC_REBOOT_SAFE,
+		.attr =			&dev_attr_pwroff_safe.attr,
 	},
 };
 
@@ -1089,6 +1093,57 @@ static void mca_shutdown(void)
 	}
 }
 
+/* Set version 255.255 for for features not available */
+struct mca_func_since mca_func_fwver[MCA_DEV_MAX][MCA_FUNC_MAX] = {
+	[MCA_DEV_KL03] = {
+		{MCA_FUNC_UART, 	MCA_MAKE_FW_VER(1, 19)},
+		{MCA_FUNC_TICK_COUNT, 	MCA_MAKE_FW_VER(0, 15)},
+		{MCA_FUNC_VREF, 	MCA_MAKE_FW_VER(0, 15)},
+		{MCA_FUNC_LAST_WAKEUP, 	MCA_MAKE_FW_VER(1,  2)},
+		{MCA_FUNC_NVRAM, 	MCA_MAKE_FW_VER(1,  2)},
+		{MCA_FUNC_REBOOT_SAFE, 	MCA_MAKE_FW_VER(1,  2)},
+		{MCA_FUNC_DEBTB50M, 	MCA_MAKE_FW_VER(1,  7)},
+		{MCA_FUNC_PWRKEY_UP, 	MCA_MAKE_FW_VER(1, 14)},
+		{MCA_FUNC_RTC_PREPARE, 	MCA_MAKE_FW_VER(1, 19)},
+	},
+	[MCA_DEV_KL17] = {
+		{MCA_FUNC_UART, 	MCA_MAKE_FW_VER(1, 13)},
+		{MCA_FUNC_TICK_COUNT, 	MCA_MAKE_FW_VER(0,  0)},
+		{MCA_FUNC_VREF, 	MCA_MAKE_FW_VER(0, 11)},
+		{MCA_FUNC_LAST_WAKEUP, 	MCA_MAKE_FW_VER(0,  4)},
+		{MCA_FUNC_NVRAM, 	MCA_MAKE_FW_VER(0,  8)},
+		{MCA_FUNC_REBOOT_SAFE, 	MCA_MAKE_FW_VER(1,  3)},
+		{MCA_FUNC_DEBTB50M, 	MCA_MAKE_FW_VER(0, 13)},
+		{MCA_FUNC_PWRKEY_UP, 	MCA_MAKE_FW_VER(0, 17)},
+		{MCA_FUNC_RTC_PREPARE, 	MCA_MAKE_FW_VER(255, 255)},
+	},
+	[MCA_DEV_STM32U031] = {
+		{MCA_FUNC_UART, 	MCA_MAKE_FW_VER(255, 255)},
+		{MCA_FUNC_TICK_COUNT, 	MCA_MAKE_FW_VER(0,  0)},
+		{MCA_FUNC_VREF, 	MCA_MAKE_FW_VER(255, 255)},
+		{MCA_FUNC_LAST_WAKEUP, 	MCA_MAKE_FW_VER(255, 255)},
+		{MCA_FUNC_NVRAM, 	MCA_MAKE_FW_VER(255, 255)},
+		{MCA_FUNC_REBOOT_SAFE, 	MCA_MAKE_FW_VER(255, 255)},
+		{MCA_FUNC_DEBTB50M, 	MCA_MAKE_FW_VER(255, 255)},
+		{MCA_FUNC_PWRKEY_UP, 	MCA_MAKE_FW_VER(255, 255)},
+		{MCA_FUNC_RTC_PREPARE, 	MCA_MAKE_FW_VER(255, 255)},
+	},
+};
+
+/* Function to know if a feature is supported in a specific FW version */
+int mca_feature_is_supported(struct mca_drv *mca, enum mca_func func)
+{
+	int i;
+
+	for (i = 0 ; i < MCA_FUNC_MAX ; i++) {
+		if (mca_func_fwver[mca->dev_idx][i].func == func) {
+			return mca->fw_version >= mca_func_fwver[mca->dev_idx][i].fw_ver_since;
+		}
+	}
+
+	return 0;
+}
+
 static int mca_add_dyn_sysfs_entries(struct mca_drv *mca,
 					   const struct dyn_attribute *dattr,
 					   int num_entries,
@@ -1104,8 +1159,7 @@ static int mca_add_dyn_sysfs_entries(struct mca_drv *mca,
 			continue;
 
 		/* Create the sysfs files if the MCA fw supports the feature */
-		if (MCA_FEATURE_IS_SUPPORTED(mca, dattr->since_kl03,
-		                             dattr->since_kl17)) {
+		if (mca_feature_is_supported(mca, dattr->func)) {
 			ret = sysfs_add_file_to_group(&mca->dev->kobj,
 						      dattr->attr,
 						      grp->name);
@@ -1133,8 +1187,17 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	}
 	mca->dev_id = (u8)val;
 
-	if (mca->dev_id != MCA_KL03_DEVICE_ID &&
-	    mca->dev_id != MCA_KL17_DEVICE_ID) {
+	switch (mca->dev_id) {
+	case MCA_KL03_DEVICE_ID:
+		mca->dev_idx = MCA_DEV_KL03;
+		break;
+	case MCA_KL17_DEVICE_ID:
+		mca->dev_idx = MCA_DEV_KL17;
+		break;
+	case MCA_STM32U031_DEVICE_ID:
+		mca->dev_idx = MCA_DEV_STM32U031;
+		break;
+	default:
 		dev_err(mca->dev, "Invalid MCA Device ID (%x)\n", mca->dev_id);
 		return -ENODEV;
 	}
@@ -1144,8 +1207,9 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	    !of_machine_is_compatible("digi,ccimx6ul")) ||
 	    (mca->dev_id == MCA_KL17_DEVICE_ID &&
 	    !(of_machine_is_compatible("digi,ccimx8") ||
-	      of_machine_is_compatible("digi,ccimx93"))))
-
+	      of_machine_is_compatible("digi,ccimx93"))) ||
+	    (mca->dev_id == MCA_STM32U031_DEVICE_ID &&
+	    !(of_machine_is_compatible("digi,ccimx95"))))
 	{
 		dev_err(mca->dev, "MCA Device ID (%x) doesn't match the SOM\n",
 			mca->dev_id);
@@ -1182,8 +1246,7 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 		set_i2c_speed(mca, 100000);
 	}
 
-	if (MCA_FEATURE_IS_SUPPORTED(mca, LAST_WAKEUP_KL03_FW_VER,
-	                             LAST_WAKEUP_KL17_FW_VER)) {
+	if (mca_feature_is_supported(mca, MCA_FUNC_LAST_WAKEUP)) {
 		ret = regmap_bulk_read(mca->regmap, MCA_LAST_MCA_RESET_0,
 				       &mca->last_mca_reset,
 				       sizeof(mca->last_mca_reset));
@@ -1232,9 +1295,9 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 			mca->fw_update_gpio = -EINVAL;
 		}
 
-		if (mca->fw_version >= RTC_PREPARE_KL03_FW_VER)
+		if (mca_feature_is_supported(mca, MCA_FUNC_RTC_PREPARE))
 			mca->rtc_prepare_enabled = true;
-	} else {
+	} else if (mca->dev_id == MCA_KL17_DEVICE_ID) {
 		/*
 		 * Read the SOM hardware version the MCA is using. For CC8X module it
 		 * is set by uboot
@@ -1252,6 +1315,8 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 			dev_warn(mca->dev, "failed to get fw-update-gpio: %d\n", ret);
 			mca->fw_update_gpio = -EINVAL;
 		}
+	} else if (mca->dev_id == MCA_STM32U031_DEVICE_ID) {
+		/* No need to handle a fw_update_gpio for STM32U031 */
 	}
 
 	mca->chip_irq = irq;
@@ -1272,6 +1337,12 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	if (mca->dev_id == MCA_KL17_DEVICE_ID) {
 		mca_devs = mca_kl17_devs;
 		n_devs = ARRAY_SIZE(mca_kl17_devs);
+	}
+
+	/* Use STM32U031 devs array if a STM32U031 is detected */
+	if (mca->dev_id == MCA_STM32U031_DEVICE_ID) {
+		mca_devs = mca_stm32u031_devs;
+		n_devs = ARRAY_SIZE(mca_stm32u031_devs);
 	}
 
 	ret = mfd_add_devices(mca->dev, -1, mca_devs,
@@ -1325,8 +1396,7 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	mca->syscore.shutdown = mca_shutdown;
 	register_syscore_ops(&mca->syscore);
 
-	if (MCA_FEATURE_IS_SUPPORTED(mca, NVRAM_KL03_FW_VER,
-	                             NVRAM_KL17_FW_VER)) {
+	if (mca_feature_is_supported(mca, MCA_FUNC_NVRAM)) {
 		mca->nvram = devm_kzalloc(mca->dev, sizeof(struct bin_attribute),
 					  GFP_KERNEL);
 		if (!mca->nvram) {

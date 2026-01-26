@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 - 2022 Digi International Inc
+ *  Copyright 2017 - 2026 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -55,6 +55,13 @@
 
 #define MCA_UID_SIZE	(MCA_HWVER_SOM - MCA_UID_0)
 
+enum mca_dev_idx {
+	MCA_DEV_KL03,
+	MCA_DEV_KL17,
+	MCA_DEV_STM32U031,
+	MCA_DEV_MAX	/* Last element */
+};
+
 struct mca_drv {
 	struct device *dev;
 	u8 dev_id;
@@ -77,34 +84,36 @@ struct mca_drv {
 	struct syscore_ops syscore;
 	bool suspended;
 	bool rtc_prepare_enabled;
+	enum mca_dev_idx dev_idx;
 };
 
-/* Platform-dependent values */
+enum mca_func {
+	MCA_FUNC_UART,
+	MCA_FUNC_TICK_COUNT,
+	MCA_FUNC_VREF,
+	MCA_FUNC_LAST_WAKEUP,
+	MCA_FUNC_NVRAM,
+	MCA_FUNC_REBOOT_SAFE,
+	MCA_FUNC_DEBTB50M,
+	MCA_FUNC_PWRKEY_UP,
+	MCA_FUNC_RTC_PREPARE,
+	MCA_FUNC_LEDS,
+	MCA_FUNC_MAX	/* Last element */
+};
+
+struct dyn_attribute {
+	enum mca_func func;
+	struct attribute *attr;
+};
+
+struct mca_func_since {
+    enum mca_func func;
+    u16 fw_ver_since;
+};
+
 #define MCA_KL03_DEVICE_ID	0x61
-#define MCA_UART_KL03_MIN_FW	MCA_MAKE_FW_VER(1, 19)
-#define TICK_COUNT_KL03_FW_VER	MCA_MAKE_FW_VER(0,15)
-#define VREF_KL03_FW_VER	MCA_MAKE_FW_VER(0,15)
-#define LAST_WAKEUP_KL03_FW_VER	MCA_MAKE_FW_VER(1,2)
-#define NVRAM_KL03_FW_VER	MCA_MAKE_FW_VER(1,2)
-#define REBOOT_SAFE_KL03_FW_VER	MCA_MAKE_FW_VER(1,2)
-#define DEBTB50M_KL03_FW_VER	MCA_MAKE_FW_VER(1, 7)
-#define PWRKEY_UP_KL03_FW_VER	MCA_MAKE_FW_VER(1, 14)
-#define RTC_PREPARE_KL03_FW_VER	MCA_MAKE_FW_VER(1, 19)
-
 #define MCA_KL17_DEVICE_ID	0x4A
-#define MCA_UART_KL17_MIN_FW	MCA_MAKE_FW_VER(0, 13)
-#define TICK_COUNT_KL17_FW_VER	MCA_MAKE_FW_VER(0,0)
-#define VREF_KL17_FW_VER	MCA_MAKE_FW_VER(0,11)
-#define LAST_WAKEUP_KL17_FW_VER	MCA_MAKE_FW_VER(0,4)
-#define NVRAM_KL17_FW_VER	MCA_MAKE_FW_VER(0,8)
-#define REBOOT_SAFE_KL17_FW_VER	MCA_MAKE_FW_VER(1,03)
-#define DEBTB50M_KL17_FW_VER	MCA_MAKE_FW_VER(0, 13)
-#define PWRKEY_UP_KL17_FW_VER	MCA_MAKE_FW_VER(0, 17)
-#define MCA_LEDS_MIN_FW		MCA_MAKE_FW_VER(1, 1)
-
-/* Function to know if a feature is supported in a specific FW version */
-#define MCA_FEATURE_IS_SUPPORTED(mca, kl03_ver, kl17_ver)	\
-	(mca->fw_version >= (mca->dev_id == MCA_KL03_DEVICE_ID ? kl03_ver : kl17_ver))
+#define MCA_STM32U031_DEVICE_ID	0x69
 
 /* MCA modules */
 #define MCA_DRVNAME_CORE	"mca-core"
@@ -138,9 +147,10 @@ enum mca_irqs {
 	MCA_IRQ_TAMPER2,
 	MCA_IRQ_TAMPER3,
 	MCA_IRQ_UART0,
+	/* Values exclusive to the KL17 and STM32U031 */
+	MCA_IRQ_GPIO_BANK_1,
+	MCA_IRQ_GPIO_BANK_2,
 	/* Values exclusive to the KL17 */
-	MCA_KL17_IRQ_GPIO_BANK_1,
-	MCA_KL17_IRQ_GPIO_BANK_2,
 	MCA_KL17_IRQ_UART1,
 	MCA_KL17_IRQ_UART2,
 	MCA_KL17_IRQ_KEYPAD,
@@ -164,5 +174,7 @@ int mca_cc8x_add_irq_chip(struct regmap *map, int irq, int irq_base,
 			  struct regmap_irq_chip_data **data);
 void mca_cc8x_del_irq_chip(struct regmap_irq_chip_data *d);
 #endif
+
+int mca_feature_is_supported(struct mca_drv *mca, enum mca_func func);
 
 #endif /* MFD_MCA_COMMON_CORE_H_ */

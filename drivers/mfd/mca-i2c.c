@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 - 2022 Digi International Inc
+ *  Copyright 2016 - 2026 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -268,6 +268,69 @@ static struct regmap_config mca_kl17_regmap_config = {
 	.cache_type = REGCACHE_NONE,
 };
 
+/* STM32U031 ranges */
+static const struct regmap_range mca_stm32u031_writeable_ranges[] = {
+	regmap_reg_range(MCA_HWVER_SOM, MCA_HWVER_SOM),
+	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_MASK_3),
+	regmap_reg_range(MCA_PWR_CTRL_0, MCA_PWR_KEY_GUARD),
+	regmap_reg_range(MCA_CTRL_UNLOCK_0, MCA_CTRL_UNLOCK_3),
+	regmap_reg_range(MCA_CTRL_0, MCA_CTRL_0),
+	regmap_reg_range(MCA_RTC_CONTROL, MCA_RTC_CONTROL),
+	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_PREPARE_ALARM),
+	regmap_reg_range(MCA_GPIO_DIR_0, MCA_GPIO_DEB_CNT_63),
+};
+
+static const struct regmap_range mca_stm32u031_volatile_ranges[] = {
+	/* Real volatile registers */
+	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_STATUS_3),
+	regmap_reg_range(MCA_TIMER_TICK_0, MCA_TIMER_TICK_3),
+	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_COUNT_SEC),
+	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
+	regmap_reg_range(MCA_GPIO_IRQ_STATUS_0, MCA_GPIO_IRQ_STATUS_7),
+
+	/*
+	 * Fake volatile registers.
+	 *
+	 * These registers could be cached but non-volatile registers makes
+	 * regmap access each register one by one which has some drawbacks:
+	 * - Breaks CRC in the protocol.
+	 * - Requires the MCA firmware to process each access as a separate
+	 *   access, even when the data requested must be returned in bulk.
+	 *
+	 * For this reasons we will consider all registers volatile.
+	 */
+	regmap_reg_range(MCA_HWVER_SOM, MCA_HWVER_SOM),
+	regmap_reg_range(MCA_DEVICE_ID, MCA_UID_9),
+	regmap_reg_range(MCA_IRQ_MASK_0, MCA_IRQ_MASK_3),
+	regmap_reg_range(MCA_CTRL_0, MCA_CTRL_0),
+	regmap_reg_range(MCA_RTC_CONTROL, MCA_RTC_CONTROL),
+	regmap_reg_range(MCA_RTC_ALARM_YEAR_L, MCA_RTC_PREPARE_ALARM),
+	regmap_reg_range(MCA_GPIO_NUM, MCA_GPIO_DIR_7),
+	regmap_reg_range(MCA_GPIO_IRQ_CFG_0, MCA_GPIO_IRQ_CFG_63),
+};
+
+static const struct regmap_access_table mca_stm32u031_writeable_table = {
+	.yes_ranges = mca_stm32u031_writeable_ranges,
+	.n_yes_ranges = ARRAY_SIZE(mca_stm32u031_writeable_ranges),
+};
+
+static const struct regmap_access_table mca_stm32u031_volatile_table = {
+	.yes_ranges = mca_stm32u031_volatile_ranges,
+	.n_yes_ranges = ARRAY_SIZE(mca_stm32u031_volatile_ranges),
+};
+
+static struct regmap_config mca_stm32u031_regmap_config = {
+	.reg_bits = 16,
+	.val_bits = 8,
+	.max_register = 0xFFFF,
+
+	.rd_table = &mca_readable_table,
+	.wr_table = &mca_stm32u031_writeable_table,
+	.volatile_table = &mca_stm32u031_volatile_table,
+
+	.cache_type = REGCACHE_NONE,
+};
+
 /* Associate each compatible string with its corresponding regmap config */
 static const struct of_device_id mca_dt_ids[] = {
 	{
@@ -277,6 +340,10 @@ static const struct of_device_id mca_dt_ids[] = {
 	{
 		.compatible = "digi,mca-kl17",
 		.data = &mca_kl17_regmap_config
+	},
+	{
+		.compatible = "digi,mca-stm32u031",
+		.data = &mca_stm32u031_regmap_config
 	},
 	/* keep old strings for backwards compatibility */
 	{

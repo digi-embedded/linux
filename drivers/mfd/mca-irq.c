@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 - 2022 Digi International Inc
+ *  Copyright 2016 - 2026 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -75,15 +75,16 @@ static const struct regmap_irq mca_irqs[] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_RTC_PERIODIC_IRQ,
 	},
-	/* IRQs exclusive to the KL17 */
-	[MCA_KL17_IRQ_GPIO_BANK_1] = {
+	/* IRQs exclusive to the KL17 and STM32U031 */
+	[MCA_IRQ_GPIO_BANK_1] = {
 		.reg_offset = MCA_IRQ_1_OFFSET,
 		.mask = MCA_GPIO_BANK_1,
 	},
-	[MCA_KL17_IRQ_GPIO_BANK_2] = {
+	[MCA_IRQ_GPIO_BANK_2] = {
 		.reg_offset = MCA_IRQ_1_OFFSET,
 		.mask = MCA_GPIO_BANK_2,
 	},
+	/* IRQs exclusive to the KL17 */
 	[MCA_KL17_IRQ_UART1] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_UART1,
@@ -100,6 +101,9 @@ static const struct regmap_irq mca_irqs[] = {
 
 /* Keep track of the number of IRQs that are exclusive to the KL17 */
 #define MCA_NUM_KL17_IRQS		5
+
+/* Keep track of the number of IRQs that are exclusive to the STM32U031 */
+#define MCA_NUM_STM32U031_IRQS		2
 
 static struct regmap_irq_chip mca_irq_chip = {
 	.name = "mca-irq",
@@ -127,6 +131,10 @@ int mca_irq_init(struct mca_drv *mca)
 	/* Use full IRQ array if a KL17 is detected */
 	if (mca->dev_id == MCA_KL17_DEVICE_ID)
 		mca_irq_chip.num_irqs += MCA_NUM_KL17_IRQS;
+
+	/* Use full IRQ array if a STM32U031 is detected */
+	if (mca->dev_id == MCA_STM32U031_DEVICE_ID)
+		mca_irq_chip.num_irqs += MCA_NUM_STM32U031_IRQS;
 
 #if defined(CONFIG_MFD_MCA_CC8X)
 	if (of_machine_is_compatible("digi,ccimx8x")) {

@@ -1,0 +1,62 @@
+* Digi ConnectCore 95 SMARC Micro-Controller Assist (MCA)
+
+MCA consists of a varied group of sub-devices (I2C Only):
+
+Device                   Description
+------                   ------------
+gpio                     IO pins (multiplexed with ADCs)
+rtc                      Real-Time Clock
+
+======
+
+Required properties:
+
+- compatible: must be "digi,mca-stm32u031".
+- reg : Specifies the I2C slave address (this defaults to 0x20).
+- interrupt-parent : Specifies the reference to the interrupt controller for
+  the MCA.
+- interrupts : IRQ line information.
+- interrupt-controller
+
+Optional properties:
+
+- fw-update-gpio : Control GPIO for MCA firmware update.
+
+Sub-nodes:
+
+- gpio : This node defines settings for the GPIO pins associated with the MCA.
+  Refer to binding at:
+  "Documentation/devicetree/bindings/gpio/gpio-mca.txt"
+
+- rtc : This node defines settings for the Real-Time Clock associated with
+  the MCA. Refer to binding at:
+  "Documentation/devicetree/bindings/rtc/digi,mca-rtc.txt"
+
+
+
+Example:
+
+	mca_cc95_smarc: mca@20 {
+		compatible = "digi,mca-stm32u031";
+		reg = <0x20>;
+		interrupt-parent = <&wu>;
+		interrupts = <GIC_SPI 177 IRQ_TYPE_EDGE_HIGH>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		fw-update-gpio = <&gpio3 9 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mca_cc95_smarc>;
+
+		gpio {
+			compatible = "digi,mca-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc95_smarc>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+
+			/* Disable all mca GPIOs as power off wake up sources */
+			pwroff-wakeup-capable-ios = <>;
+		};
+	};
