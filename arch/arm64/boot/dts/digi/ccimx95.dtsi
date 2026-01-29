@@ -270,16 +270,6 @@
 		>;
 	};
 
-	/* Bluetooth UART */
-	pinctrl_uart1: uart1grp {
-		fsl,pins = <
-			IMX95_PAD_UART1_RXD__AONMIX_TOP_LPUART1_RX		0x31e
-			IMX95_PAD_UART1_TXD__AONMIX_TOP_LPUART1_TX		0x31e
-			IMX95_PAD_UART2_TXD__AONMIX_TOP_LPUART1_RTS_B	0x31e
-			IMX95_PAD_UART2_RXD__AONMIX_TOP_LPUART1_CTS_B	0x31e
-		>;
-	};
-
 	pinctrl_usdhc1: usdhc1grp {
 		fsl,pins = <
 			IMX95_PAD_SD1_CLK__USDHC1_CLK		0x158e
@@ -327,10 +317,4 @@
 			IMX95_PAD_SD1_STROBE__USDHC1_STROBE	0x15fe
 		>;
 	};
-};
-
-/* Errata: DMA does not work on LPUART1 */
-&lpuart1 {
-	/delete-property/dmas;
-	/delete-property/dma-names;
 };

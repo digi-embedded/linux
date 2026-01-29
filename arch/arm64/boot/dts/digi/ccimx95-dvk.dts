@@ -308,6 +308,9 @@
 	/* console */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1>;
+	/* Errata: DMA does not work on LPUART1 */
+	/delete-property/dmas;
+	/delete-property/dma-names;
 	status = "okay";
 };
 
