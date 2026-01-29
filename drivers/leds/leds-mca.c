@@ -134,7 +134,7 @@ static int mca_led_probe(struct platform_device *pdev)
 			return -ENODEV;
 	}
 
-	if (mca->fw_version < MCA_LEDS_MIN_FW) {
+	if (!mca_feature_is_supported(mca, MCA_FUNC_LEDS)) {
 		dev_err(&pdev->dev,
 			"LEDs are not supported in MCA firmware v%d.%02d.\n",
 			MCA_FW_VER_MAJOR(mca->fw_version),
