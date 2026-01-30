@@ -287,6 +287,7 @@ static const struct regmap_range mca_stm32u031_volatile_ranges[] = {
 	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_COUNT_SEC),
 	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
 	regmap_reg_range(MCA_GPIO_IRQ_STATUS_0, MCA_GPIO_IRQ_STATUS_7),
+	regmap_reg_range(MCA_PWR_CTRL_0, MCA_PWR_STATUS_0),
 
 	/*
 	 * Fake volatile registers.
@@ -302,6 +303,7 @@ static const struct regmap_range mca_stm32u031_volatile_ranges[] = {
 	regmap_reg_range(MCA_HWVER_SOM, MCA_HWVER_SOM),
 	regmap_reg_range(MCA_DEVICE_ID, MCA_UID_9),
 	regmap_reg_range(MCA_IRQ_MASK_0, MCA_IRQ_MASK_3),
+	regmap_reg_range(MCA_PWR_KEY_DEBOUNCE, MCA_PWR_KEY_GUARD),
 	regmap_reg_range(MCA_CTRL_0, MCA_CTRL_0),
 	regmap_reg_range(MCA_RTC_CONTROL, MCA_RTC_CONTROL),
 	regmap_reg_range(MCA_RTC_ALARM_YEAR_L, MCA_RTC_PREPARE_ALARM),

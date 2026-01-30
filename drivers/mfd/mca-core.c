@@ -389,6 +389,12 @@ static const struct mfd_cell mca_stm32u031_devs[] = {
 		.resources	= mca_gpios_resources,
 		.of_compatible = "digi,mca-gpio",
 	},
+	{
+		.name           = MCA_DRVNAME_PWRKEY,
+		.num_resources  = ARRAY_SIZE(mca_pwrkey_resources),
+		.resources      = mca_pwrkey_resources,
+		.of_compatible = "digi,mca-pwrkey",
+	},
 };
 
 /* Read a block of registers */
@@ -1127,7 +1133,7 @@ struct mca_func_since mca_func_fwver[MCA_DEV_MAX][MCA_FUNC_MAX] = {
 		{MCA_FUNC_NVRAM, 	MCA_MAKE_FW_VER(255, 255)},
 		{MCA_FUNC_REBOOT_SAFE, 	MCA_MAKE_FW_VER(255, 255)},
 		{MCA_FUNC_DEBTB50M, 	MCA_MAKE_FW_VER(255, 255)},
-		{MCA_FUNC_PWRKEY_UP, 	MCA_MAKE_FW_VER(255, 255)},
+		{MCA_FUNC_PWRKEY_UP, 	MCA_MAKE_FW_VER(0,   0)},
 		{MCA_FUNC_RTC_PREPARE, 	MCA_MAKE_FW_VER(255, 255)},
 		{MCA_FUNC_LEDS, 	MCA_MAKE_FW_VER(255, 255)},
 	},
