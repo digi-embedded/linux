@@ -1,5 +1,5 @@
 /*
- * Copyright 2024, Digi International Inc.
+ * Copyright 2024-2026, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,11 +15,11 @@
 
 /dts-v1/;
 
-#include <dt-bindings/usb/pd.h>
+/* i.MX91 CPU */
 #include "../freescale/imx91.dtsi"
-
 /* Digi ConnectCore 91 (SOM) */
 #include "ccimx91.dtsi"
+#include <dt-bindings/usb/pd.h>
 
 / {
 	model = "Digi International ConnectCore 91 DVK";
@@ -122,7 +122,6 @@
 &tpm6 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_tpm6>;
-	status = "okay";
 };
 
 /* ADC - 4 channels available on expansion connector */
@@ -136,15 +135,17 @@
 };
 
 &flexcan1 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_flexcan1>;
+	pinctrl-1 = <&pinctrl_flexcan1_sleep>;
 	xceiver-supply = <&reg_can1_stby>;
 	status = "okay";
 };
 
 &flexcan2 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_flexcan2>;
+	pinctrl-1 = <&pinctrl_flexcan2_sleep>;
 	xceiver-supply = <&reg_can2_stby>;
 	status = "okay";
 };
@@ -165,7 +166,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_rtc>;
 		interrupt-parent = <&gpio2>;
-		interrupts = <18 IRQ_TYPE_EDGE_FALLING>;
+		interrupts = <18 IRQ_TYPE_LEVEL_LOW>;
 		wakeup-source;
 	};
 
@@ -271,7 +272,7 @@
 /* Ethernet EQoS */
 &eqos {
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_eqos>;
+	pinctrl-0 = <&pinctrl_eqos>, <&pinctrl_eqos_mdio>;
 	pinctrl-1 = <&pinctrl_eqos_sleep>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
@@ -293,7 +294,7 @@
 /* Ethernet MAC (ENET) */
 &fec {
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_fec>;
+	pinctrl-0 = <&pinctrl_fec>, <&pinctrl_fec_mdio>;
 	pinctrl-1 = <&pinctrl_fec_sleep>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy1>;
@@ -320,8 +321,9 @@
 
 /* Audio interface */
 &sai3 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_sai3>;
+	pinctrl-1 = <&pinctrl_sai3_sleep>;
 	assigned-clocks = <&clk IMX91_CLK_SAI3>;
 	assigned-clock-parents = <&clk IMX91_CLK_AUDIO_PLL>;
 	assigned-clock-rates = <12288000>;
@@ -357,11 +359,13 @@
 
 /* SD card */
 &usdhc2 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-names = "default", "state_100mhz", "state_200mhz", "sleep";
 	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-3 = <&pinctrl_usdhc2_sleep>, <&pinctrl_usdhc2_gpio_sleep>;
 	cd-gpios = <&gpio3 00 GPIO_ACTIVE_HIGH>;
+	fsl,cd-gpio-wakeup-disable;
 	bus-width = <4>;
 	status = "okay";
 	post-power-on-delay-ms = <200>;
@@ -384,8 +388,6 @@
 	/* EQoS RGMII */
 	pinctrl_eqos: eqosgrp {
 		fsl,pins = <
-			MX91_PAD_ENET1_MDC__ENET1_MDC				0x57e
-			MX91_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x57e
 			MX91_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x57e
 			MX91_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x57e
 			MX91_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x57e
@@ -398,6 +400,14 @@
 			MX91_PAD_ENET1_TD3__ENET_QOS_RGMII_TD3			0x57e
 			MX91_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x5fe
 			MX91_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x57e
+		>;
+	};
+
+	/* EQoS MDIO */
+	pinctrl_eqos_mdio: ethmdio {
+		fsl,pins = <
+			MX91_PAD_ENET1_MDC__ENET1_MDC				0x57e
+			MX91_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x57e
 		>;
 	};
 
@@ -441,23 +451,31 @@
 		>;
 	};
 
+	/* FEC MDIO */
+	pinctrl_fec_mdio: fecmdiogrp {
+		fsl,pins = <
+			MX91_PAD_ENET2_MDC__ENET2_MDC				0x57e
+			MX91_PAD_ENET2_MDIO__ENET2_MDIO				0x57e
+		>;
+	};
+
 	/* FEC_SLEEP */
 	pinctrl_fec_sleep: fecsleepgrp {
 		fsl,pins = <
-			MX91_PAD_ENET2_MDC__GPIO4_IO14			0xc00
-			MX91_PAD_ENET2_MDIO__GPIO4_IO15			0xc00
 			MX91_PAD_ENET2_RD0__GPIO4_IO24			0xc00
 			MX91_PAD_ENET2_RD1__GPIO4_IO25			0xc00
 			MX91_PAD_ENET2_RD2__GPIO4_IO26			0xc00
 			MX91_PAD_ENET2_RD3__GPIO4_IO27			0xc00
-			MX91_PAD_ENET2_RXC__GPIO4_IO23                  0xc00
+			MX91_PAD_ENET2_RXC__GPIO4_IO23			0xc00
 			MX91_PAD_ENET2_RX_CTL__GPIO4_IO22		0xc00
 			MX91_PAD_ENET2_TD0__GPIO4_IO19			0xc00
 			MX91_PAD_ENET2_TD1__GPIO4_IO18			0xc00
 			MX91_PAD_ENET2_TD2__GPIO4_IO17			0xc00
 			MX91_PAD_ENET2_TD3__GPIO4_IO16			0xc00
-			MX91_PAD_ENET2_TXC__GPIO4_IO21                  0xc00
-			MX91_PAD_ENET2_TX_CTL__GPIO4_IO20               0xc00
+			MX91_PAD_ENET2_TXC__GPIO4_IO21			0xc00
+			MX91_PAD_ENET2_TX_CTL__GPIO4_IO20		0xc00
+			MX91_PAD_ENET2_MDC__GPIO4_IO14			0xc00
+			MX91_PAD_ENET2_MDIO__GPIO4_IO15			0xc00
 		>;
 	};
 
@@ -469,11 +487,25 @@
 		>;
 	};
 
+	pinctrl_flexcan1_sleep: flexcan1grpsleep {
+		fsl,pins = <
+			MX91_PAD_PDM_CLK__GPIO1_IO8				0x31e
+			MX91_PAD_PDM_BIT_STREAM0__GPIO1_IO9			0x31e
+		>;
+	};
+
 	/* CAN2 */
 	pinctrl_flexcan2: flexcan2grp {
 		fsl,pins = <
 			MX91_PAD_GPIO_IO25__CAN2_TX			0x139e
 			MX91_PAD_GPIO_IO27__CAN2_RX			0x139e
+		>;
+	};
+
+	pinctrl_flexcan2_sleep: flexcan2grp {
+		fsl,pins = <
+			MX91_PAD_GPIO_IO25__GPIO2_IO25			0x31e
+			MX91_PAD_GPIO_IO27__GPIO2_IO27			0x31e
 		>;
 	};
 
@@ -578,10 +610,26 @@
 		>;
 	};
 
+	pinctrl_sai3_sleep: sai3grpsleep {
+		fsl,pins = <
+			MX91_PAD_GPIO_IO21__GPIO2_IO21				0x51e
+			MX91_PAD_GPIO_IO20__GPIO2_IO20				0x51e
+			MX91_PAD_GPIO_IO26__GPIO2_IO26				0x51e
+			MX91_PAD_GPIO_IO16__GPIO2_IO16				0x51e
+			MX91_PAD_GPIO_IO17__GPIO2_IO17				0x51e
+		>;
+	};
+
 	/* SD card */
 	pinctrl_usdhc2_gpio: usdhc2gpiogrp {
 		fsl,pins = <
 			MX91_PAD_SD2_CD_B__GPIO3_IO0			0x31e
+		>;
+	};
+
+	pinctrl_usdhc2_gpio_sleep: usdhc2gpiogrpsleep {
+		fsl,pins = <
+			MX91_PAD_SD2_CD_B__GPIO3_IO0				0x51e
 		>;
 	};
 
@@ -618,6 +666,18 @@
 			MX91_PAD_SD2_DATA2__USDHC2_DATA2		0x13fe
 			MX91_PAD_SD2_DATA3__USDHC2_DATA3		0x13fe
 			MX91_PAD_SD2_VSELECT__USDHC2_VSELECT		0x51e
+		>;
+	};
+
+	pinctrl_usdhc2_sleep: usdhc2grpsleep {
+		fsl,pins = <
+			MX91_PAD_SD2_CLK__GPIO3_IO1				0x51e
+			MX91_PAD_SD2_CMD__GPIO3_IO2				0x51e
+			MX91_PAD_SD2_DATA0__GPIO3_IO3				0x51e
+			MX91_PAD_SD2_DATA1__GPIO3_IO4				0x51e
+			MX91_PAD_SD2_DATA2__GPIO3_IO5				0x51e
+			MX91_PAD_SD2_DATA3__GPIO3_IO6				0x51e
+			MX91_PAD_SD2_VSELECT__GPIO3_IO19			0x51e
 		>;
 	};
 
