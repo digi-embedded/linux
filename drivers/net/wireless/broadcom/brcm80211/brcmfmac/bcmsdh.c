@@ -237,6 +237,7 @@ static int brcmf_sdiod_set_backplane_window(struct brcmf_sdio_dev *sdiodev,
 	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
 		if (!sdiodev->ignore_bus_error)
 			brcmf_err("ERROR: Write operation when bus is in sleep state\n");
+		return -EPERM;
 	}
 
 	if (sdiodev->sbwad_valid && (bar0 == sdiodev->sbwad))
@@ -261,9 +262,14 @@ u32 brcmf_sdiod_readl(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret)
 	u32 data = 0;
 	int retval;
 
+	brcmf_dbg(SDIOEXT, "addr 0x%x\n", addr);
+
 	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
 		if (!sdiodev->ignore_bus_error)
 			brcmf_err("ERROR: Read operation when bus is in sleep state\n");
+		if (ret)
+			*ret = -EPERM;
+		return data;
 	}
 
 	retval = brcmf_sdiod_set_backplane_window(sdiodev, addr);
@@ -276,6 +282,9 @@ u32 brcmf_sdiod_readl(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret)
 	addr |= SBSDIO_SB_ACCESS_2_4B_FLAG;
 
 	data = sdio_readl(sdiodev->func1, addr, &retval);
+
+	if (retval)
+		data = 0;
 
 	brcmf_dbg(SDIO, "data 0x%08x\n", data);
 out:
@@ -290,9 +299,13 @@ void brcmf_sdiod_writel(struct brcmf_sdio_dev *sdiodev, u32 addr,
 {
 	int retval;
 
+	brcmf_dbg(SDIOEXT, "addr 0x%x val 0x%x\n", addr, data);
 	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
 		if (!sdiodev->ignore_bus_error)
 			brcmf_err("ERROR: Write operation when bus is in sleep state\n");
+		if (ret)
+			*ret = -EPERM;
+		return;
 	}
 
 	retval = brcmf_sdiod_set_backplane_window(sdiodev, addr);
@@ -321,6 +334,7 @@ static int brcmf_sdiod_skbuff_read(struct brcmf_sdio_dev *sdiodev,
 	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
 		if (!sdiodev->ignore_bus_error)
 			brcmf_err("ERROR: Read operation when bus is in sleep state\n");
+		return -EPERM;
 	}
 
 	/* Single skb use the standard mmc interface */
@@ -361,6 +375,7 @@ static int brcmf_sdiod_skbuff_write(struct brcmf_sdio_dev *sdiodev,
 	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
 		if (!sdiodev->ignore_bus_error)
 			brcmf_err("ERROR: Write operation when bus is in sleep state\n");
+		return -EPERM;
 	}
 
 	/* Single skb use the standard mmc interface */
@@ -392,6 +407,7 @@ static int mmc_submit_one(struct mmc_data *md, struct mmc_request *mr,
 		if (!sdiodev->ignore_bus_error)
 			brcmf_err("ERROR: %s operation when bus is in sleep state\n",
 				  write ? "Write" : "Read");
+		return -EPERM;
 	}
 
 	md->sg_len = sg_cnt;
@@ -1171,6 +1187,9 @@ static int brcmf_ops_sdio_probe(struct sdio_func *func,
 	brcmf_dbg(SDIO, "sdio vendor ID: 0x%04x\n", func->vendor);
 	brcmf_dbg(SDIO, "sdio device ID: 0x%04x\n", func->device);
 	brcmf_dbg(SDIO, "Function#: %d\n", func->num);
+	/* Consume func num 1 but dont do anything with it. */
+	if (func->num == SDIO_FUNC_1 || func->num == SDIO_FUNC_3)
+		return 0;
 
 	/* Set MMC_QUIRK_LENIENT_FN0 for this card */
 	func->card->quirks |= MMC_QUIRK_LENIENT_FN0;
@@ -1179,10 +1198,6 @@ static int brcmf_ops_sdio_probe(struct sdio_func *func,
 	 * Use func->cur_blksize by default
 	 */
 	func->card->quirks |= MMC_QUIRK_BLKSZ_FOR_BYTE_MODE;
-
-	/* Consume func num 1 but dont do anything with it. */
-	if (func->num == SDIO_FUNC_1 || func->num == SDIO_FUNC_3)
-		return 0;
 
 	/* Ignore anything but func 2 */
 	if (func->num != SDIO_FUNC_2)
@@ -1307,6 +1322,7 @@ static int brcmf_ops_sdio_suspend(struct device *dev)
 	mmc_pm_flag_t sdio_flags;
 	struct brcmf_cfg80211_info *config;
 	int retry = BRCMF_PM_WAIT_MAXRETRY;
+	bool cap_power_off;
 	int ret = 0;
 
 	func = container_of(dev, struct sdio_func, dev);
@@ -1326,17 +1342,21 @@ static int brcmf_ops_sdio_suspend(struct device *dev)
 	if (func->num != SDIO_FUNC_1)
 		return 0;
 
+	cap_power_off = !!(func->card->host->caps & MMC_CAP_POWER_OFF_CARD);
 	sdiodev = bus_if->bus_priv.sdio;
 
-	if (sdiodev->wowl_enabled) {
+	if (sdiodev->wowl_enabled || !cap_power_off) {
 		brcmf_sdiod_freezer_on(sdiodev);
 		brcmf_sdio_wd_timer(sdiodev->bus, 0);
 
 		sdio_flags = MMC_PM_KEEP_POWER;
-		if (sdiodev->settings->bus.sdio.oob_irq_supported)
-			enable_irq_wake(sdiodev->settings->bus.sdio.oob_irq_nr);
-		else
-			sdio_flags |= MMC_PM_WAKE_SDIO_IRQ;
+
+		if (sdiodev->wowl_enabled) {
+			if (sdiodev->settings->bus.sdio.oob_irq_supported)
+				enable_irq_wake(sdiodev->settings->bus.sdio.oob_irq_nr);
+			else
+				sdio_flags |= MMC_PM_WAKE_SDIO_IRQ;
+		}
 
 		if (sdio_set_host_pm_flags(sdiodev->func1, sdio_flags))
 			brcmf_err("Failed to set pm_flags %x\n", sdio_flags);
@@ -1358,18 +1378,19 @@ static int brcmf_ops_sdio_resume(struct device *dev)
 	struct brcmf_sdio_dev *sdiodev = bus_if->bus_priv.sdio;
 	struct sdio_func *func = container_of(dev, struct sdio_func, dev);
 	int ret = 0;
+	bool cap_power_off = !!(func->card->host->caps & MMC_CAP_POWER_OFF_CARD);
 
 	brcmf_dbg(SDIO, "Enter: F%d\n", func->num);
 	if (func->num != SDIO_FUNC_2)
 		return 0;
 
-	if (!sdiodev->wowl_enabled) {
+	if (!sdiodev->wowl_enabled && cap_power_off) {
 		/* bus was powered off and device removed, probe again */
 		ret = brcmf_sdiod_probe(sdiodev);
 		if (ret)
 			brcmf_err("Failed to probe device on resume\n");
 	} else {
-		if (sdiodev->settings->bus.sdio.oob_irq_supported)
+		if (sdiodev->wowl_enabled && sdiodev->settings->bus.sdio.oob_irq_supported)
 			disable_irq_wake(sdiodev->settings->bus.sdio.oob_irq_nr);
 
 		brcmf_sdiod_freezer_off(sdiodev);

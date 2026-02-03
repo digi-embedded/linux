@@ -445,6 +445,7 @@ struct brcmf_cfg80211_info {
 	u8 num_softap;
 	u8 pfn_enable;
 	u8 pfn_connection;
+	bool bands_reset_required;
 	struct drv_config_pfn_params pfn_data;
 	u8 mchan_conf;
 };

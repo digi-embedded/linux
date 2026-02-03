@@ -132,6 +132,11 @@ brcmf_fil_cmd_data(struct brcmf_if *ifp, u32 cmd, void *data, u32 len, bool set)
 	if (ifp->fwil_fwerr)
 		return fwerr;
 
+	if (err && resend_cnt == MAX_CMD_RESEND) {
+		if (drvr->bus_reset.func)
+			schedule_work(&drvr->bus_reset);
+	}
+
 	return err;
 }
 

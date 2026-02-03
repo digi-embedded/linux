@@ -259,7 +259,7 @@ struct sbsocramregs {
 #define BRCMF_BLHS_D2H_READY_TIMEOUT			100	/* msec */
 #define BRCMF_BLHS_D2H_TRXHDR_PARSE_DONE_TIMEOUT	50	/* msec */
 
-#define BRCMF_BLHS_D2H_VALDN_DONE_TIMEOUT		450	/* msec */
+#define BRCMF_BLHS_D2H_VALDN_DONE_TIMEOUT		1000	/* msec */
 #define BRCMF_BLHS_D2H_MV_NVRAM_DONE_TIMEOUT		(100)	/* msec */
 #define BRCMF_BLHS_D2H_BP_CLK_DISABLE_REQ_TIMEOUT	(5 * 1000)	/* msec */
 
