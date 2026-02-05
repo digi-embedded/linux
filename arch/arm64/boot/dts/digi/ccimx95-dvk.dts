@@ -325,6 +325,19 @@
 	status = "okay";
 };
 
+/*
+ * RS485/mikroBUS UART
+ * The uart of the RS485 and the mikroBUS interfaces is shared. Configure the
+ * corresponding jumpers to select the desired functionality.
+ */
+&lpuart7 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_uart7>;
+	linux,rs485-enabled-at-boot-time;
+	digi,rts-gpio = <&gpio2 10 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+};
+
 &enetc_port0 {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_enetc0>;
@@ -759,6 +772,16 @@
 			IMX95_PAD_ENET2_TD0__LPUART4_TX			0x31e
 			IMX95_PAD_ENET2_TD1__LPUART4_RTS_B		0x31e
 			IMX95_PAD_ENET2_RD2__LPUART4_CTS_B		0x31e
+		>;
+	};
+
+	/* mikroBUS/RS485 uart */
+	pinctrl_uart7: uart7grp {
+		fsl,pins = <
+			IMX95_PAD_GPIO_IO09__LPUART7_RX			0x31e
+			IMX95_PAD_GPIO_IO08__LPUART7_TX			0x31e
+			/* RS485_DE */
+			IMX95_PAD_GPIO_IO10__GPIO2_IO_BIT10		0x31e
 		>;
 	};
 
