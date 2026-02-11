@@ -27,7 +27,7 @@
 		target = <&lpuart5>;
 		__overlay__ {
 			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_uart5>, <&pinctrl_bt_ctrl>;
+			pinctrl-0 = <&pinctrl_uart5_bt>, <&pinctrl_bt_ctrl>;
 			status = "okay";
 
 			bluetooth {
@@ -69,7 +69,7 @@
 				>;
 			};
 
-			pinctrl_uart5: uart5grp {
+			pinctrl_uart5_bt: uart5grpbt {
 				fsl,pins = <
 					IMX95_PAD_DAP_TDO_TRACESWO__LPUART5_TX	0x31e
 					IMX95_PAD_DAP_TDI__LPUART5_RX		0x31e
