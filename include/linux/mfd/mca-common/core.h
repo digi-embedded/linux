@@ -150,6 +150,8 @@ enum mca_irqs {
 	/* Values exclusive to the KL17 and STM32U031 */
 	MCA_IRQ_GPIO_BANK_1,
 	MCA_IRQ_GPIO_BANK_2,
+	/* Values exclusive to the STM32U031 */
+	MCA_IRQ_GPIO_BANK_3,
 	/* Values exclusive to the KL17 */
 	MCA_KL17_IRQ_UART1,
 	MCA_KL17_IRQ_UART2,

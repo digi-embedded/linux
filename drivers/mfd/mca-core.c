@@ -230,6 +230,13 @@ static struct resource mca_gpios_resources[] = {
 		.end    = MCA_IRQ_GPIO_BANK_2,
 		.flags  = IORESOURCE_IRQ,
 	},
+	/* GPIO bank 3 is exclusive to the STM32U031 */
+	{
+		.name   = MCA_IRQ_GPIO_BANK_3_NAME,
+		.start  = MCA_IRQ_GPIO_BANK_3,
+		.end    = MCA_IRQ_GPIO_BANK_3,
+		.flags  = IORESOURCE_IRQ,
+	},
 };
 
 static struct resource mca_uart_resources[] = {
@@ -280,7 +287,7 @@ static const struct mfd_cell mca_kl03_devs[] = {
 	{
 		.name           = MCA_DRVNAME_GPIO,
 		/* Use KL03 subset of GPIOs */
-		.num_resources	= ARRAY_SIZE(mca_gpios_resources) - 2,
+		.num_resources	= 1, /* KL03: one GPIO bank */
 		.resources	= mca_gpios_resources,
 		.of_compatible = "digi,mca-gpio",
 	},
@@ -332,7 +339,8 @@ static const struct mfd_cell mca_kl17_devs[] = {
 	},
 	{
 		.name           = MCA_DRVNAME_GPIO,
-		.num_resources	= ARRAY_SIZE(mca_gpios_resources),
+		/* Use KL17 subset of GPIOs */
+		.num_resources	= 3, /* KL17: three GPIO banks */
 		.resources	= mca_gpios_resources,
 		.of_compatible = "digi,mca-gpio",
 	},
@@ -385,7 +393,7 @@ static const struct mfd_cell mca_stm32u031_devs[] = {
 	},
 	{
 		.name           = MCA_DRVNAME_GPIO,
-		.num_resources	= ARRAY_SIZE(mca_gpios_resources),
+		.num_resources	= 4, /* STM32U031: four GPIO banks */
 		.resources	= mca_gpios_resources,
 		.of_compatible = "digi,mca-gpio",
 	},

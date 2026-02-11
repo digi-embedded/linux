@@ -21,7 +21,63 @@
 #define MCA_IRQ_2_OFFSET		2
 #define MCA_IRQ_3_OFFSET		3
 
-static const struct regmap_irq mca_irqs[] = {
+static const struct regmap_irq mca_irqs_kl03[] = {
+	/* MCA irqs A register */
+	[MCA_IRQ_RTC_ALARM] = {
+                .reg_offset = MCA_IRQ_0_OFFSET,
+                .mask = MCA_M_RTC_ALARM,
+        },
+	[MCA_IRQ_RTC_1HZ] = {
+                .reg_offset = MCA_IRQ_0_OFFSET,
+                .mask = MCA_M_RTC_1HZ,
+        },
+	[MCA_IRQ_WATCHDOG] = {
+                .reg_offset = MCA_IRQ_0_OFFSET,
+                .mask = MCA_M_WATCHDOG,
+        },
+	[MCA_IRQ_PWR_SLEEP] = {
+                .reg_offset = MCA_IRQ_0_OFFSET,
+                .mask = MCA_M_PWR_SLEEP,
+        },
+	[MCA_IRQ_PWR_OFF] = {
+                .reg_offset = MCA_IRQ_0_OFFSET,
+                .mask = MCA_M_PWR_OFF,
+        },
+	[MCA_IRQ_TAMPER0] = {
+		.reg_offset = MCA_IRQ_0_OFFSET,
+		.mask = MCA_M_TAMPER0,
+	},
+	[MCA_IRQ_TAMPER1] = {
+		.reg_offset = MCA_IRQ_0_OFFSET,
+		.mask = MCA_M_TAMPER1,
+	},
+	[MCA_IRQ_ADC] = {
+		.reg_offset = MCA_IRQ_0_OFFSET,
+		.mask = MCA_M_ADC,
+	},
+	[MCA_IRQ_GPIO_BANK_0] = {
+		.reg_offset = MCA_IRQ_1_OFFSET,
+		.mask = MCA_GPIO_BANK_0,
+	},
+	[MCA_IRQ_TAMPER2] = {
+		.reg_offset = MCA_IRQ_2_OFFSET,
+		.mask = MCA_M_TAMPER2,
+	},
+	[MCA_IRQ_TAMPER3] = {
+		.reg_offset = MCA_IRQ_2_OFFSET,
+		.mask = MCA_M_TAMPER3,
+	},
+	[MCA_IRQ_UART0] = {
+		.reg_offset = MCA_IRQ_2_OFFSET,
+		.mask = MCA_M_UART0,
+	},
+	[MCA_IRQ_RTC_PERIODIC_IRQ] = {
+		.reg_offset = MCA_IRQ_2_OFFSET,
+		.mask = MCA_M_RTC_PERIODIC_IRQ,
+	},
+};
+
+static const struct regmap_irq mca_irqs_kl17[] = {
 	/* MCA irqs A register */
 	[MCA_IRQ_RTC_ALARM] = {
                 .reg_offset = MCA_IRQ_0_OFFSET,
@@ -84,7 +140,6 @@ static const struct regmap_irq mca_irqs[] = {
 		.reg_offset = MCA_IRQ_1_OFFSET,
 		.mask = MCA_GPIO_BANK_2,
 	},
-	/* IRQs exclusive to the KL17 */
 	[MCA_KL17_IRQ_UART1] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_UART1,
@@ -99,17 +154,76 @@ static const struct regmap_irq mca_irqs[] = {
 	},
 };
 
-/* Keep track of the number of IRQs that are exclusive to the KL17 */
-#define MCA_NUM_KL17_IRQS		5
+static const struct regmap_irq mca_irqs_stm32u031[] = {
+	/* MCA irqs A register */
+	[MCA_IRQ_RTC_ALARM] = {
+                .reg_offset = MCA_IRQ_0_OFFSET,
+                .mask = MCA_M_RTC_ALARM,
+        },
+	[MCA_IRQ_RTC_1HZ] = {
+                .reg_offset = MCA_IRQ_0_OFFSET,
+                .mask = MCA_M_RTC_1HZ,
+        },
+	[MCA_IRQ_WATCHDOG] = {
+                .reg_offset = MCA_IRQ_0_OFFSET,
+                .mask = MCA_M_WATCHDOG,
+        },
+	[MCA_IRQ_PWR_SLEEP] = {
+                .reg_offset = MCA_IRQ_0_OFFSET,
+                .mask = MCA_M_PWR_SLEEP,
+        },
+	[MCA_IRQ_PWR_OFF] = {
+                .reg_offset = MCA_IRQ_0_OFFSET,
+                .mask = MCA_M_PWR_OFF,
+        },
+	[MCA_IRQ_GPIO_BANK_0] = {
+		.reg_offset = MCA_IRQ_1_OFFSET,
+		.mask = MCA_GPIO_BANK_0,
+	},
+	[MCA_IRQ_RTC_PERIODIC_IRQ] = {
+		.reg_offset = MCA_IRQ_2_OFFSET,
+		.mask = MCA_M_RTC_PERIODIC_IRQ,
+	},
+	[MCA_IRQ_GPIO_BANK_1] = {
+		.reg_offset = MCA_IRQ_1_OFFSET,
+		.mask = MCA_GPIO_BANK_1,
+	},
+	[MCA_IRQ_GPIO_BANK_2] = {
+		.reg_offset = MCA_IRQ_1_OFFSET,
+		.mask = MCA_GPIO_BANK_2,
+	},
+	[MCA_IRQ_GPIO_BANK_3] = {
+		.reg_offset = MCA_IRQ_1_OFFSET,
+		.mask = MCA_GPIO_BANK_3,
+	},
+};
 
-/* Keep track of the number of IRQs that are exclusive to the STM32U031 */
-#define MCA_NUM_STM32U031_IRQS		2
-
-static struct regmap_irq_chip mca_irq_chip = {
+static struct regmap_irq_chip mca_irq_chip_kl03 = {
 	.name = "mca-irq",
-	.irqs = mca_irqs,
-	/* By default, use only the KL03 subset of IRQs */
-	.num_irqs = ARRAY_SIZE(mca_irqs) - MCA_NUM_KL17_IRQS,
+	.irqs = mca_irqs_kl03,
+	.num_irqs = ARRAY_SIZE(mca_irqs_kl03),
+	.num_regs = MCA_NUM_IRQ_REGS,
+	.status_base = MCA_IRQ_STATUS_0,
+	.mask_base = MCA_IRQ_MASK_0,
+	.ack_base = MCA_IRQ_STATUS_0,
+	.init_ack_masked = true,
+};
+
+static struct regmap_irq_chip mca_irq_chip_kl17 = {
+	.name = "mca-irq",
+	.irqs = mca_irqs_kl17,
+	.num_irqs = ARRAY_SIZE(mca_irqs_kl17),
+	.num_regs = MCA_NUM_IRQ_REGS,
+	.status_base = MCA_IRQ_STATUS_0,
+	.mask_base = MCA_IRQ_MASK_0,
+	.ack_base = MCA_IRQ_STATUS_0,
+	.init_ack_masked = true,
+};
+
+static struct regmap_irq_chip mca_irq_chip_stm32u031 = {
+	.name = "mca-irq",
+	.irqs = mca_irqs_stm32u031,
+	.num_irqs = ARRAY_SIZE(mca_irqs_stm32u031),
 	.num_regs = MCA_NUM_IRQ_REGS,
 	.status_base = MCA_IRQ_STATUS_0,
 	.mask_base = MCA_IRQ_MASK_0,
@@ -128,30 +242,34 @@ int mca_irq_init(struct mca_drv *mca)
 
 	mca->irq_base = -1;
 
-	/* Use full IRQ array if a KL17 is detected */
-	if (mca->dev_id == MCA_KL17_DEVICE_ID)
-		mca_irq_chip.num_irqs += MCA_NUM_KL17_IRQS;
-
-	/* Use full IRQ array if a STM32U031 is detected */
-	if (mca->dev_id == MCA_STM32U031_DEVICE_ID)
-		mca_irq_chip.num_irqs += MCA_NUM_STM32U031_IRQS;
-
 #if defined(CONFIG_MFD_MCA_CC8X)
 	if (of_machine_is_compatible("digi,ccimx8x")) {
 		ret = mca_cc8x_add_irq_chip(mca->regmap, mca->chip_irq,
-					    mca->irq_base, &mca_irq_chip,
+					    mca->irq_base, &mca_irq_chip_kl17,
 					    &mca->regmap_irq);
 	} else
 #endif
 	{
 		unsigned int irq_flags = IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED;
+		struct regmap_irq_chip *mca_irq_chip = NULL;
 
 		of_property_read_u32(mca->dev->of_node, "interrupt-flags",
 				     &irq_flags);
 
+		if (mca->dev_id == MCA_KL03_DEVICE_ID)
+			mca_irq_chip = &mca_irq_chip_kl03;
+		else if (mca->dev_id == MCA_KL17_DEVICE_ID)
+			mca_irq_chip = &mca_irq_chip_kl17;
+		else if (mca->dev_id == MCA_STM32U031_DEVICE_ID)
+			mca_irq_chip = &mca_irq_chip_stm32u031;
+		else {
+			dev_err(mca->dev, "Wrong device id %d\n", mca->dev_id);
+			return -EINVAL;
+		}
+
 		ret = regmap_add_irq_chip(mca->regmap, mca->chip_irq,
 					  irq_flags,
-					  mca->irq_base, &mca_irq_chip,
+					  mca->irq_base, mca_irq_chip,
 					  &mca->regmap_irq);
 	}
 
