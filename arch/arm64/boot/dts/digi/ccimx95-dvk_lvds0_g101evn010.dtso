@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2025 Digi International Inc.
+ * Copyright 2025-2026, Digi International Inc.
  */
 
 /dts-v1/;
@@ -21,7 +21,7 @@
 				compatible = "pwm-backlight";
 				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_lvds0_backlight>;
-				pwms = <&tpm5 1 50000 0>;
+				pwms = <&tpm4 0 50000 0>;
 				brightness-levels = <0 20 25 30 35 40 100>;
 				default-brightness-level = <6>;
 				status = "okay";
@@ -30,7 +30,7 @@
 			lvds0-panel {
 				compatible = "panel-lvds";
 				backlight = <&lvds0_backlight>;
-				power-supply = <&reg_5v_dvk>;
+				power-supply = <&reg_5v_board>;
 				data-mapping = "jeida-24";
 				de-high;
 				width-mm = <216>;
@@ -143,7 +143,7 @@
 
 	/* Enable the LVDS backlight PWM */
 	fragment@7 {
-		target = <&tpm5>;
+		target = <&tpm4>;
 		__overlay__ {
 			status = "okay";
 		};
@@ -151,7 +151,7 @@
 
 	/* Enable goodix_touch */
 	fragment@8 {
-		target = <&lpi2c3>;
+		target = <&lpi2c7>;
 		__overlay__ {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -163,11 +163,11 @@
 				pinctrl-0 = <&pinctrl_lvds0_touch>;
 				/* LVDS interrupt */
 				interrupt-parent = <&gpio2>;
-				interrupts = <28 IRQ_TYPE_EDGE_FALLING>;
-				irq-gpios = <&gpio2 28 GPIO_ACTIVE_HIGH>;
+				interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
+				irq-gpios = <&gpio2 24 GPIO_ACTIVE_HIGH>;
 				reload-fw-on-resume;
 				skip-firmware-request;
-				vin-supply = <&reg_5v_dvk>;
+				vin-supply = <&reg_5v_board>;
 				status = "okay";
 			};
 		};
@@ -180,14 +180,14 @@
 			/* Backlight */
 			pinctrl_lvds0_backlight: lvds0backlightgrp {
 				fsl,pins = <
-					IMX95_PAD_GPIO_IO22__TPM5_CH1		0x51e
+					IMX95_PAD_GPIO_IO05__TPM4_CH0		0x51e
 				>;
 			};
 
 			/* Touch interrupt */
 			pinctrl_lvds0_touch: lvds0touchgrp {
 				fsl,pins = <
-					IMX95_PAD_GPIO_IO28__GPIO2_IO_BIT28	0x51e
+					IMX95_PAD_GPIO_IO24__GPIO2_IO_BIT24	0x51e
 				>;
 			};
 		};
