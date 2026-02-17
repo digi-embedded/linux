@@ -134,7 +134,7 @@ err_free_dev:
 	return ret;
 }
 
-static void neutron_pdev_remove(struct platform_device *pdev)
+static int neutron_pdev_remove(struct platform_device *pdev)
 {
 	struct neutron_device *ndev = platform_get_drvdata(pdev);
 
@@ -146,6 +146,8 @@ static void neutron_pdev_remove(struct platform_device *pdev)
 	neutron_dev_deinit(ndev);
 	pm_runtime_put_noidle(ndev->dev);
 	pm_runtime_disable(ndev->dev);
+
+	return 0;
 }
 
 #ifdef CONFIG_PM
