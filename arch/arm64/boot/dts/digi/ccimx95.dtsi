@@ -99,6 +99,12 @@
 			reg = <0 0x88020000 0 0x100000>;
 			no-map;
 		};
+
+		neutron_mem: neutron_memory@100000000 {
+			compatible = "shared-dma-pool";
+			reusable;
+			reg = <0x1 0x00000000 0x1 0x00000000>;
+		};
 	};
 
 	regulators {
@@ -141,6 +147,11 @@
 			regulator-name = "vdd-1v8-dummy";
 		};
 	};
+};
+
+&neutron {
+	memory-region = <&neutron_mem>;
+	iommus = <&smmu 0xd>;
 };
 
 /* Enable GPIO1 to be used in Linux (not reserved by SM) */
