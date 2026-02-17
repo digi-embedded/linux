@@ -6,7 +6,6 @@
 
 #include <linux/dma-mapping.h>
 #include <linux/dma-map-ops.h>
-#include <linux/dma-direct.h>
 #include <linux/bitmap.h>
 #include <linux/interrupt.h>
 #include <linux/mutex.h>
@@ -22,6 +21,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/firmware.h>
 #include <linux/elf.h>
+#include <linux/platform_device.h>
 
 #include "uapi/neutron.h"
 #include "neutron_buffer.h"
@@ -70,10 +70,12 @@ static bool wait_until_neutron_ready(struct neutron_device *ndev, int time_ms)
 	return 0;
 }
 
-struct rproc *neutron_get_rproc(struct neutron_device *ndev)
+static struct rproc *neutron_get_rproc(struct neutron_device *ndev)
 {
 	phandle rproc_phandle;
 	struct rproc *rproc;
+	struct platform_device *pdev;
+	struct resource *res;
 
 	if (!ndev || !ndev->dev)
 		return NULL;
@@ -90,15 +92,19 @@ struct rproc *neutron_get_rproc(struct neutron_device *ndev)
 			dev_err(ndev->dev, "could not get rproc handle\n");
 			return NULL;
 		}
-		ndev->rproc = rproc;
+
+		/* Get the RESETCTRL register from remoteproc device */
+		pdev = to_platform_device((struct device *)(&(*rproc->dev.parent)));
+		res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+		ndev->reg_reset = devm_ioremap(ndev->dev, res->start, resource_size(res));
 
 		return rproc;
 	}
 	return ndev->rproc;
 }
 
-int neutron_rproc_elf_load(struct rproc *rproc, const struct firmware *fw,
-			   void *data_ddr, u8 skip_flag)
+static int neutron_rproc_elf_load(struct rproc *rproc, const struct firmware *fw,
+				  void *data_ddr, u8 skip_flag)
 {
 	struct device *dev = &rproc->dev;
 	int i, ret = 0;
@@ -184,7 +190,6 @@ static int neutron_firmw_request(struct neutron_device *ndev, struct neutron_buf
 	int ret = 0;
 	struct device *dev;
 	struct rproc *rproc = ndev->rproc;
-	phys_addr_t paddr;
 
 	if (!buf) {
 		dev_err(dev, "%s: invalid neutron bufffer\n", __func__);
@@ -197,8 +202,8 @@ static int neutron_firmw_request(struct neutron_device *ndev, struct neutron_buf
 	if (buf->firmware_p)
 		return ret;
 
-	/* request firmware */
-	ret = request_firmware(&buf->firmware_p, fw_name, dev);
+	/* request firmware without cache with flag FW_OPT_NOCACHE */
+	ret = request_firmware_into_buf(&buf->firmware_p, fw_name, dev, NULL, 0);
 	if (ret < 0) {
 		dev_err(dev, "request_firmware failed: %d\n", ret);
 		return ret;
@@ -217,8 +222,7 @@ static int neutron_firmw_request(struct neutron_device *ndev, struct neutron_buf
 	}
 
 	/* Sync the data for device */
-	paddr = dma_to_phys(ndev->dev, buf->dma_addr);
-	arch_sync_dma_for_device(paddr, buf->size, DMA_TO_DEVICE);
+	neutron_memory_sync(ndev, buf->dma_addr, buf->size, DMA_TO_DEVICE);
 
 	/* Firmware is changed, it should be reloaded on next job */
 	ndev->firmw_id = 0;
@@ -239,8 +243,10 @@ int neutron_firmw_reload(struct neutron_device *ndev, struct neutron_buffer *buf
 	}
 
 	ret = rproc->ops->stop(rproc);
-	if (ret)
+	if (ret) {
 		dev_err(dev, "could not stop neutron\n");
+		return ret;
+	}
 
 	ret = neutron_rproc_elf_load(rproc, buf->firmware_p, data_ddr, 0x1);
 	if (ret)
@@ -251,12 +257,58 @@ int neutron_firmw_reload(struct neutron_device *ndev, struct neutron_buffer *buf
 	return ret;
 }
 
+void neutron_memory_sync(struct neutron_device *ndev, dma_addr_t addr,
+			 size_t size, enum dma_data_direction dir)
+{
+	/* unset dma_coherent to ensure arch_sync_dma_for_device() is executed */
+	ndev->dev->dma_coherent = false;
+
+	switch (dir) {
+	case DMA_TO_DEVICE:
+		dma_sync_single_for_device(ndev->dev, addr, size, DMA_TO_DEVICE);
+		break;
+	case DMA_FROM_DEVICE:
+		dma_sync_single_for_cpu(ndev->dev, addr, size, DMA_FROM_DEVICE);
+		break;
+	default:
+		break;
+	}
+
+	/* recovery dma_coherent */
+	ndev->dev->dma_coherent = true;
+}
+
+/* Clock gating via RESETCTRL register */
+void neutron_clk_disable(struct neutron_device *ndev)
+{
+	u32 val;
+
+	/* Disable clocks for risc-v core, TCM and Compute block. */
+	val = readl(ndev->reg_reset);
+	if (val & ZENV_CLK_ON) {
+		val &= ~(TCM_CLK_ON | COMPUTE_CLK_ON | ZENV_CLK_ON);
+		writel(val, ndev->reg_reset);
+	}
+}
+
+/* Clock ungating */
+void neutron_clk_enable(struct neutron_device *ndev)
+{
+	u32 val;
+
+	/* Enable clocks for risc-v core, TCM and Compute block. */
+	val = readl(ndev->reg_reset);
+	if (!(val & ZENV_CLK_ON)) {
+		val |= (TCM_CLK_ON | COMPUTE_CLK_ON |  ZENV_CLK_ON);
+		writel(val, ndev->reg_reset);
+	}
+}
+
 int neutron_rproc_boot(struct neutron_device *ndev, const char *fw_name)
 {
-	struct rproc *rproc;
+	struct rproc *rproc = ndev->rproc;
 	int ret = 0;
 
-	rproc = neutron_get_rproc(ndev);
 	if (IS_ERR(rproc))
 		return -ENODEV;
 
@@ -274,6 +326,12 @@ int neutron_rproc_boot(struct neutron_device *ndev, const char *fw_name)
 		/* Continue and assume boot neutron manually */
 		if (!wait_until_neutron_ready(ndev, 100))
 			dev_err(ndev->dev, "failed: neutron is not ready, timeout\n");
+
+		if (ndev->power_mode >= POWER_MODE_LOW)
+			neutron_clk_disable(ndev);
+
+		/* Firmware is changed */
+		ndev->firmw_id = 0;
 	}
 	/* Update power state */
 	if (ndev->power_state == NEUTRON_POWER_OFF)
@@ -284,16 +342,13 @@ int neutron_rproc_boot(struct neutron_device *ndev, const char *fw_name)
 
 int neutron_rproc_shutdown(struct neutron_device *ndev)
 {
-	struct rproc *rproc;
-
-	rproc = neutron_get_rproc(ndev);
-	if (IS_ERR(rproc))
+	if (IS_ERR(ndev->rproc))
 		return -ENODEV;
 
-	return rproc_shutdown(rproc);
+	return rproc_shutdown(ndev->rproc);
 }
 
-void neutron_rproc_put(struct neutron_device *ndev)
+static void neutron_rproc_put(struct neutron_device *ndev)
 {
 	if (!ndev->rproc)
 		return;
@@ -340,7 +395,6 @@ static int neutron_open(struct inode *inode,
 {
 	struct neutron_device *ndev =
 		container_of(inode->i_cdev, struct neutron_device, cdev);
-	struct rproc *rproc;
 	int head, ret = 0;
 	bool is_iomem = true;
 
@@ -354,7 +408,9 @@ static int neutron_open(struct inode *inode,
 		return ret;
 	}
 
-	rproc = ndev->rproc;
+	if (!ndev->rproc)
+		return -ENODEV;
+
 	head = readl(ndev->reg_base + HEAD);
 
 	file->private_data = ndev;
@@ -362,7 +418,7 @@ static int neutron_open(struct inode *inode,
 
 	/* 0x44000 is the LOG buffer address for neutron */
 	if (!ndev->logger.start_addr)
-		ndev->logger.start_addr = rproc_da_to_va(rproc, 0x44000, 0x1000, &is_iomem);
+		ndev->logger.start_addr = rproc_da_to_va(ndev->rproc, 0x44000, 0x1000, &is_iomem);
 
 	if (!ndev->logger.end_addr)
 		ndev->logger.end_addr = ndev->logger.start_addr + NEUTRON_LOG_SIZE;
@@ -371,19 +427,9 @@ static int neutron_open(struct inode *inode,
 	ndev->logger.last_to_console  = ndev->logger.start_addr + head;
 
 	pm_runtime_mark_last_busy(ndev->dev);
-
-	return nonseekable_open(inode, file);
-}
-
-static int neutron_release(struct inode *inode, struct file *file)
-{
-	struct neutron_device *ndev =
-		container_of(inode->i_cdev, struct neutron_device, cdev);
-
-	pm_runtime_mark_last_busy(ndev->dev);
 	pm_runtime_put_autosuspend(ndev->dev);
 
-	return 0;
+	return nonseekable_open(inode, file);
 }
 
 /* function to read neutron log */
@@ -481,8 +527,8 @@ static long neutron_ioctl(struct file *file,
 			break;
 
 		dev_dbg(ndev->dev,
-			"Ioctl: Inference run. dram_base=%u, kernel_offset=%u\n",
-			uapi.dram_base, uapi.kernel_offset);
+			"Ioctl: Inference run. base_ddr=%llx, kernel_offset=%x\n",
+			(__u64)uapi.base_ddr_h << 32 | uapi.base_ddr_l, uapi.kernel_offset);
 		ret = neutron_inference_create(ndev, NEUTRON_CMD_LOAD_KERNEL, &uapi);
 
 		break;
@@ -494,8 +540,8 @@ static long neutron_ioctl(struct file *file,
 			break;
 
 		dev_dbg(ndev->dev,
-			"Ioctl: Inference run. dram_base=%u, tensor_offset=%u\n",
-			uapi.dram_base, uapi.tensor_offset);
+			"Ioctl: Inference run. base_ddr=%llx, tensor_offset=%x\n",
+			(__u64)uapi.base_ddr_h << 32 | uapi.base_ddr_l, uapi.tensor_offset);
 		ret = neutron_inference_create(ndev, NEUTRON_CMD_RUN_INFERENCE, &uapi);
 
 		break;
@@ -503,7 +549,6 @@ static long neutron_ioctl(struct file *file,
 	case NEUTRON_IOCTL_CACHE_SYNC: {
 		struct neutron_uapi_cache_sync uapi;
 		struct neutron_buffer *buf;
-		phys_addr_t paddr;
 
 		ret = copy_from_user(&uapi, udata, sizeof(uapi));
 		if (ret)
@@ -527,11 +572,12 @@ static long neutron_ioctl(struct file *file,
 			ret = -EINVAL;
 		}
 
-		paddr = dma_to_phys(ndev->dev, buf->dma_addr + uapi.offset);
 		if (uapi.direction)
-			arch_sync_dma_for_cpu(paddr, uapi.size, DMA_FROM_DEVICE);
+			neutron_memory_sync(ndev, buf->dma_addr + uapi.offset,
+					    uapi.size, DMA_FROM_DEVICE);
 		else
-			arch_sync_dma_for_device(paddr, uapi.size, DMA_TO_DEVICE);
+			neutron_memory_sync(ndev, buf->dma_addr + uapi.offset,
+					    uapi.size, DMA_TO_DEVICE);
 
 		break;
 	}
@@ -583,7 +629,6 @@ static long neutron_ioctl(struct file *file,
 static const struct file_operations ndev_fops = {
 	.owner		= THIS_MODULE,
 	.open		= &neutron_open,
-	.release	= &neutron_release,
 	.read		= &neutron_read,
 	.unlocked_ioctl	= &neutron_ioctl,
 #ifdef CONFIG_COMPAT
@@ -599,7 +644,7 @@ static void neutron_mbox_rx_callback(struct neutron_device *ndev, void *data)
 		neutron_inference_done(ndev);
 }
 
-int neutron_dev_clk_get(struct neutron_device *ndev)
+static int neutron_dev_clk_get(struct neutron_device *ndev)
 {
 	int ret = -ENODEV;
 
@@ -618,6 +663,16 @@ int neutron_dev_clk_get(struct neutron_device *ndev)
 		dev_err(ndev->dev, "failed to enable clock\n");
 
 	return ret;
+}
+
+void neutron_irq_enable(struct neutron_device *ndev)
+{
+	u32 val;
+
+	/* Setup irq register */
+	val = readl(ndev->reg_base + INTENA);
+	val |= (SHUTDOWN_IRQ_ENABLE | INFERENCE_DONE_IRQ_ENABLE);
+	writel(val, ndev->reg_base + INTENA);
 }
 
 int neutron_dev_init(struct neutron_device *ndev,
@@ -653,8 +708,8 @@ int neutron_dev_init(struct neutron_device *ndev,
 		goto destroy_mbox;
 	}
 
-	dma_set_mask_and_coherent(ndev->dev, DMA_BIT_MASK(32));
-	arch_setup_dma_ops(ndev->dev, 0, 0, NULL, true);
+	dma_set_mask_and_coherent(ndev->dev, DMA_BIT_MASK(48));
+	ndev->dev->dma_coherent = true;
 
 	/* Init power state */
 	ndev->power_state = NEUTRON_POWER_OFF;
@@ -675,6 +730,8 @@ int neutron_dev_init(struct neutron_device *ndev,
 		ret = PTR_ERR(sysdev);
 		goto del_cdev;
 	}
+
+	ndev->rproc = neutron_get_rproc(ndev);
 
 	dev_info(ndev->dev,
 		 "created neutron device, name=%s\n", dev_name(sysdev));
@@ -699,7 +756,6 @@ destroy_mutex:
 void neutron_dev_deinit(struct neutron_device *ndev)
 {
 	neutron_queue_destroy(ndev->queue);
-	clk_bulk_disable_unprepare(ndev->num_clks, ndev->clks);
 	neutron_mbox_destroy(ndev->mbox);
 	neutron_rproc_put(ndev);
 	mutex_destroy(&ndev->mutex);

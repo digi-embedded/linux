@@ -7,7 +7,6 @@
  * Includes
  ****************************************************************************/
 
-#include <linux/dma-direct.h>
 #include <linux/dma-mapping.h>
 #include <linux/anon_inodes.h>
 #include <linux/file.h>
@@ -16,6 +15,7 @@
 #include <linux/list.h>
 #include <linux/hrtimer.h>
 #include <linux/delay.h>
+#include <linux/pm_runtime.h>
 
 #include "neutron_inference.h"
 #include "neutron_buffer.h"
@@ -84,11 +84,10 @@ static enum hrtimer_restart poll_result_callback(struct hrtimer *poll_timer)
 	return HRTIMER_RESTART;
 }
 
-int neutron_inference_run(struct neutron_inference *inf)
+static int neutron_inference_run(struct neutron_inference *inf)
 {
 	struct neutron_device *ndev;
 	struct neutron_mbox_tx_msg msg;
-	phys_addr_t paddr;
 	u32 i, val;
 	int ret = 0;
 
@@ -104,15 +103,23 @@ int neutron_inference_run(struct neutron_inference *inf)
 
 	ndev = inf->ndev;
 
+	if (ndev->power_mode >= POWER_MODE_LOW)
+		neutron_clk_enable(ndev);
+
 	/* Sync the input data for device before running inference job */
-	paddr = dma_to_phys(ndev->dev, inf->buf->dma_addr + inf->args.input_offset);
-	arch_sync_dma_for_device(paddr, inf->args.input_size, DMA_TO_DEVICE);
+	neutron_memory_sync(ndev, inf->buf->dma_addr + inf->args.input_offset,
+			    inf->args.input_size, DMA_TO_DEVICE);
 
 	// reload only when firmware was changed
 	if (ndev->firmw_id  != inf->args.firmw_id) {
 		mutex_lock(&ndev->mutex);
+		ret = neutron_firmw_reload(ndev, inf->buf);
+		if (ret) {
+			inf->status = NEUTRON_UAPI_STATUS_ERROR;
+			mutex_unlock(&ndev->mutex);
+			goto inf_stop_early;
+		}
 		ndev->firmw_id = inf->args.firmw_id;
-		neutron_firmw_reload(ndev, inf->buf);
 		mutex_unlock(&ndev->mutex);
 		dev_dbg(ndev->dev, "Inference firmw_reload: %x\n", inf->args.firmw_id);
 	}
@@ -124,8 +131,8 @@ int neutron_inference_run(struct neutron_inference *inf)
 
 	ndev = inf->ndev;
 
-	neu_dbg("job %x is started, dram_base %x\n",
-		inf->args.tensor_offset, inf->args.dram_base);
+	neu_dbg("job %x is started, base_ddr %llx\n",
+		inf->args.tensor_offset, (__u64)inf->args.base_ddr_h << 32 | inf->args.base_ddr_l);
 
 	/* Do reset when neutron is stuck.
 	 * If the previous inference job is done, the ACK register will be set to RESET_VAL.
@@ -140,13 +147,17 @@ int neutron_inference_run(struct neutron_inference *inf)
 		mutex_unlock(&ndev->mutex);
 	}
 
+	/* set BASEDDR address */
+	writel(inf->args.base_ddr_l, inf->ndev->reg_base + BASEDDRL);
+	writel(inf->args.base_ddr_l, inf->ndev->reg_base + BASEINOUTL);
+	writel(inf->args.base_ddr_l, inf->ndev->reg_base + BASESPILLL);
+
+	writel(inf->args.base_ddr_h, inf->ndev->reg_base + BASEDDRH);
+	writel(inf->args.base_ddr_h, inf->ndev->reg_base + BASEINOUTH);
+	writel(inf->args.base_ddr_h, inf->ndev->reg_base + BASESPILLH);
+
 	/* Run neutron inference */
 	if (inf->cmd_type == NEUTRON_CMD_RUN_INFERENCE) {
-		/* set BASEDDRL address */
-		writel(inf->args.dram_base, inf->ndev->reg_base + BASEDDRL);
-		writel(inf->args.dram_base, inf->ndev->reg_base + BASEINOUTL);
-		writel(inf->args.dram_base, inf->ndev->reg_base + BASESPILLL);
-
 		neu_dbg("run inference\n");
 		msg.command = RUN;
 		msg.args[0] = inf->args.tensor_offset;
@@ -156,11 +167,6 @@ int neutron_inference_run(struct neutron_inference *inf)
 
 	/* Load neutron kernel binary */
 	} else if (inf->cmd_type == NEUTRON_CMD_LOAD_KERNEL) {
-		/* set BASEDDRL address */
-		writel(inf->args.dram_base, inf->ndev->reg_base + BASEDDRL);
-		writel(inf->args.dram_base, inf->ndev->reg_base + BASEINOUTL);
-		writel(inf->args.dram_base, inf->ndev->reg_base + BASESPILLL);
-
 		neu_dbg("load kernel\n");
 		msg.command = KERNELS;
 		msg.args[0] = inf->args.kernel_offset;
@@ -237,8 +243,8 @@ static void inference_inqueue(struct neutron_inference_queue *queue,
 		neutron_inference_run(inf);
 }
 
-static void inference_dequeue(struct neutron_inference_queue *queue,
-			      struct neutron_inference *inf)
+static struct neutron_inference *inference_dequeue(struct neutron_inference_queue *queue,
+						   struct neutron_inference *inf)
 {
 	struct neutron_inference *next_inf;
 	int queue_count;
@@ -254,8 +260,9 @@ static void inference_dequeue(struct neutron_inference_queue *queue,
 	/* There are jobs left in queue list */
 	if (queue_count > 0) {
 		neu_dbg("next %x\n", next_inf->args.tensor_offset);
-		neutron_inference_run(next_inf);
+		return next_inf;
 	}
+	return NULL;
 }
 
 static void inference_done_callback(struct work_struct *work)
@@ -263,16 +270,18 @@ static void inference_done_callback(struct work_struct *work)
 	struct neutron_inference_queue *queue =
 		container_of(work, struct neutron_inference_queue, work);
 
-	struct neutron_inference *inf;
+	struct neutron_inference *inf, *next_inf;
 	struct neutron_device *ndev;
 	struct neutron_mbox *mbox;
-	phys_addr_t paddr;
 
 	spin_lock_bh(&queue->lock);
 	inf = queue->cur_inf;
 	spin_unlock_bh(&queue->lock);
 
 	if (!inf || IS_ERR(inf))
+		return;
+
+	if (!kref_read(&inf->kref))
 		return;
 
 	neutron_inference_get(inf);
@@ -284,25 +293,38 @@ static void inference_done_callback(struct work_struct *work)
 	ndev = inf->ndev;
 	mbox = ndev->mbox;
 
+	pm_runtime_get_sync(ndev->dev);
+
 	/* Sync the output data for cpu after inference is done */
-	paddr = dma_to_phys(ndev->dev, inf->buf->dma_addr + inf->args.output_offset);
-	arch_sync_dma_for_cpu(paddr, inf->args.output_size, DMA_FROM_DEVICE);
+	neutron_memory_sync(ndev, inf->buf->dma_addr + inf->args.output_offset,
+			    inf->args.output_size, DMA_FROM_DEVICE);
 
 	/* Wake up the waiting process */
 	wake_up_interruptible(&inf->waitq);
 
 	/* Reset neutron */
+	mutex_lock(&ndev->mutex);
 	if (mbox->ops->send_reset(ndev->mbox))
 		dev_warn(ndev->dev, "failed to reset neutron state\n");
+	mutex_unlock(&ndev->mutex);
 
 	dev_dbg(ndev->dev, "inf %x is done\n", inf->args.tensor_offset);
 
 	/* Only dequeue a new job when the previous one is completed,
 	 * allowing only 1 job to run at a time.
 	 */
-	inference_dequeue(ndev->queue, inf);
-
+	next_inf = inference_dequeue(ndev->queue, inf);
 	neutron_inference_put(inf);
+
+	if (next_inf)
+		neutron_inference_run(next_inf);
+	/* In low power mode, if there are no new inferences
+	 * the clock should be gated.
+	 */
+	else if (ndev->power_mode >= POWER_MODE_LOW)
+		neutron_clk_disable(ndev);
+
+	pm_runtime_put_sync(ndev->dev);
 }
 
 static void neutron_inference_kref_destroy(struct kref *kref)
@@ -340,6 +362,9 @@ static int neutron_inference_release(struct inode *inode,
 	dev_dbg(inf->ndev->dev,
 		"Inference release. file=0x%pK, inf=0x%pK",
 		file, inf);
+
+	pm_runtime_mark_last_busy(inf->ndev->dev);
+	pm_runtime_put_autosuspend(inf->ndev->dev);
 
 	neutron_inference_put(inf);
 
@@ -416,8 +441,14 @@ int neutron_inference_create(struct neutron_device *ndev, enum neutron_cmd_type 
 
 	inf->ndev = ndev;
 	inf->cmd_type = type;
+
+	/* use irq mode */
+	if (ndev->flags & NEUTRON_USE_IRQ_MODE)
+		inf->poll_mode = false;
+
 	/* use polling mode */
-	inf->poll_mode = true;
+	else
+		inf->poll_mode = true;
 
 	kref_init(&inf->kref);
 	init_waitqueue_head(&inf->waitq);
@@ -437,6 +468,7 @@ int neutron_inference_create(struct neutron_device *ndev, enum neutron_cmd_type 
 
 	inf->buf = neutron_buffer_get_from_fd(inf->args.buf_id);
 
+	pm_runtime_resume_and_get(ndev->dev);
 	inference_inqueue(ndev->queue, inf);
 
 	/* Store pointer to file structure */

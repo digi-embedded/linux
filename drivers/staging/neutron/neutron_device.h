@@ -12,6 +12,7 @@
 #include <linux/cdev.h>
 #include <linux/io.h>
 #include <linux/mutex.h>
+#include <linux/dma-mapping.h>
 
 #ifdef DEBUG
  #define neu_dbg(fmt, arg...) pr_info("neutron: " fmt, ##arg)
@@ -65,9 +66,25 @@
 // Power status
 #define NEUTRON_POWER_OFF    0
 #define NEUTRON_POWER_ON     1
+#define SPECIFIC_DMA_POOL      BIT(0)
+#define NEUTRON_USE_IRQ_MODE   BIT(1)
+
+// IRQ
+#define INFERENCE_DONE_IRQ_ENABLE   BIT(1)
+#define MBOX_IRQ_ENABLE             BIT(2)
+#define SHUTDOWN_IRQ_ENABLE         BIT(7)
+
+#define ZENV_CLK_ON         (0x1 << 0)
+#define COMPUTE_CLK_ON      (0xF << 4)
+#define TCM_CLK_ON          (0xF << 8)
 
 // Suspend delay time in millisecond
-#define NEUTRON_AUTOSUSPEND_DELAY 10000
+#define NEUTRON_AUTOSUSPEND_DELAY 1000
+
+/* Power mode */
+#define  POWER_MODE_AUTO       0 /* auto mode, balance performance and power consumption */
+#define  POWER_MODE_PERF       1 /* performance mode */
+#define  POWER_MODE_LOW        2 /* low power mode, A slight decrease in performance. */
 /****************************************************************************
  * Types
  ****************************************************************************/
@@ -113,6 +130,10 @@ struct neutron_device {
 	dev_t                          devt;
 	unsigned int                   power_state;
 	u32                            firmw_id;
+	u32                            flags;
+	void __iomem                   *reg_reset;
+	u32                            power_mode;
+	u32                            suspend_delay;
 };
 
 int neutron_dev_init(struct neutron_device *ndev,
@@ -125,5 +146,11 @@ int neutron_rproc_boot(struct neutron_device *ndev, const char *fw_name);
 int neutron_rproc_shutdown(struct neutron_device *ndev);
 int neutron_hw_reset(struct neutron_device *ndev);
 int neutron_firmw_reload(struct neutron_device *ndev, struct neutron_buffer *buf);
+void neutron_memory_sync(struct neutron_device *ndev, dma_addr_t addr,
+			 size_t size, enum dma_data_direction dir);
+void neutron_clk_enable(struct neutron_device *ndev);
+void neutron_clk_disable(struct neutron_device *ndev);
+void neutron_irq_enable(struct neutron_device *ndev);
+
 #endif /* NEUTRON_DEVICE_H */
 
