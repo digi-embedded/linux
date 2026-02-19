@@ -5743,7 +5743,7 @@ brcmf_sdio_prepare_fw_request(struct brcmf_sdio *bus)
 	fwnames[0].path = bus->sdiodev->fw_name;
 	fwnames[1].extension = ".txt";
 	fwnames[1].path = bus->sdiodev->nvram_name;
-	
+
 	fwnames[2].extension = ".clm_blob";
 	fwnames[2].path = bus->sdiodev->clm_name;
 
@@ -5921,7 +5921,9 @@ fail:
 /* Detach and free everything */
 void brcmf_sdio_remove(struct brcmf_sdio *bus)
 {
+#ifdef CONFIG_INFFMAC_BT_SHARED_SDIO
 	struct brcmf_bus *bus_if = bus->sdiodev->bus_if;
+#endif
 	u32 reg_val, read_reg;
 	int err = 0;
 
