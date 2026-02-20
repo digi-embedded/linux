@@ -86,6 +86,7 @@ ccimx95_dvk_overlays := ccimx95-dvk_enet2.dtbo \
 
 ccimx95-dtbs := 	ccimx95-dvk.dtb \
 			$(ccimx9_som_overlays) \
+			ccimx95_npu.dtbo \
 			$(ccimx95_dvk_overlays)
 
 dtb-$(CONFIG_ARCH_MXC) += ccimx8mm.dtb \
