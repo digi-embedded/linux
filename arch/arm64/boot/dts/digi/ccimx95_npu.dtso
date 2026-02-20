@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2026 Digi International Inc.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: Neutron NPU";
+
+			reserved-memory {
+				#address-cells = <2>;
+				#size-cells = <2>;
+
+				/* Reserve 256MiB at the end of the 2G DDR space */
+				neutron_mem: neutron_memory@f0000000 {
+					compatible = "shared-dma-pool";
+					reusable;
+					reg = <0x0 0xf0000000 0x0 0x10000000>;
+				};
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&neutron>;
+		__overlay__ {
+			memory-region = <&neutron_mem>;
+			iommus = <&smmu 0xd>;
+		};
+	};
+};
