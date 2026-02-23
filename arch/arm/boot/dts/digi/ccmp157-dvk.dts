@@ -259,7 +259,6 @@
 
 /* Display Controller for MIPI-DSI to HDMI */
 &ltdc {
-	default-on;
 	status = "okay";
 
 	port {
@@ -272,7 +271,6 @@
 &dsi {
 	#address-cells = <1>;
 	#size-cells = <0>;
-	default-on;
 	clocks = <&rcc DSI>, <&scmi_clk CK_SCMI_HSE>, <&rcc DSI_PX>;
 	status = "okay";
 };
