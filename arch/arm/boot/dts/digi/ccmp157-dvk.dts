@@ -1,5 +1,5 @@
  /*
- * Copyright 2022-2025, Digi International Inc.
+ * Copyright 2022-2026, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -184,6 +184,7 @@
 
 /* Console */
 &uart4 {
+	bootph-all;
 	pinctrl-names = "default", "sleep", "idle";
 	pinctrl-0 = <&ccmp15_uart4_pins_a>;
 	pinctrl-1 = <&uart4_sleep_pins_a>;
@@ -957,13 +958,16 @@
 	};
 
 	ccmp15_uart4_pins_a: ccmp15_uart4-0 {
+		bootph-all;
 		pins1 {
+			bootph-all;
 			pinmux = <STM32_PINMUX('G', 11, AF6)>; /* UART4_TX */
 			bias-disable;
 			drive-push-pull;
 			slew-rate = <0>;
 		};
 		pins2 {
+			bootph-all;
 			pinmux = <STM32_PINMUX('B', 2, AF8)>; /* UART4_RX */
 			bias-pull-up;
 		};
