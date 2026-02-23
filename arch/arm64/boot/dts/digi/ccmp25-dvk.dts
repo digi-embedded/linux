@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-3-Clause)
 /*
- * Copyright (C) 2024,2025, Digi International Inc.
+ * Copyright (C) 2024,2026, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -809,6 +809,7 @@
 
 /* Console A35 */
 &usart2 {
+	bootph-all;
 	pinctrl-names = "default", "idle", "sleep";
 	pinctrl-0 = <&usart2_pins_a>;
 	pinctrl-1 = <&usart2_idle_pins_a>;
@@ -816,6 +817,16 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "okay";
+};
+
+&usart2_pins_a {
+	bootph-all;
+	pins1 {
+		bootph-all;
+	};
+	pins2 {
+		bootph-all;
+	};
 };
 
 /* Console M33 / XBEE */
