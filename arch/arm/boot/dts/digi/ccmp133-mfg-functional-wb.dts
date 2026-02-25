@@ -66,6 +66,7 @@
 	no-1-8-v;
 	st,neg-edge;
 	bus-width = <4>;
+	cap-power-off-card;
 	vmmc-supply = <&reg_rf_wl_en>;
 	max-frequency = <1000000>;
 	status = "okay";

@@ -66,6 +66,7 @@
 			non-removable;
 			st,neg-edge;
 			bus-width = <4>;
+			cap-power-off-card;
 			vmmc-supply = <&reg_rf_wl_en>;
 			vqmmc-supply = <&scmi_vddio1>;
 			cap-sdio-irq;

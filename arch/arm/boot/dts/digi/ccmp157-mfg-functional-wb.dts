@@ -73,6 +73,7 @@
 	no-1-8-v;
 	st,neg-edge;
 	bus-width = <4>;
+	cap-power-off-card;
 	vmmc-supply = <&reg_rf_wl_en>;
 	#address-cells = <1>;
 	#size-cells = <0>;
