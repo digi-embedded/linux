@@ -35,7 +35,7 @@
 extern int digi_get_som_hv(void);
 
 struct mca_reason {
-	u32 		flag;
+	u64 		flag;
 	const char	*text;
 };
 
@@ -121,6 +121,48 @@ static const struct mca_reason last_wakeup_kl17[] = {
 	{MCA_KL17_LAST_WAKEUP_IO19,	"IO19"},
 	{MCA_KL17_LAST_WAKEUP_IO20,	"IO20"},
 	{MCA_KL17_LAST_WAKEUP_IO21,	"IO21"},
+};
+
+static const struct mca_reason last_wakeup_stm32u031[] = {
+	{MCA_LAST_WAKEUP_PWRIO,			"Power IO"},
+	{MCA_LAST_WAKEUP_TIMER,			"Timer"},
+	{MCA_LAST_WAKEUP_RTC,			"RTC"},
+	{MCA_LAST_WAKEUP_LPUART,		"LP UART"},
+	{MCA_LAST_WAKEUP_TAMPER0,		"Tamper0"},
+	{MCA_LAST_WAKEUP_TAMPER1,		"Tamper1"},
+	{MCA_LAST_WAKEUP_TAMPER2,		"Tamper2"},
+	{MCA_LAST_WAKEUP_TAMPER3,		"Tamper3"},
+	{MCA_LAST_WAKEUP_IO0,			"IO0"},
+	{MCA_LAST_WAKEUP_IO1,			"IO1"},
+	{MCA_LAST_WAKEUP_IO2,			"IO2"},
+	{MCA_LAST_WAKEUP_IO3,			"IO3"},
+	{MCA_LAST_WAKEUP_IO4,			"IO4"},
+	{MCA_LAST_WAKEUP_IO5,			"IO5"},
+	{MCA_LAST_WAKEUP_IO6,			"IO6"},
+	{MCA_LAST_WAKEUP_IO7,			"IO7"},
+	{MCA_STM32U031_LAST_WAKEUP_IO8,		"IO8"},
+	{MCA_STM32U031_LAST_WAKEUP_IO9,		"IO9"},
+	{MCA_STM32U031_LAST_WAKEUP_IO10,	"IO10"},
+	{MCA_STM32U031_LAST_WAKEUP_IO11,	"IO11"},
+	{MCA_STM32U031_LAST_WAKEUP_IO12,	"IO12"},
+	{MCA_STM32U031_LAST_WAKEUP_IO13,	"IO13"},
+	{MCA_STM32U031_LAST_WAKEUP_IO14,	"IO14"},
+	{MCA_STM32U031_LAST_WAKEUP_IO15,	"IO15"},
+	{MCA_STM32U031_LAST_WAKEUP_IO16,	"IO16"},
+	{MCA_STM32U031_LAST_WAKEUP_IO17,	"IO17"},
+	{MCA_STM32U031_LAST_WAKEUP_IO18,	"IO18"},
+	{MCA_STM32U031_LAST_WAKEUP_IO19,	"IO19"},
+	{MCA_STM32U031_LAST_WAKEUP_IO20,	"IO20"},
+	{MCA_STM32U031_LAST_WAKEUP_IO21,	"IO21"},
+	{MCA_STM32U031_LAST_WAKEUP_IO22,	"IO22"},
+	{MCA_STM32U031_LAST_WAKEUP_IO23,	"IO23"},
+	{MCA_STM32U031_LAST_WAKEUP_IO24,	"IO24"},
+	{MCA_STM32U031_LAST_WAKEUP_IO25,	"IO25"},
+	{MCA_STM32U031_LAST_WAKEUP_IO26,	"IO26"},
+	{MCA_STM32U031_LAST_WAKEUP_IO27,	"IO27"},
+	{MCA_STM32U031_LAST_WAKEUP_IO28,	"IO28"},
+	{MCA_STM32U031_LAST_WAKEUP_VCC,		"Vcc"},
+	{MCA_STM32U031_LAST_WAKEUP_CPU,		"CPU"},
 };
 
 static struct mca_drv *pmca;
@@ -660,21 +702,37 @@ static ssize_t last_wakeup_reason_show(struct device *dev,
 				       char *buf)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
-	/* Use KL03 subset of wakeup reasons by default */
-	const struct mca_reason *last_wakeup = last_wakeup_kl03;
-	int n_reasons = ARRAY_SIZE(last_wakeup_kl03);
+	const struct mca_reason *last_wakeup;
+	int n_reasons;
+	int last_wakeup_size;
 	bool comma = false;
-	u32 last_wakeup_val;
+	u64 last_wakeup_val;
 	int ret, i;
 
-	/* Use KL17 reason array if KL17 detected */
-	if (mca->dev_id == MCA_KL17_DEVICE_ID) {
+	/* Use specific reason array according to the device detected */
+	switch (mca->dev_id) {
+	case MCA_KL03_DEVICE_ID:
+		last_wakeup = last_wakeup_kl03;
+		n_reasons = ARRAY_SIZE(last_wakeup_kl03);
+		last_wakeup_size = sizeof(u32);
+		break;
+	case MCA_KL17_DEVICE_ID:
 		last_wakeup = last_wakeup_kl17;
 		n_reasons = ARRAY_SIZE(last_wakeup_kl17);
+		last_wakeup_size = sizeof(u32);
+		break;
+	case MCA_STM32U031_DEVICE_ID:
+		last_wakeup = last_wakeup_stm32u031;
+		n_reasons = ARRAY_SIZE(last_wakeup_stm32u031);
+		last_wakeup_size = sizeof(u64);
+		break;
+	default:
+		dev_err(mca->dev, "Invalid MCA Device ID (%x)\n", mca->dev_id);
+		return -ENODEV;
 	}
 
 	ret = regmap_bulk_read(mca->regmap, MCA_LAST_WAKEUP_REASON_0,
-			       &last_wakeup_val, sizeof(last_wakeup_val));
+			       &last_wakeup_val, last_wakeup_size);
 	if (ret) {
 		dev_err(mca->dev,
 			"Cannot read last MCA wakeup reason (%d)\n",

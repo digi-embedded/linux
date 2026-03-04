@@ -284,6 +284,10 @@ static const struct regmap_range mca_stm32u031_volatile_ranges[] = {
 	/* Real volatile registers */
 	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_STATUS_3),
 	regmap_reg_range(MCA_TIMER_TICK_0, MCA_TIMER_TICK_3),
+	regmap_reg_range(MCA_LAST_MCA_RESET_0, MCA_LAST_MCA_RESET_3),
+	regmap_reg_range(MCA_LAST_MPU_RESET_0, MCA_LAST_MPU_RESET_3),
+	regmap_reg_range(MCA_LAST_WAKEUP_REASON_0, MCA_LAST_WAKEUP_REASON_7),
+	regmap_reg_range(MCA_MPU_NVRAM_START, MCA_MPU_NVRAM_END),
 	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_COUNT_SEC),
 	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
 	regmap_reg_range(MCA_GPIO_IRQ_STATUS_0, MCA_GPIO_IRQ_STATUS_7),
