@@ -2,7 +2,7 @@
 /*
  * NEOISP context registers/memory setting helpers
  *
- * Copyright 2023-2024 NXP
+ * Copyright 2023-2025 NXP
  * Author: Aymen Sghaier (aymen.sghaier@nxp.com)
  */
 
@@ -36,6 +36,7 @@
  */
 struct neoisp_meta_params_s neoisp_default_params = {
 	.features_cfg = {
+		.pipe_conf_cfg = 1,
 		.head_color_cfg = 1,
 		.hdr_decompress_input0_cfg = 1,
 		.hdr_decompress_input1_cfg = 1,
@@ -64,12 +65,36 @@ struct neoisp_meta_params_s neoisp_default_params = {
 		.drc_local_tonemap_cfg = 1,
 	},
 	.regs = {
+	.pipe_conf = {
+		.img_conf_inalign0 = 1,
+		.img_conf_lpalign0 = 1,
+		.img_conf_inalign1 = 1,
+		.img_conf_lpalign1 = 1,
+	},
 	.head_color = {
 		.ctrl_hoffset = 0,
 		.ctrl_voffset = 0,
 	},
-	.decompress_input0 = { .ctrl_enable = 1	},
-	.decompress_input1 = { .ctrl_enable = 0 },
+	.decompress_input0 = {
+		.ctrl_enable = 1,
+		.knee_point1 = 0,
+		.knee_point2 = 0,
+		.knee_point3 = 0,
+		.knee_point4 = 0,
+		.knee_offset4 = 0,
+		.knee_ratio4 = 1 << 5,
+		.knee_npoint4 = 0,
+	},
+	.decompress_input1 = {
+		.ctrl_enable = 0,
+		.knee_point1 = 0,
+		.knee_point2 = 0,
+		.knee_point3 = 0,
+		.knee_point4 = 0,
+		.knee_offset4 = 0,
+		.knee_ratio4 = 1 << 5,
+		.knee_npoint4 = 0,
+	},
 	.obwb[0] = {
 		.ctrl_obpp = 3,
 		.r_ctrl_gain = 1 << 8,
@@ -103,7 +128,22 @@ struct neoisp_meta_params_s neoisp_default_params = {
 		.b_ctrl_gain = 1 << 8,
 		.b_ctrl_offset = 0,
 		},
-	.hdr_merge = { .ctrl_enable = 0, },
+	.hdr_merge = {
+		.ctrl_enable = 0,
+		.ctrl_gain1bpp = 3u,
+		.ctrl_gain0bpp = 3u,
+		.ctrl_obpp = 3u,
+		.gain_scale_scale1 = 8u,
+		.gain_scale_scale0 = 1 << 12,
+		.gain_shift_shift1 = 12u,
+		.gain_shift_shift0 = 4u,
+		.luma_th_th0 = 4u,
+		.luma_scale_scale = 1 << 8,
+		.luma_scale_shift = 8u,
+		.luma_scale_thshift = 8u,
+		.downscale_imgscale0 = 8u,
+		.upscale_imgscale1 = 8u,
+		},
 	.rgbir = { .ctrl_enable = 0,
 		.ccm0_ccm = 1 << 8,
 		.ccm1_ccm = 1 << 8,
@@ -180,9 +220,14 @@ struct neoisp_meta_params_s neoisp_default_params = {
 		.gain_ctrl_rgain = 1 << 8,
 		.gain_ctrl_bgain = 1 << 8,
 		.mat_rxcy = {
-			{76, 148,  29},
-			{-36, -73, 111},
-			{157, -130, -26},
+	/* Constants defined by V4L2_YCBCR_ENC_601, full range and
+	 * formatted in s8.8. This matrix will define the gcm.imat_rxcy
+	 * as its inverse.
+	 * https://www.kernel.org/doc/html/latest/userspace-api/media/v4l/colorspaces-details.html
+	 */
+			{77, 150,  29},
+			{-43, -85, 128},
+			{128, -107, -21},
 			},
 		.csc_offsets = {0, 0, 0},
 		},
@@ -203,24 +248,18 @@ struct neoisp_meta_params_s neoisp_default_params = {
 		.offset_offset = 0,
 		},
 	.gcm = {
-		.imat_rxcy = {
-			{256, 0, 292},
-			{256, -101, -149},
-			{256, 520, 0},
+		.imat_rxcy = { /* inv(mat(V4L2_YCBCR_ENC_601)), in s8.8 */
+			{256, 0, 359},
+			{256, -88, -183},
+			{256, 454, 0},
 			},
 		.ioffsets = {0, 0, 0},
-		.omat_rxcy = {
+		.omat_rxcy = { /* Identity matrix, in s8.8 */
 			{256, 0, 0},
 			{0, 256, 0},
 			{0, 0, 256},
 			},
 		.ooffsets = {0, 0, 0},
-		.gamma0_gamma0 = 106, /* 1/2.4 x 256 */
-		.gamma0_offset0 = 0,
-		.gamma1_gamma1 = 106, /* 1/2.4 x 256 */
-		.gamma1_offset1 = 0,
-		.gamma2_gamma2 = 106, /* 1/2.4 x 256 */
-		.gamma2_offset2 = 0,
 		.mat_confg_sign_confg = 1,
 		},
 	},
@@ -237,6 +276,23 @@ static inline void ctx_blk_write(uint32_t field, __u32 *ptr, __u32 *dest)
 		return;
 	}
 	memcpy(&dest[woffset], ptr, wcount * sizeof(__u32));
+}
+
+static void neoisp_update_img_conf(struct neoisp_reg_params_s *p, struct neoisp_dev_s *neoispd)
+{
+	__u32 mask;
+
+	mask = NEO_PIPE_CONF_IMG_CONF_CAM0_INALIGN0
+		| NEO_PIPE_CONF_IMG_CONF_CAM0_LPALIGN0
+		| NEO_PIPE_CONF_IMG_CONF_CAM0_INALIGN1
+		| NEO_PIPE_CONF_IMG_CONF_CAM0_LPALIGN1;
+
+	regmap_field_update_bits_base(neoispd->regs.fields[NEO_PIPE_CONF_IMG_CONF_CAM0_IDX], mask,
+			NEO_PIPE_CONF_IMG_CONF_CAM0_INALIGN0_SET(p->pipe_conf.img_conf_inalign0)
+			| NEO_PIPE_CONF_IMG_CONF_CAM0_LPALIGN0_SET(p->pipe_conf.img_conf_lpalign0)
+			| NEO_PIPE_CONF_IMG_CONF_CAM0_INALIGN1_SET(p->pipe_conf.img_conf_inalign1)
+			| NEO_PIPE_CONF_IMG_CONF_CAM0_LPALIGN1_SET(p->pipe_conf.img_conf_lpalign1),
+			NULL, false, false);
 }
 
 static void neoisp_set_head_color(struct neoisp_reg_params_s *p, struct neoisp_dev_s *neoispd)
@@ -1037,19 +1093,28 @@ static void neoisp_set_autofocus(struct neoisp_reg_params_s *p, struct neoisp_de
 			NEO_AUTOFOCUS_FIL1_SHIFT_CAM0_SHIFT_SET(p->afc.fil1_shift_shift));
 }
 
-static void neoisp_set_mem_vignetting_table(struct neoisp_mem_params_s *p, __u32 *dest)
+static void neoisp_set_mem_vignetting_table(struct neoisp_mem_params_s *p,
+					    __u32 *dest,
+					    struct neoisp_dev_s *neoispd)
 {
-	ctx_blk_write(NEO_VIGNETTING_TABLE_MAP, (__u32 *)p->vt.vignetting_table, dest);
+	ctx_blk_write(neoispd->info->mems->vignetting_table,
+		      (__u32 *)p->vt.vignetting_table, dest);
 }
 
-static void neoisp_set_mem_global_tonemap(struct neoisp_mem_params_s *p, __u32 *dest)
+static void neoisp_set_mem_global_tonemap(struct neoisp_mem_params_s *p,
+					  __u32 *dest,
+					  struct neoisp_dev_s *neoispd)
 {
-	ctx_blk_write(NEO_DRC_GLOBAL_TONEMAP_MAP, (__u32 *)p->gtm.drc_global_tonemap, dest);
+	ctx_blk_write(neoispd->info->mems->drc_global_tonemap,
+		      (__u32 *)p->gtm.drc_global_tonemap, dest);
 }
 
-static void neoisp_set_mem_local_tonemap(struct neoisp_mem_params_s *p, __u32 *dest)
+static void neoisp_set_mem_local_tonemap(struct neoisp_mem_params_s *p,
+					 __u32 *dest,
+					 struct neoisp_dev_s *neoispd)
 {
-	ctx_blk_write(NEO_DRC_LOCAL_TONEMAP_MAP, (__u32 *)p->ltm.drc_local_tonemap, dest);
+	ctx_blk_write(neoispd->info->mems->drc_local_tonemap,
+		      (__u32 *)p->ltm.drc_local_tonemap, dest);
 }
 
 int neoisp_set_params(struct neoisp_dev_s *neoispd, struct neoisp_meta_params_s *p, bool force)
@@ -1057,6 +1122,8 @@ int neoisp_set_params(struct neoisp_dev_s *neoispd, struct neoisp_meta_params_s 
 	__u32 *mem = (__u32 *)neoispd->mmio_tcm;
 
 	/* update selected blocks wrt feature config flag */
+	if (force || p->features_cfg.pipe_conf_cfg)
+		neoisp_update_img_conf(&p->regs, neoispd);
 	if (force || p->features_cfg.head_color_cfg)
 		neoisp_set_head_color(&p->regs, neoispd);
 	if (force || p->features_cfg.hdr_decompress_input0_cfg)
@@ -1104,11 +1171,11 @@ int neoisp_set_params(struct neoisp_dev_s *neoispd, struct neoisp_meta_params_s 
 	if (force || p->features_cfg.gcm_cfg)
 		neoisp_set_gcm(&p->regs, neoispd);
 	if (force || p->features_cfg.vignetting_table_cfg)
-		neoisp_set_mem_vignetting_table(&p->mems, mem);
+		neoisp_set_mem_vignetting_table(&p->mems, mem, neoispd);
 	if (force || p->features_cfg.drc_global_tonemap_cfg)
-		neoisp_set_mem_global_tonemap(&p->mems, mem);
+		neoisp_set_mem_global_tonemap(&p->mems, mem, neoispd);
 	if (force || p->features_cfg.drc_local_tonemap_cfg)
-		neoisp_set_mem_local_tonemap(&p->mems, mem);
+		neoisp_set_mem_local_tonemap(&p->mems, mem, neoispd);
 
 	return 0;
 }
@@ -1137,6 +1204,9 @@ int neoisp_update_ctx(struct neoisp_dev_s *neoispd, __u32 ctx_id)
 	new = (struct neoisp_meta_params_s *)vb2_plane_vaddr(&buf->vb.vb2_buf, 0);
 
 	/* update selected blocks wrt feature config flag */
+	if (new->features_cfg.pipe_conf_cfg)
+		memcpy(&params->regs.pipe_conf, &new->regs.pipe_conf,
+				sizeof(new->regs.pipe_conf));
 	if (new->features_cfg.head_color_cfg)
 		memcpy(&params->regs.head_color, &new->regs.head_color,
 				sizeof(new->regs.head_color));
