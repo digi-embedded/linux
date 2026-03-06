@@ -2195,7 +2195,7 @@ err_pm:
 	return ret;
 }
 
-static void neoisp_remove(struct platform_device *pdev)
+static int neoisp_remove(struct platform_device *pdev)
 {
 	struct neoisp_dev_s *neoisp_dev = platform_get_drvdata(pdev);
 	int i;
@@ -2208,6 +2208,8 @@ static void neoisp_remove(struct platform_device *pdev)
 
 	pm_runtime_dont_use_autosuspend(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
+
+	return 0;
 }
 
 static int __maybe_unused neoisp_runtime_suspend(struct device *dev)
