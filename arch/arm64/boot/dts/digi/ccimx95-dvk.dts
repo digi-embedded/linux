@@ -393,6 +393,8 @@
 /* MicroSD */
 &usdhc2 {
 	vmmc-supply = <&reg_3v3_board>;
+	/* Workaround for DVKv1 patched boards */
+	no-1-8-v;
 };
 
 &wdog3 {
