@@ -164,4 +164,13 @@
 			};
 		};
 	};
+
+	/* Enable Neo ISP */
+	fragment@7 {
+		target = <&neoisp0>;
+		__overlay__ {
+			compatible = "nxp,imx95-b0-neoisp";
+			status = "okay";
+		};
+	};
 };
