@@ -43,8 +43,11 @@ struct lt8912 {
 
 	struct videomode mode;
 
+	struct regulator_bulk_data supplies[7];
+
 	u8 data_lanes;
 	bool is_power_on;
+	bool no_hpd;
 };
 
 static int lt8912_write_init_config(struct lt8912 *lt)
@@ -257,6 +260,12 @@ static int lt8912_free_i2c(struct lt8912 *lt)
 
 static int lt8912_hard_power_on(struct lt8912 *lt)
 {
+	int ret;
+
+	ret = regulator_bulk_enable(ARRAY_SIZE(lt->supplies), lt->supplies);
+	if (ret)
+		return ret;
+
 	gpiod_set_value_cansleep(lt->gp_reset, 0);
 	msleep(20);
 
@@ -267,6 +276,9 @@ static void lt8912_hard_power_off(struct lt8912 *lt)
 {
 	gpiod_set_value_cansleep(lt->gp_reset, 1);
 	msleep(20);
+
+	regulator_bulk_disable(ARRAY_SIZE(lt->supplies), lt->supplies);
+
 	lt->is_power_on = false;
 }
 
@@ -381,6 +393,9 @@ static enum drm_connector_status lt8912_check_cable_status(struct lt8912 *lt)
 	int ret;
 	unsigned int reg_val;
 
+	if (lt->no_hpd)
+		return connector_status_connected;
+
 	ret = regmap_read(lt->regmap[I2C_MAIN], 0xC1, &reg_val);
 	if (ret)
 		return connector_status_unknown;
@@ -411,6 +426,34 @@ static const struct drm_connector_funcs lt8912_connector_funcs = {
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 };
 
+#include <video/of_display_timing.h>
+static int lt8912_connector_get_modes_from_dt(struct drm_connector *connector)
+{
+	struct drm_display_mode *mode;
+	struct lt8912 *lt = connector_to_lt8912(connector);
+	u32 bus_flags = 0;
+	int ret, num = 0;
+
+	mode = drm_mode_create(connector->dev);
+	if (!mode)
+		return num;
+
+	ret = of_get_drm_display_mode(lt->dev->of_node, mode,
+				      &bus_flags, OF_USE_NATIVE_MODE);
+	if (ret < 0) {
+		dev_err(lt->dev, "failed to get display timings\n");
+		drm_mode_destroy(connector->dev, mode);
+		return num;
+	}
+
+	mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
+	drm_mode_set_name(mode);
+	drm_mode_probed_add(connector, mode);
+	num = 1;
+
+	return num;
+}
+
 static int lt8912_connector_get_modes(struct drm_connector *connector)
 {
 	const struct drm_edid *drm_edid;
@@ -421,7 +464,7 @@ static int lt8912_connector_get_modes(struct drm_connector *connector)
 	drm_edid = drm_bridge_edid_read(lt->hdmi_port, connector);
 	drm_edid_connector_update(connector, drm_edid);
 	if (!drm_edid)
-		return 0;
+		return lt8912_connector_get_modes_from_dt(connector);
 
 	num = drm_edid_connector_add_modes(connector);
 
@@ -483,6 +526,7 @@ static int lt8912_attach_dsi(struct lt8912 *lt)
 
 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO |
 			  MIPI_DSI_MODE_LPM |
+			  MIPI_DSI_MODE_VIDEO_NO_HFP |
 			  MIPI_DSI_MODE_NO_EOT_PACKET;
 
 	ret = devm_mipi_dsi_attach(dev, dsi);
@@ -631,6 +675,48 @@ static const struct drm_bridge_funcs lt8912_bridge_funcs = {
 	.get_edid = lt8912_bridge_get_edid,
 };
 
+static int lt8912_bridge_resume(struct device *dev)
+{
+	struct lt8912 *lt = dev_get_drvdata(dev);
+	int ret;
+
+	ret = lt8912_hard_power_on(lt);
+	if (ret)
+		return ret;
+
+	ret = lt8912_soft_power_on(lt);
+	if (ret)
+		return ret;
+
+	return lt8912_video_on(lt);
+}
+
+static int lt8912_bridge_suspend(struct device *dev)
+{
+	struct lt8912 *lt = dev_get_drvdata(dev);
+
+	lt8912_hard_power_off(lt);
+
+	return 0;
+}
+
+static DEFINE_SIMPLE_DEV_PM_OPS(lt8912_bridge_pm_ops, lt8912_bridge_suspend, lt8912_bridge_resume);
+
+static int lt8912_get_regulators(struct lt8912 *lt)
+{
+	unsigned int i;
+	const char * const supply_names[] = {
+		"vdd", "vccmipirx", "vccsysclk", "vcclvdstx",
+		"vcchdmitx", "vcclvdspll", "vcchdmipll"
+	};
+
+	for (i = 0; i < ARRAY_SIZE(lt->supplies); i++)
+		lt->supplies[i].supply = supply_names[i];
+
+	return devm_regulator_bulk_get(lt->dev, ARRAY_SIZE(lt->supplies),
+				       lt->supplies);
+}
+
 static int lt8912_parse_dt(struct lt8912 *lt)
 {
 	struct gpio_desc *gp_reset;
@@ -638,6 +724,8 @@ static int lt8912_parse_dt(struct lt8912 *lt)
 	int ret;
 	int data_lanes;
 	struct device_node *port_node;
+
+	lt->no_hpd = of_property_read_bool(dev->of_node, "digi,no-hpd");
 
 	gp_reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(gp_reset)) {
@@ -681,6 +769,10 @@ static int lt8912_parse_dt(struct lt8912 *lt)
 		ret = -EINVAL;
 		goto err_free_host_node;
 	}
+
+	ret = lt8912_get_regulators(lt);
+	if (ret)
+		goto err_free_host_node;
 
 	of_node_put(port_node);
 	return 0;
@@ -767,6 +859,7 @@ static struct i2c_driver lt8912_i2c_driver = {
 	.driver = {
 		.name = "lt8912",
 		.of_match_table = lt8912_dt_match,
+		.pm = pm_sleep_ptr(&lt8912_bridge_pm_ops),
 	},
 	.probe = lt8912_probe,
 	.remove = lt8912_remove,

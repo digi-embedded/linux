@@ -24,6 +24,7 @@ struct display_connector {
 	int			hpd_irq;
 
 	struct regulator	*supply;
+	struct regulator	*lv_supply;
 	struct gpio_desc	*ddc_en;
 };
 
@@ -357,6 +358,24 @@ static int display_connector_probe(struct platform_device *pdev)
 		}
 	}
 
+	/* Additional Level Voltage regulator */
+	conn->lv_supply = devm_regulator_get_optional(&pdev->dev, "lv-pwr");
+
+	if (conn->lv_supply == ERR_PTR(-ENODEV))
+		conn->lv_supply = NULL;
+
+	ret = PTR_ERR_OR_ZERO(conn->lv_supply);
+	if (ret < 0)
+		return dev_err_probe(&pdev->dev, ret, "failed to get LV Power regulator\n");
+
+	if (conn->lv_supply) {
+		ret = regulator_enable(conn->lv_supply);
+		if (ret) {
+			dev_err(&pdev->dev, "failed to enable LV PWR regulator: %d\n", ret);
+			return ret;
+		}
+	}
+
 	conn->bridge.funcs = &display_connector_bridge_funcs;
 	conn->bridge.of_node = pdev->dev.of_node;
 
@@ -391,11 +410,57 @@ static void display_connector_remove(struct platform_device *pdev)
 	if (conn->supply)
 		regulator_disable(conn->supply);
 
+	if (conn->lv_supply)
+		regulator_disable(conn->lv_supply);
+
 	drm_bridge_remove(&conn->bridge);
 
 	if (!IS_ERR(conn->bridge.ddc))
 		i2c_put_adapter(conn->bridge.ddc);
 }
+
+static int display_connector_resume(struct device *dev)
+{
+	struct display_connector *conn = dev_get_drvdata(dev);
+	int ret = 0;
+
+	if (conn->lv_supply) {
+		ret = regulator_enable(conn->lv_supply);
+		if (ret)
+			dev_err(dev, "failed to enable LV PWR regulator: %d\n", ret);
+	}
+
+	if (conn->supply) {
+		ret = regulator_enable(conn->supply);
+		if (ret)
+			dev_err(dev, "failed to enable PWR regulator: %d\n", ret);
+	}
+
+	if (conn->hpd_irq >= 0)
+		enable_irq(conn->hpd_irq);
+
+	return ret;
+}
+
+static int display_connector_suspend(struct device *dev)
+{
+	struct display_connector *conn = dev_get_drvdata(dev);
+
+	if (conn->hpd_irq >= 0)
+		disable_irq(conn->hpd_irq);
+
+	if (conn->supply)
+		regulator_disable(conn->supply);
+
+	if (conn->lv_supply)
+		regulator_disable(conn->lv_supply);
+
+	return 0;
+}
+
+static DEFINE_SIMPLE_DEV_PM_OPS(display_connector_pm_ops,
+				display_connector_suspend,
+				display_connector_resume);
 
 static const struct of_device_id display_connector_match[] = {
 	{
@@ -427,6 +492,7 @@ static struct platform_driver display_connector_driver = {
 	.driver		= {
 		.name		= "display-connector",
 		.of_match_table	= display_connector_match,
+		.pm = pm_sleep_ptr(&display_connector_pm_ops),
 	},
 };
 module_platform_driver(display_connector_driver);

@@ -1,0 +1,102 @@
+/*
+ * Copyright 2024 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/rtc/rtc-stm32.h>
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: Wi-Fi";
+			wireless {
+				/* U-Boot will fill in the MAC address here */
+			};
+		};
+	};
+
+	/* Enable the RF and Wifi regulators */
+	fragment@1 {
+		target-path = "/";
+		__overlay__ {
+			regulators {
+				compatible = "simple-bus";
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				reg_rf_wl_en: regulator-som@1 {
+					compatible = "regulator-fixed";
+					reg = <1>;
+					regulator-name = "rf_wl_en";
+					regulator-min-microvolt = <3300000>;
+					regulator-max-microvolt = <3300000>;
+					gpio = <&gpioi 7 GPIO_ACTIVE_HIGH>; /* WL_REG_EN */
+					enable-active-high;
+					status = "okay";
+					startup-delay-us = <100000>; /* Minimum of 78 ms */
+					vin-supply = <&scmi_ldo8_1v8_rf>;
+				};
+			};
+		};
+	};
+
+	/* Enable SDMMC1 (Wireless) */
+	fragment@2 {
+		target = <&sdmmc1>;
+		__overlay__ {
+			pinctrl-names = "default", "opendrain", "sleep";
+			pinctrl-0 = <&sdmmc1_b4_pins_a>;
+			pinctrl-1 = <&sdmmc1_b4_od_pins_a>;
+			pinctrl-2 = <&sdmmc1_b4_sleep_pins_a>;
+			non-removable;
+			st,neg-edge;
+			bus-width = <4>;
+			cap-power-off-card;
+			vmmc-supply = <&reg_rf_wl_en>;
+			vqmmc-supply = <&scmi_vddio1>;
+			cap-sdio-irq;
+			status = "okay";
+
+			#address-cells = <1>;
+			#size-cells = <0>;
+			brcmf: bcrmf@1 {
+				reg = <1>;
+				compatible = "brcm,bcm4329-fmac";
+			};
+		};
+	};
+
+	/* Enable External 32kHz Low-Power Oscillator */
+	fragment@3 {
+		target = <&rtc>;
+		__overlay__ {
+			st,lsco = <RTC_OUT2_RMP>;
+			pinctrl-0 = <&ccmp25_rtc_out1_pins &ccmp25_rtc_out2_pins>;
+			pinctrl-names = "default";
+		};
+	};
+
+	/* SCMI LDO8 regulator */
+	fragment@4 {
+		target = <&scmi_ldo8_1v8_rf>;
+		__overlay__ {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+		};
+	};
+};

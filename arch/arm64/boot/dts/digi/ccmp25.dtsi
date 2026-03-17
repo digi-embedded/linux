@@ -1,0 +1,520 @@
+ /*
+ * Copyright (C) 2024, 2025, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/* STM32MP25 CPU */
+#include "../st/stm32mp255.dtsi"
+#include "../st/stm32mp25xc.dtsi"
+#include "../st/stm32mp25-pinctrl.dtsi"
+#include "../st/stm32mp25xxai-pinctrl.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/rtc/rtc-stm32.h>
+
+/ {
+	aliases {
+		mmc0 = &sdmmc2; /* eMMC */
+		serial0 = &usart2; /* Console A35 */
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		/* Internal RAM reserved memory declaration */
+		tfa_bl31: tfa-bl31@a000000 {
+			reg = <0x0 0xa000000 0x0 0x20000>;
+			no-map;
+		};
+
+		hpdma1_lli: hpdma1-lli@a020000 {
+			reg = <0x0 0xa020000 0x0 0xf0f0>;
+			no-map;
+		};
+
+		hpdma2_lli: hpdma2-lli@a02f0f0 {
+			reg = <0x0 0xa02f0f0 0x0 0xf0f0>;
+			no-map;
+		};
+
+		hpdma3_lli: hpdma3-lli@a03e1e0 {
+			reg = <0x0 0xa03e1e0 0x0 0x1e20>;
+			no-map;
+		};
+
+		bsec_mirror: bsec-mirror@a040000 {
+			reg = <0x0 0xa040000 0x0 0x1000>;
+			no-map;
+		};
+
+		scmi_cid2_s: scmi-cid2-s@a041000 {
+			reg = <0x0 0xa041000 0x0 0x1000>;
+			no-map;
+		};
+
+		scmi_cid2_ns: scmi-cid2-ns@a042000 {
+			reg = <0x0 0xa042000 0x0 0x1000>;
+			no-map;
+		};
+
+		cm33_sram1: cm33-sram1@a043000 {
+			reg = <0x0 0xa043000 0x0 0x1d000>;
+			no-map;
+		};
+
+		cm33_sram2: cm33-sram2@a060000 {
+			reg = <0x0 0xa060000 0x0 0x20000>;
+			no-map;
+		};
+
+		cm33_retram: cm33-retram@a080000 {
+			reg = <0x0 0xa080000 0x0 0x1f000>;
+			no-map;
+		};
+
+		ddr_param: ddr-param@a09f000 {
+			reg = <0x0 0xa09f000 0x0 0x1000>;
+			no-map;
+		};
+
+		cm0_cube_fw: cm0-cube-fw@200C0000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x200C0000 0x0 0x4000>;
+			no-map;
+		};
+
+		cm0_cube_data: cm0-cube-data@200C4000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x200C4000 0x0 0x2000>;
+			no-map;
+		};
+
+		ipc_shmem_2: ipc-shmem-2@200C6000{
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x200C6000 0x0 0x2000>;
+			no-map;
+		};
+
+		/* Backup RAM reserved memory declaration */
+		bl31_lowpower: bl31-lowpower@42000000 {
+			reg = <0x0 0x42000000 0x0 0x1000>;
+			no-map;
+		};
+
+		tfm_its: tfm-its@42001000 {
+			reg = <0x0 0x42001000 0x0 0x1000>;
+			no-map;
+		};
+
+		/* Octo Memory Manager reserved memory declaration */
+		mm_ospi1: mm-ospi@60000000 {
+			reg = <0x0 0x60000000 0x0 0x10000000>;
+			no-map;
+		};
+
+		/* DDR reserved memory declaration */
+		tfm_code: tfm-code@80000000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x80000000 0x0 0x100000>; /* 1 MiB */
+			no-map;
+		};
+
+		cm33_cube_fw: cm33-cube-fw@80100000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x80100000 0x0 0x800000>; /* 8 MiB */
+			no-map;
+		};
+
+		tfm_data: tfm-data@80900000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x80900000 0x0 0x100000>; /* 1 MiB */
+			no-map;
+		};
+
+		cm33_cube_data: cm33-cube-data@80a00000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x80a00000 0x0 0x800000>; /* 8 MiB */
+			no-map;
+		};
+
+		ipc_shmem_1: ipc-shmem-1@81200000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x81200000 0x0 0xf8000>;  /* 992 KiB */
+			no-map;
+		};
+
+		vdev0vring0: vdev0vring0@812f8000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x812f8000 0x0 0x1000>; /* 4 KiB*/
+			no-map;
+		};
+
+		vdev0vring1: vdev0vring1@812f9000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x812f9000 0x0 0x1000>; /* 4 KiB */
+			no-map;
+		};
+
+		vdev0buffer: vdev0buffer@812fa000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x812fa000 0x0 0x6000>; /* 24 KiB */
+			no-map;
+		};
+
+		spare1: spare1@81300000 {
+			reg = <0x0 0x81300000 0x0 0xcc0000>; /* 12,75 MiB */
+			no-map;
+		};
+
+		bl31_context: bl31-context@81fc0000 {
+			reg = <0x0 0x81fc0000 0x0 0x40000>; /* 256 KiB */
+			no-map;
+		};
+
+		op_tee: op-tee@82000000 {
+			reg = <0x0 0x82000000 0x0 0x2000000>; /* 32 MiB */
+			no-map;
+		};
+
+		gpu_reserved: gpu-reserved@ba800000 {
+			reg = <0x0 0xba800000 0x0 0x4000000>; /* 64 MiB */
+			no-map;
+		};
+
+		ltdc_sec_layer: ltdc-sec-layer@be800000 {
+			reg = <0x0 0xbe800000 0x0 0x800000>; /* 8 MiB */
+			no-map;
+		};
+
+		ltdc_sec_rotation: ltdc-sec-rotation@bf000000 {
+			reg = <0x0 0xbf000000 0x0 0x1000000>; /* 16 MiB */
+			no-map;
+		};
+
+		/* global autoconfigured region for contiguous allocations */
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			alloc-ranges = <0 0x80000000 0 0x40000000>;
+			size = <0x0 0x8000000>;
+			alignment = <0x0 0x2000>;
+			linux,cma-default;
+		};
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x0 0x80000000 0x0 0x40000000>;
+	};
+
+	thermal-zones {
+		cpu-thermal {
+			trips {
+				cpu_alert: cpu-alert {
+					temperature = <95000>;
+					hysteresis = <10000>;
+					type = "passive";
+				};
+
+				cpu_crit: cpu-crit {
+					temperature = <105000>;
+					hysteresis = <1000>;
+					type = "critical";
+				};
+
+				gpu_alert: gpu-alert {
+					temperature = <95000>;
+					hysteresis = <10000>;
+					type = "passive";
+				};
+			};
+		};
+		soc-thermal {
+			trips {
+				soc_crit: soc-crit {
+					temperature = <105000>;
+					hysteresis = <1000>;
+					type = "critical";
+				};
+			};
+		};
+	};
+};
+
+&a35ss_syscfg {
+	status = "okay";
+};
+
+&ahbsr {
+	mbox_client: mailbox-client@1 {
+		compatible = "mbox-cdev";
+		reg = <1 0>;
+		memory-region =  <&ipc_shmem_2>;
+		mboxes = <&ipcc2 0>;
+		mbox-names = "rx-tx";
+		status = "okay";
+	};
+};
+
+&arm_wdt {
+	timeout-sec = <32>;
+	status = "okay";
+};
+
+&bsec {
+	/* By default, make the OTP bits read-only */
+	read-only;
+
+	/* Digi hardware ID (HWID) stored in OTP23, OTP24, OTP25 */
+	hwid: hwid@5c {
+		reg = <0x5c 0xc>;
+	};
+};
+
+&crc {
+	status = "okay";
+};
+
+&cryp1 {
+	status = "okay";
+};
+
+&gpu {
+	contiguous-area = <&gpu_reserved>;
+	status = "okay";
+};
+
+&hpdma {
+	memory-region = <&hpdma1_lli>;
+};
+
+&hpdma2 {
+	memory-region = <&hpdma2_lli>;
+};
+
+&hpdma3 {
+	memory-region = <&hpdma3_lli>;
+};
+
+&ipcc1 {
+	status = "okay";
+};
+
+&ipcc2 {
+	status = "okay";
+};
+
+/* use LPTIMER with tick broadcast for suspend mode */
+&lptimer3 {
+	clocks = <&rcc CK_LPTIM3_AM>;
+	status = "okay";
+	timer {
+		status = "okay";
+	};
+};
+
+&m0_rproc {
+	memory-region = <&cm0_cube_fw>, <&cm0_cube_data>;
+	clocks = <&rcc CK_CPU3>,
+		 <&rcc CK_CPU3_AM>,
+		 <&rcc CK_LPUART1_C3>,
+		 <&rcc CK_KER_LPUART1>,
+		 <&rcc CK_LPUART1_AM>,
+		 <&rcc CK_GPIOZ_C3>,
+		 <&scmi_clk CK_SCMI_GPIOZ>,
+		 <&scmi_clk CK_SCMI_GPIOZ_AM>,
+		 <&rcc CK_LPTIM4_C3>,
+		 <&rcc CK_KER_LPTIM4>,
+		 <&rcc CK_LPTIM4_AM>,
+		 <&scmi_clk CK_SCMI_IPCC2>,
+		 <&scmi_clk CK_SCMI_IPCC2_AM>;
+	status = "okay";
+};
+
+&m33_rproc {
+	mboxes = <&ipcc1 0x100>, <&ipcc1 0x101>, <&ipcc1 2>;
+	mbox-names = "vq0", "vq1", "shutdown";
+	memory-region = <&cm33_cube_fw>, <&cm33_cube_data>,
+			<&ipc_shmem_1>, <&vdev0vring0>,
+			<&vdev0vring1>, <&vdev0buffer>,
+			<&cm33_sram2>;
+	st,syscfg-nsvtor = <&a35ss_syscfg 0xa8 0xffffff80>;
+	status = "okay";
+};
+
+&rtc {
+	st,alarm = <RTC_OUT1>;
+	pinctrl-0 = <&ccmp25_rtc_out1_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&scmi_regu {
+	scmi_vrefbuf: regulator@9 {
+		reg = <VOLTD_SCMI_VREFBUF>;
+		regulator-name = "vrefbuf";
+	};
+	scmi_vddcore: regulator@b {
+		reg = <VOLTD_SCMI_STPMIC2_BUCK2>;
+		regulator-name = "vddcore";
+	};
+	scmi_v1v8: regulator@e {
+		reg = <VOLTD_SCMI_STPMIC2_BUCK5>;
+		regulator-name = "v1v8";
+	};
+	scmi_v3v3: regulator@10 {
+		reg = <VOLTD_SCMI_STPMIC2_BUCK7>;
+		regulator-name = "v3v3";
+	};
+	scmi_vdd_emmc: regulator@12 {
+		reg = <VOLTD_SCMI_STPMIC2_LDO2>;
+		regulator-name = "vdd_emmc";
+	};
+	scmi_vdd3v3_usb: regulator@14 {
+		reg = <VOLTD_SCMI_STPMIC2_LDO4>;
+		regulator-name = "vdd3v3_usb";
+	};
+	scmi_ldo6: regulator@16 {
+		reg = <VOLTD_SCMI_STPMIC2_LDO6>;
+		regulator-name = "ldo6";
+	};
+	scmi_ldo7: regulator@17 {
+		reg = <VOLTD_SCMI_STPMIC2_LDO7>;
+		regulator-name = "ldo7";
+	};
+	scmi_ldo8_1v8_rf: regulator@18 {
+		reg = <VOLTD_SCMI_STPMIC2_LDO8>;
+		regulator-name = "ldo8_1v8_rf";
+	};
+};
+
+/* eMMC */
+&sdmmc2 {
+	pinctrl-names = "default", "opendrain", "sleep";
+	pinctrl-0 = <&ccmp25_sdmmc2_b4_pins &ccmp25_sdmmc2_d47_pins>;
+	pinctrl-1 = <&ccmp25_sdmmc2_b4_od_pins &ccmp25_sdmmc2_d47_pins>;
+	pinctrl-2 = <&sdmmc2_b4_sleep_pins_a &sdmmc2_d47_sleep_pins_a>;
+	non-removable;
+	no-sd;
+	no-sdio;
+	st,neg-edge;
+	bus-width = <8>;
+	vmmc-supply = <&scmi_vdd_emmc>;
+	vqmmc-supply = <&scmi_vddio2>;
+	mmc-ddr-1_8v;
+	mmc-hs200-1_8v;
+	max-frequency = <200000000>; /* 200 MHz */
+	status = "okay";
+};
+
+&pinctrl {
+	ccmp25_rtc_out1_pins: ccmp25_rtc-out1-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 13, ANALOG)>; /* RTC_OUT1 */
+		};
+	};
+
+	ccmp25_rtc_out2_pins: ccmp25_rtc-out2-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('I', 8, ANALOG)>; /* RTC_OUT2 */
+		};
+	};
+
+	ccmp25_sdmmc2_b4_pins: ccmp25-sdmmc2-b4-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('E', 13, AF12)>, /* SDMMC2_D0 */
+				 <STM32_PINMUX('E', 11, AF12)>, /* SDMMC2_D1 */
+				 <STM32_PINMUX('E', 8, AF12)>, /* SDMMC2_D2 */
+				 <STM32_PINMUX('E', 12, AF12)>, /* SDMMC2_D3 */
+				 <STM32_PINMUX('E', 15, AF12)>, /* SDMMC2_CMD */
+				 <STM32_PINMUX('E', 14, AF12)>; /* SDMMC2_CK */
+			slew-rate = <3>;
+			drive-push-pull;
+			bias-pull-up;
+		};
+	};
+
+	ccmp25_sdmmc2_b4_od_pins: ccmp25-sdmmc2-b4-od-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('E', 13, AF12)>, /* SDMMC2_D0 */
+				 <STM32_PINMUX('E', 11, AF12)>, /* SDMMC2_D1 */
+				 <STM32_PINMUX('E', 8, AF12)>, /* SDMMC2_D2 */
+				 <STM32_PINMUX('E', 12, AF12)>, /* SDMMC2_D3 */
+				 <STM32_PINMUX('E', 14, AF12)>; /* SDMMC2_CK */
+			slew-rate = <3>;
+			drive-push-pull;
+			bias-pull-up;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('E', 15, AF12)>; /* SDMMC2_CMD */
+			slew-rate = <3>;
+			drive-open-drain;
+			bias-pull-up;
+		};
+	};
+
+	ccmp25_sdmmc2_d47_pins: ccmp25-sdmmc2-d47-0 {
+		pins {
+			pinmux = <STM32_PINMUX('E', 10, AF12)>, /* SDMMC2_D4 */
+				 <STM32_PINMUX('E', 9, AF12)>, /* SDMMC2_D5 */
+				 <STM32_PINMUX('E', 6, AF12)>, /* SDMMC2_D6 */
+				 <STM32_PINMUX('E', 7, AF12)>; /* SDMMC2_D7 */
+			slew-rate = <3>;
+			drive-push-pull;
+			bias-pull-up;
+		};
+	};
+
+	ccmp25_usart1_pins: ccmp25-usart1-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 14, AF6)>, /* BT_USART1_TX */
+				 <STM32_PINMUX('B', 9, AF6)>;  /* BT_USART1_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 15, AF6)>, /* BT_USART1_RX */
+				 <STM32_PINMUX('B', 11, AF6)>; /* BT_USART1_CTS */
+			bias-pull-up;
+		};
+	};
+
+	ccmp25_usart1_idle_pins: ccmp25-usart1-idle-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 14, ANALOG)>, /* BT_USART1_TX */
+				 <STM32_PINMUX('B', 11, ANALOG)>; /* BT_USART1_CTS */
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('B', 9, AF6)>; /* BT_USART1_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins3 {
+			pinmux = <STM32_PINMUX('G', 15, AF6)>; /* BT_USART1_RX */
+			bias-pull-up;
+		};
+	};
+
+	ccmp25_usart1_sleep_pins: ccmp25-usart1-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 14, ANALOG)>, /* BT_USART1_TX */
+				 <STM32_PINMUX('B', 9, ANALOG)>,  /* BT_USART1_RTS */
+				 <STM32_PINMUX('B', 11, ANALOG)>, /* BT_USART1_CTS */
+				 <STM32_PINMUX('G', 15, ANALOG)>; /* BT_USART1_RX */
+		};
+	};
+};

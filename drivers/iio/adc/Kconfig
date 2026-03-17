@@ -756,6 +756,16 @@ config MAX9611
 	  To compile this driver as a module, choose M here: the module will be
 	  called max9611.
 
+config MCA_ADC
+	tristate "Digi ConnectCore SOMs Micro Controller Assist ADC"
+	select MFD_MCA
+	help
+	  If you say Y here you will get support for the ADCs in the Micro
+	  Controller Assist of Digi ConnectCore system-on-modules.
+
+	  This driver can also be built as a module, if so, the module
+	  will be called "mca-adc".
+
 config MCP320X
 	tristate "Microchip Technology MCP3x01/02/04/08 and MCP3550/1/3"
 	depends on SPI

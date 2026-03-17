@@ -162,6 +162,16 @@ config DRM_PANEL_FEIYANG_FY07024DI26A30D
 	  Say Y if you want to enable support for panels based on the
 	  Feiyang FY07024DI26A30-D MIPI-DSI interface.
 
+config DRM_PANEL_FORCELEAD_FL7703NI
+	tristate "ForceLEAD FL7703NI panel driver"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for the FORCELEAD
+	  FL7703NI controller for 720RGBX2047 dot TFT LCD panels with MIPI/RGB/SPI
+	  system interfaces.
+
 config DRM_PANEL_HIMAX_HX8394
 	tristate "HIMAX HX8394 MIPI-DSI LCD panels"
 	depends on OF
@@ -825,6 +835,16 @@ config DRM_PANEL_WIDECHIPS_WS2401
 	  Say Y here if you want to enable support for the Widechips WS2401 DPI
 	  480x800 display controller used in panels such as Samsung LMS380KF01.
 	  This display is used in the Samsung Galaxy Ace 2 GT-I8160 (Codina).
+
+config DRM_PANEL_XIAMEN_XM91080
+	tristate "Xiamen XM91080 panel driver"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for the XIAMEN
+	  XM91080 controller for 1080RGBX2400 dot TFT LCD panels with
+	  MIPI-DSI interface.
 
 config DRM_PANEL_XINPENG_XPP055C272
 	tristate "Xinpeng XPP055C272 panel driver"

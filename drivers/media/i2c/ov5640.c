@@ -1459,7 +1459,7 @@ static int ov5640_set_mipi_pclk(struct ov5640_dev *sensor)
 	unsigned long sysclk;
 	u8 pclk_period;
 	u32 sample_rate;
-	u32 num_lanes;
+	u32 num_lanes = sensor->ep.bus.mipi_csi2.num_data_lanes;
 	int ret;
 
 	/* Use the link freq computed at ov5640_update_pixel_rate() time. */
@@ -1476,8 +1476,14 @@ static int ov5640_set_mipi_pclk(struct ov5640_dev *sensor)
 	else
 		mipi_div = 2;
 
-	sysclk = link_freq * mipi_div;
+	sysclk = link_freq * num_lanes * mipi_div;
 	ov5640_calc_sys_clk(sensor, sysclk, &prediv, &mult, &sysdiv);
+	/*
+	 * Workaround: increase the OV5640 internal PLL multiplier
+	 * to compensate for adjusted frame timing requirements.
+	 */
+	if (mult > 1)
+		mult += 1;
 
 	/*
 	 * Adjust PLL parameters to maintain the MIPI_SCLK-to-PCLK ratio.
@@ -1516,7 +1522,6 @@ static int ov5640_set_mipi_pclk(struct ov5640_dev *sensor)
 	 *
 	 * 2 * sample_period = (mipi_clk * 2 * num_lanes / bpp) * (bpp / 8) / 2
 	 */
-	num_lanes = sensor->ep.bus.mipi_csi2.num_data_lanes;
 	sample_rate = (link_freq * mipi_div * num_lanes * 2) / 16;
 	pclk_period = 2000000000UL / sample_rate;
 

@@ -68,8 +68,44 @@ const char *brcmf_fweh_event_name(enum brcmf_fweh_event_code code)
 	}
 	return "unknown";
 }
+
+struct roam_reason_name roam_reason_namemap[] = {
+	{BRCMF_E_REASON_LOW_RSSI, "LOW_RSSI"},
+	{BRCMF_E_REASON_DEAUTH, "DEAUTH"},
+	{BRCMF_E_REASON_DISASSOC, "DISASSOC"},
+	{BRCMF_E_REASON_BCNS_LOST, "BCNS_LOST"},
+	{BRCMF_E_REASON_FAST_ROAM_FAILED, "FAST_ROAM_FAILED"},
+	{BRCMF_E_REASON_DIRECTED_ROAM, "DIRECTED_ROAM"},
+	{BRCMF_E_REASON_TSPEC_REJECTED, "TSPEC_REJECTED"},
+	{BRCMF_E_REASON_BETTER_AP, "BETTER_AP"},
+	{BRCMF_E_REASON_MINTXRATE, "MINTXRATE"},
+	{BRCMF_E_REASON_TXFAIL, "TXFAIL"},
+	{BRCMF_E_REASON_BSSTRANS_REQ, "BSSTRANS_REQ"},
+	{BRCMF_E_REASON_LOW_RSSI_CU, "LOW_RSSI_CU"},
+	{BRCMF_E_REASON_RADAR_DETECTED, "RADAR_DETECTED"},
+	{BRCMF_E_REASON_CSA, "CSA"},
+	{BRCMF_E_REASON_ESTM_LOW, "ESTM_LOW_TPUT"},
+	{BRCMF_E_REASON_LAST, NULL}
+};
+
+static char *brcmf_fweh_roam_reason_name(u32 reason)
+{
+	int i;
+
+	for (i = 0; roam_reason_namemap[i].reason_name; i++) {
+		if (roam_reason_namemap[i].reason == reason)
+			return roam_reason_namemap[i].reason_name;
+	}
+
+	return NULL;
+}
 #else
 const char *brcmf_fweh_event_name(enum brcmf_fweh_event_code code)
+{
+	return "nodebug";
+}
+
+static char *brcmf_fweh_roam_reason_name(u32 reason)
 {
 	return "nodebug";
 }
@@ -219,6 +255,7 @@ static void brcmf_fweh_event_worker(struct work_struct *work)
 	int err = 0;
 	struct brcmf_event_msg_be *emsg_be;
 	struct brcmf_event_msg emsg;
+	char *reason_str = NULL;
 
 	fweh = container_of(work, struct brcmf_fweh_info, event_work);
 	drvr = container_of(fweh, struct brcmf_pub, fweh);
@@ -247,8 +284,14 @@ static void brcmf_fweh_event_worker(struct work_struct *work)
 		emsg.ifidx = emsg_be->ifidx;
 		emsg.bsscfgidx = emsg_be->bsscfgidx;
 
-		brcmf_dbg(EVENT, "  version %u flags %u status %u reason %u\n",
-			  emsg.version, emsg.flags, emsg.status, emsg.reason);
+		if (event->code == BRCMF_E_ROAM)
+			reason_str = brcmf_fweh_roam_reason_name(emsg.reason);
+		brcmf_dbg(EVENT, "  version %u flags %u status %u reason %s(%u)\n",
+			  emsg.version,
+			  emsg.flags,
+			  emsg.status,
+			  !reason_str ? "" : reason_str,
+			  emsg.reason);
 		brcmf_dbg_hex_dump(BRCMF_EVENT_ON(), event->data,
 				   min_t(u32, emsg.datalen, 64),
 				   "event payload, len=%d\n", emsg.datalen);
@@ -359,26 +402,42 @@ int brcmf_fweh_activate_events(struct brcmf_if *ifp)
 {
 	struct brcmf_pub *drvr = ifp->drvr;
 	int i, err;
-	s8 eventmask[BRCMF_EVENTING_MASK_LEN];
+	struct eventmsgs_ext *eventmask_msg;
+	u32 msglen;
 
-	memset(eventmask, 0, sizeof(eventmask));
+	msglen = EVENTMSGS_EXT_STRUCT_SIZE + BRCMF_EVENTING_MASK_LEN;
+	eventmask_msg = kzalloc(msglen, GFP_KERNEL);
+	if (!eventmask_msg)
+		return -ENOMEM;
+
 	for (i = 0; i < BRCMF_E_LAST; i++) {
 		if (ifp->drvr->fweh.evt_handler[i]) {
 			brcmf_dbg(EVENT, "enable event %s\n",
 				  brcmf_fweh_event_name(i));
-			setbit(eventmask, i);
+			setbit(eventmask_msg->mask, i);
 		}
 	}
 
 	/* want to handle IF event as well */
 	brcmf_dbg(EVENT, "enable event IF\n");
-	setbit(eventmask, BRCMF_E_IF);
+	setbit(eventmask_msg->mask, BRCMF_E_IF);
 
-	err = brcmf_fil_iovar_data_set(ifp, "event_msgs",
-				       eventmask, BRCMF_EVENTING_MASK_LEN);
+	eventmask_msg->ver = EVENTMSGS_VER;
+	eventmask_msg->command = EVENTMSGS_SET_MASK;
+	eventmask_msg->len = BRCMF_EVENTING_MASK_LEN;
+
+	err = brcmf_fil_iovar_data_set(ifp, "event_msgs_ext", eventmask_msg,
+				       msglen);
+	if (!err)
+		goto end;
+
+	err = brcmf_fil_iovar_data_set(ifp, "event_msgs", eventmask_msg->mask,
+				       BRCMF_EVENTING_MASK_LEN);
 	if (err)
 		bphy_err(drvr, "Set event_msgs error (%d)\n", err);
 
+end:
+	kfree(eventmask_msg);
 	return err;
 }
 

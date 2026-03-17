@@ -1,0 +1,104 @@
+/*
+ * Copyright 2024 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/clock/st,stm32mp25-rcc.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/phy/phy.h>
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: USB 3.0 Type-C";
+
+			/* USB 3.0 Data switch */
+			usb3_data_switch: cbtl04gp {
+				compatible = "nxp,cbtu02043";
+				switch-gpios = <&gpiod 11 GPIO_ACTIVE_HIGH>; /* USBC_BUS_SEL */
+				shutdown-gpios = <&gpiod 10 GPIO_ACTIVE_HIGH>; /* USBC_SW_PWR */
+				orientation-switch;
+				status = "okay";
+
+				port {
+					typec_ep: endpoint {
+						remote-endpoint = <&dwc3_ep>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Disable PCIe */
+	fragment@1 {
+		target = <&pcie_ep>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@2 {
+		target = <&pcie_rc>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Enable USB 3.0 PCIe combo PHY */
+	fragment@3 {
+		target = <&combophy>;
+		__overlay__ {
+			clocks = <&rcc CK_BUS_USB3PCIEPHY>, <&rcc CK_KER_USB3PCIEPHY>;
+			clock-names = "apb-clk", "ker-clk";
+			status = "okay";
+		};
+	};
+
+	/* Enable USB 3.0 Dual-Role data port */
+	fragment@4 {
+		target = <&usb3dr>;
+		__overlay__ {
+				status = "okay";
+		};
+	};
+
+	/* Configure SuperSpeed (SS) USB 3.0 controller */
+	fragment@5 {
+		target = <&dwc3>;
+		__overlay__ {
+				/* Configure USB 3.0 speed */
+				maximum-speed = "super-speed";
+				phys = <&usb2_phy2>, <&combophy PHY_TYPE_USB3>;
+				phy-names = "usb2-phy", "usb3-phy";
+				role-switch-default-mode = "host";
+
+				port {
+					dwc3_ep: endpoint {
+						remote-endpoint = <&typec_ep>;
+					};
+				};
+		};
+	};
+
+	/* Enable USB regulator */
+	fragment@7 {
+		target = <&reg_5v_usb_pwr_sw>;
+		__overlay__ {
+			regulator-always-on;
+		};
+	};
+};
