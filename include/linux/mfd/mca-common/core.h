@@ -75,7 +75,7 @@ struct mca_drv {
 	int chip_irq;
 	u32 irq_base;
 	int gpio_base;
-	int fw_update_gpio;
+	struct gpio_desc *fw_update_gpio;
 	int som_hv;
 	u32 last_mca_reset;
 	u32 last_mpu_reset;

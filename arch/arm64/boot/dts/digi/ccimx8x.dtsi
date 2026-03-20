@@ -327,7 +327,7 @@
 		interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
-		fw-update-gpio = <&lsio_gpio3 9 GPIO_ACTIVE_LOW>;
+		fw-update-gpios = <&lsio_gpio3 9 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mca_cc8x>;
 

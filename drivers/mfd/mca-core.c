@@ -648,11 +648,11 @@ static ssize_t fw_update_show(struct device *dev, struct device_attribute *attr,
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
 
-	if (!gpio_is_valid(mca->fw_update_gpio))
+	if (!mca->fw_update_gpio)
 		return -EINVAL;
 
 	return sprintf(buf, "%d\n",
-		       gpio_get_value_cansleep(mca->fw_update_gpio));
+		       gpiod_get_value_cansleep(mca->fw_update_gpio));
 }
 
 static struct imxi2c_platform_data i2c_data_mca = { 0 };
@@ -679,7 +679,7 @@ static ssize_t fw_update_store(struct device *dev,
 	ssize_t status;
 	long value;
 
-	if (!gpio_is_valid(mca->fw_update_gpio))
+	if (!mca->fw_update_gpio)
 		return -EINVAL;
 
 	if (mca->dev_id != MCA_STM32U031_DEVICE_ID) {
@@ -689,7 +689,7 @@ static ssize_t fw_update_store(struct device *dev,
 
 	status = kstrtol(buf, 0, &value);
 	if (status == 0) {
-		gpio_set_value_cansleep(mca->fw_update_gpio, value);
+		gpiod_set_value_cansleep(mca->fw_update_gpio, value);
 		status = count;
 	}
 
@@ -1353,21 +1353,18 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 					 "Cannot set SOM hardware version (%d)\n", ret);
 		}
 
-		mca->fw_update_gpio = of_get_named_gpio(mca->dev->of_node,
-						"fw-update-gpio", 0);
+		mca->fw_update_gpio = devm_gpiod_get_optional(mca->dev,
+				      "fw-update", GPIOD_OUT_LOW);
+		if (IS_ERR(mca->fw_update_gpio))
+			return dev_err_probe(mca->dev,
+					     PTR_ERR(mca->fw_update_gpio),
+					     "failed to get fw-update GPIO\n");
 		if (of_machine_is_compatible("digi,ccimx6ul") &&
-		    gpio_is_valid(mca->fw_update_gpio) && mca->som_hv >= 4) {
+		    mca->fw_update_gpio && mca->som_hv < 4) {
 			/*
-			 * On the CC6UL HV >= 4 this GPIO must be driven low
-			 * so that the CPU resets together with the reset button.
+			 * On the CC6UL HV < 4 this GPIO must be driven high.
 			 */
-			if (devm_gpio_request_one(mca->dev, mca->fw_update_gpio,
-						  GPIOF_OUT_INIT_LOW, "mca-fw-update"))
-				dev_warn(mca->dev, "failed to get fw-update-gpio: %d\n",
-					 ret);
-		} else {
-			/* Invalidate GPIO */
-			mca->fw_update_gpio = -EINVAL;
+			gpiod_set_value_cansleep(mca->fw_update_gpio, 1);
 		}
 
 		if (mca_feature_is_supported(mca, MCA_FUNC_RTC_PREPARE))
@@ -1382,14 +1379,12 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 			dev_warn(mca->dev,
 				 "Cannot read SOM hardware version (%d)\n", ret);
 
-		mca->fw_update_gpio = of_get_named_gpio(mca->dev->of_node,
-							"fw-update-gpio", 0);
-		if (!gpio_is_valid(mca->fw_update_gpio) ||
-		    devm_gpio_request_one(mca->dev, mca->fw_update_gpio,
-					  GPIOF_OUT_INIT_LOW, "mca-fw-update")) {
-			dev_warn(mca->dev, "failed to get fw-update-gpio: %d\n", ret);
-			mca->fw_update_gpio = -EINVAL;
-		}
+		mca->fw_update_gpio = devm_gpiod_get_optional(mca->dev,
+				      "fw-update", GPIOD_ASIS);
+		if (IS_ERR(mca->fw_update_gpio))
+			return dev_err_probe(mca->dev,
+					     PTR_ERR(mca->fw_update_gpio),
+					     "failed to get fw-update GPIO\n");
 	} else if (mca->dev_id == MCA_STM32U031_DEVICE_ID) {
 		/* No need to handle a fw_update_gpio for STM32U031 */
 	}
@@ -1433,7 +1428,7 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 		dev_err(mca->dev, "Cannot create sysfs entries (%d)\n", ret);
 		goto out_dev;
 	}
-	if (mca->fw_update_gpio == -EINVAL) {
+	if (!mca->fw_update_gpio) {
 		/* Remove fw_update entry */
 		sysfs_remove_file(&mca->dev->kobj, &dev_attr_fw_update.attr);
 	}

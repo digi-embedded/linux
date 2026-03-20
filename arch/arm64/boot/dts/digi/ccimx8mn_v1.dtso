@@ -53,7 +53,7 @@
 		__overlay__ {
 			interrupt-parent = <&gpio3>;
 			interrupts = <8 IRQ_TYPE_LEVEL_HIGH>;
-			fw-update-gpio = <&gpio1 4 GPIO_ACTIVE_LOW>;
+			fw-update-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
 			pinctrl-0 = <&pinctrl_mca_cc8m_somv1>;
 		};
 	};
