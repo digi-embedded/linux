@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Digi International Inc.
+ * Copyright 2020-2026 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -38,7 +38,7 @@
 				io = <18>;
 				/* Configure led for blinking at boot */
 				linux,default-trigger = "timer";
-				led-pattern = <100>, <1000>;
+				led-pattern = <100 1000>;
 				retain-state-suspended;
 			};
 
@@ -48,7 +48,7 @@
 				io = <10>;
 				/* Configure led for blinking at boot */
 				linux,default-trigger = "timer";
-				led-pattern = <5000>, <5000>;
+				led-pattern = <5000 5000>;
 				retain-state-suspended;
 			};
 		};
