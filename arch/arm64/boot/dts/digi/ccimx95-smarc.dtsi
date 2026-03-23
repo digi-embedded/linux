@@ -87,7 +87,7 @@
 		};
 
 		pwrkey {
-			compatible = "digi,mca-pwrkey";
+			compatible = "digi,mca-smarc-pwrkey";
 			digi,key-power;
 			digi,key-power-up;
 			digi,key-sleep;

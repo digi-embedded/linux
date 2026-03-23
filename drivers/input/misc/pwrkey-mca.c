@@ -491,9 +491,15 @@ static struct mca_pwrkey_data mca_pwrkey_devdata = {
 };
 
 static const struct of_device_id mca_pwrkey_ids[] = {
-        { .compatible = "digi,mca-pwrkey",
-	  .data = &mca_pwrkey_devdata},
-        { /* sentinel */ }
+	{
+		.compatible = "digi,mca-pwrkey",
+		.data = &mca_pwrkey_devdata
+	},
+	{
+		.compatible = "digi,mca-smarc-pwrkey",
+		.data = &mca_pwrkey_devdata,
+	},
+	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_pwrkey_ids);
 #endif
