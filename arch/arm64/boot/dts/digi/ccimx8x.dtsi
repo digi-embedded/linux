@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2024 Digi International Inc.
+ * Copyright 2018-2026 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -370,21 +370,27 @@
 
 		gpio_wdt: gpio-wdt {
 			compatible = "digi,mca-gpio-wdt";
+			#address-cells = <1>;
+			#size-cells = <0>;
 			status = "disabled";
 
 			gpio_wdt0: gpio-wdt@210 {
+				reg = <0x210>;
 				status = "disabled";
 			};
 
 			gpio_wdt1: gpio-wdt@220 {
+				reg = <0x220>;
 				status = "disabled";
 			};
 
 			gpio_wdt2: gpio-wdt@230 {
+				reg = <0x230>;
 				status = "disabled";
 			};
 
 			gpio_wdt3: gpio-wdt@240 {
+				reg = <0x240>;
 				status = "disabled";
 			};
 		};
