@@ -1,0 +1,32 @@
+$id: "http://devicetree.org/schemas/mfd/digi,mca-kl17.yaml#"
+
+allOf:
+  - $ref: /schemas/mfd/digi,mca-common.yaml#
+
+properties:
+  compatible:
+    const: digi,mca-kl17
+
+patternProperties:
+  "^adc$":
+    $ref: /schemas/iio/adc/digi,mca-adc.yaml#
+
+  "^pwrkey$":
+    $ref: /schemas/input/digi,mca-pwrkey.yaml#
+
+  "^tamper$":
+    $ref: /schemas/misc/digi,mca-tamper.yaml#
+
+  "^uart$":
+    $ref: /schemas/serial/digi,mca-uart.yaml#
+
+  "^wdt$":
+    $ref: /schemas/watchdog/digi,mca-wdt.yaml#
+
+  "^pwms$":
+    $ref: /schemas/pwm/digi,mca-pwm.yaml#
+
+required:
+  - compatible
+
+unevaluatedProperties: false
