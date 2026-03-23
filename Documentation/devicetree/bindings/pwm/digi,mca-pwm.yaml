@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/pwm/digi,mca-pwm.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Digi MCA PWM controllers
+
+maintainers:
+  - name: Digi International
+    email: hector.palacios@digi.com
+
+description: |
+  Digi MCA PWM controller block. The child nodes represent individual PWM
+  controllers (pwmchips) exposed by the MCA.
+
+properties:
+  compatible:
+    const: digi,mca-pwm
+
+  "#address-cells":
+    const: 1
+
+  "#size-cells":
+    const: 0
+
+patternProperties:
+  "^pwm@[0-9a-f]+$":
+    type: object
+    description: MCA PWM controller instance
+
+    properties:
+      reg:
+        description: Index of the MCA PWM controller.
+        maxItems: 1
+
+      pwm-channels:
+        description:
+          Number of channels provided by this PWM controller. The PWM period
+          is common to all channels in the same controller.
+        minimum: 1
+        maxItems: 1
+
+      "#pwm-cells":
+        const: 3
+
+    required:
+      - reg
+      - pwm-channels
+      - "#pwm-cells"
+
+    additionalProperties: false
+
+required:
+  - compatible
+  - "#address-cells"
+  - "#size-cells"
+
+additionalProperties: false
+
+examples:
+  - |
+    mca@63 {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        pwms {
+            compatible = "digi,mca-pwm";
+            #address-cells = <1>;
+            #size-cells = <0>;
+
+            pwm@0 {
+                reg = <0>;
+                pwm-channels = <6>;
+                #pwm-cells = <3>;
+            };
+
+            pwm@1 {
+                reg = <1>;
+                pwm-channels = <2>;
+                #pwm-cells = <3>;
+            };
+
+            pwm@2 {
+                reg = <2>;
+                pwm-channels = <2>;
+                #pwm-cells = <3>;
+            };
+        };
+    };
