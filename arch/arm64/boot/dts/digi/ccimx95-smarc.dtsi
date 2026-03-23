@@ -210,6 +210,11 @@
 	status = "okay";
 };
 
+/* Disable BBM (i.MX95 RTC and ON/OFF key) */
+&scmi_bbm {
+	status = "disabled";
+};
+
 &usdhc2 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz", "sleep";
 	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
