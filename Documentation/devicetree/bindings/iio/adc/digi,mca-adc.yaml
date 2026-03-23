@@ -1,0 +1,83 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/iio/adc/digi,mca-adc.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Digi MCA ADC
+
+maintainers:
+  - name: Digi International
+    email: hector.palacios@digi.com
+
+description: |
+  ADC block provided by the Digi MCA (Micro Controller Assist) and
+  Digi MCA I/O expander devices.
+
+  MCA IOs that are ADC-capable can be configured as ADC inputs. They can
+  also be configured as analog comparators. In comparator mode, the input
+  is sampled periodically and an interrupt is generated based on the
+  comparison result against configured thresholds.
+
+properties:
+  compatible:
+    enum:
+      - digi,mca-adc
+      - digi,mca-ioexp-adc
+
+  digi,adc-ch-list:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: List of MCA IOs enabled as ADC channels.
+
+  digi,comparator-ch-list:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: List of MCA IOs enabled as analog comparator channels.
+
+  digi,adc-vref:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: ADC reference voltage in microvolts.
+
+  digi,internal-vref:
+    type: boolean
+    description: |
+      Use the internal 1.2 V reference.
+
+      On ConnectCore 8X, this forces MCA_VREF_OUT to be configured as a
+      1.2 V output.
+
+      On ConnectCore 6UL, this forces MCA_IO2/EXT_VREF to be configured as
+      a 1.2 V output. A 100 nF capacitor must be placed between
+      MCA_IO2/EXT_VREF and GND for proper operation.
+
+required:
+  - compatible
+
+allOf:
+  - oneOf:
+      - required:
+          - digi,adc-vref
+      - required:
+          - digi,internal-vref
+
+additionalProperties: false
+
+examples:
+  - |
+    mca@7e {
+        mca_adc: adc {
+            compatible = "digi,mca-adc";
+            digi,adc-ch-list = <0 4>;
+            digi,comparator-ch-list = <3>;
+            digi,adc-vref = <3000000>;
+        };
+    };
+
+  - |
+    mca_io@6e {
+        ioexp_adc: adc {
+            compatible = "digi,mca-ioexp-adc";
+            digi,adc-ch-list = <0 4>;
+            digi,comparator-ch-list = <3>;
+            digi,adc-vref = <3000000>;
+        };
+    };
