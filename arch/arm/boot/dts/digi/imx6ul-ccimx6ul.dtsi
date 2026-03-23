@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Digi International, Inc.
+ * Copyright 2016-2026 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -140,7 +140,6 @@
 
 			mca_uart0: serial@900 {
 				reg = <0x900>;
-				index = <0>;
 			};
 		};
 	};

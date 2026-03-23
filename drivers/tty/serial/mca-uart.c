@@ -872,13 +872,7 @@ static int mca_uart_get_config_of(struct mca_uart_drv *uart_drv, int num_uarts)
 			continue;
 		}
 		mca_uart->baddr = val;
-
-		if (of_property_read_u32(node, "index", &val)) {
-			dev_err(uart_drv->dev,
-				"invalid/missing index entry in devicetree\n");
-			continue;
-		}
-		mca_uart->line = val;
+		mca_uart->line = (val - MCA_UART0_OFFSET) / MCA_REG_UART_LEN;
 
 		if (mca_uart_get_pins(uart_drv, mca_uart, node))
 			continue;
