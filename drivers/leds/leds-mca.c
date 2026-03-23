@@ -215,18 +215,13 @@ static int mca_led_probe(struct platform_device *pdev)
 		 */
 		count = of_property_count_u32_elems(node, "led-pattern");
 		if (count == 2) {
-			u32 *pattern = kcalloc(count, sizeof(*pattern), GFP_KERNEL);
-			if (!pattern)
-				continue;
+			u32 pattern[2];
 
-			if (of_property_read_u32_array(node, "led-pattern", pattern,
-						       count)) {
-				kfree(pattern);
-				continue;
+			if (!of_property_read_u32_array(node, "led-pattern",
+							pattern, 2)) {
+				led->cdev.blink_delay_on = pattern[0];
+				led->cdev.blink_delay_off = pattern[1];
 			}
-			led->cdev.blink_delay_on = pattern[0];
-			led->cdev.blink_delay_off = pattern[1];
-			kfree(pattern);
 		}
 
 		/* Parse some DT properties that configure LEDs bahavior */
