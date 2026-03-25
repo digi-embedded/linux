@@ -1525,6 +1525,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 		.datbuf = buf,
 	};
 	int ret;
+	int cret;
 
 	if (mtd->flags & MTD_NONENCRYPTED) {
 		ret = mtd_read_oob(mtd, from, &ops);
@@ -1554,18 +1555,18 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 	ops.datbuf = tmpbuf;
 	ret = mtd_read_oob(mtd, afrom, &ops);
 	*retlen = ops.retlen;
-	if (unlikely(ret < 0)) {
+	if (unlikely((ret < 0) && !mtd_is_bitflip(ret))) {
 		kfree(tmpbuf);
 		return ret;
 	}
 
-	ret = mtdcrypt_crypt(mtd->crypt_info, tmpbuf, tmpbuf,
+	cret = mtdcrypt_crypt(mtd->crypt_info, tmpbuf, tmpbuf,
 			len, afrom >> mtd->crypt_info->block_shift,
 			MTD_DECRYPT);
-	if (unlikely(ret < 0)) {
+	if (unlikely(cret < 0)) {
 		kfree(tmpbuf);
-		pr_err("Decryption failed with %d\n", ret);
-		return ret;
+		pr_err("Decryption failed with %d\n", cret);
+		return cret;
 	}
 	/* Adjust for unaligned read */
 	memcpy(buf, tmpbuf + fromdiff, olen);
