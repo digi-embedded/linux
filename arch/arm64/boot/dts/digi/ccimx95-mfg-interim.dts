@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2025 Digi International Inc.
+ * Copyright 2025-2026 Digi International Inc.
  */
 
 /dts-v1/;
@@ -133,7 +133,6 @@
 };
 
 &adc1 {
-	vref-supply = <&reg_vdd_1v8_dummy>;
 	status = "okay";
 };
 
@@ -684,7 +683,7 @@
 			IMX95_PAD_GPIO_IO15__GPIO2_IO_BIT15		0x3fe
 			/* SPI8_MISO - J38.5 */
 			IMX95_PAD_GPIO_IO13__GPIO2_IO_BIT13		0x3fe
-			/* SPI8_MOSI - J38.6 */			
+			/* SPI8_MOSI - J38.6 */
 			IMX95_PAD_GPIO_IO14__GPIO2_IO_BIT14		0x3fe
 			/* MIKROBUS_PWM - J39.1 */
 			IMX95_PAD_GPIO_IO24__GPIO2_IO_BIT24		0x3fe

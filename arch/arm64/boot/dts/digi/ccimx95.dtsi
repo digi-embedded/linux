@@ -143,6 +143,11 @@
 	};
 };
 
+&adc1 {
+	/* ADC Vref is internal 1.8V */
+	vref-supply = <&reg_vdd_1v8_dummy>;
+};
+
 /* Enable GPIO1 to be used in Linux (not reserved by SM) */
 &gpio1 {
 	status = "okay";

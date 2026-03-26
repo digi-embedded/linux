@@ -76,13 +76,6 @@
 			vin-supply = <&reg_5v_board>;
 			enable-active-low;
 		};
-
-		reg_vref_1v8: regulator-adc-vref {
-			compatible = "regulator-fixed";
-			regulator-name = "vref_1v8";
-			regulator-min-microvolt = <1800000>;
-			regulator-max-microvolt = <1800000>;
-		};
 	};
 
 	sound_max98089: sound-max98089 {
@@ -126,7 +119,6 @@
 
 /* ADC - 4 channels available on expansion connector */
 &adc1 {
-	vref-supply = <&reg_vref_1v8>;
 	status = "okay";
 };
 
