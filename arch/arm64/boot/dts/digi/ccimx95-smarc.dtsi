@@ -59,7 +59,7 @@
 	#size-cells = <0>;
 	status = "okay";
 
-	mca: mca@20 {
+	mca_cc95_smarc: mca@20 {
 		compatible = "digi,mca-stm32u031";
 		reg = <0x20>;
 		interrupt-parent = <&gpio1>;
@@ -74,7 +74,7 @@
 			gpio-controller;
 			#gpio-cells = <2>;
 
-			interrupt-parent = <&mca>;
+			interrupt-parent = <&mca_cc95_smarc>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
 
