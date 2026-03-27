@@ -417,32 +417,6 @@
 		>;
 	};
 
-	pinctrl_reg_3v3_board: reg3v3grp {
-		fsl,pins = <
-			/* 3V3_BOARD_EN */
-			IMX95_PAD_GPIO_IO34__GPIO5_IO_BIT14		0x31e
-		>;
-	};
-
-	pinctrl_reg_5v_board: reg5vgrp {
-		fsl,pins = <
-			/* 5V_DVK_PWR_ON */
-			IMX95_PAD_SAI1_RXD0__AONMIX_TOP_GPIO1_IO_BIT14	0x31e
-		>;
-	};
-
-	pinctrl_reg_can1_stby: regcan1stbygrp {
-		fsl,pins = <
-			IMX95_PAD_SAI1_TXFS__AONMIX_TOP_GPIO1_IO_BIT11	0x31e
-		>;
-	};
-
-	pinctrl_reg_can2_stby: regcan2stbygrp {
-		fsl,pins = <
-			IMX95_PAD_SAI1_TXD0__AONMIX_TOP_GPIO1_IO_BIT13	0x31e
-		>;
-	};
-
 	pinctrl_uart7_rs485: uart7grprs485 {
 		fsl,pins = <
 			IMX95_PAD_GPIO_IO37__LPUART7_RX			0x31e
