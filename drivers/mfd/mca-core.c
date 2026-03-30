@@ -443,7 +443,7 @@ static const struct mfd_cell mca_stm32u031_devs[] = {
 		.name           = MCA_DRVNAME_PWRKEY,
 		.num_resources  = ARRAY_SIZE(mca_pwrkey_resources),
 		.resources      = mca_pwrkey_resources,
-		.of_compatible = "digi,mca-pwrkey",
+		.of_compatible = "digi,mca-smarc-pwrkey",
 	},
 };
 
