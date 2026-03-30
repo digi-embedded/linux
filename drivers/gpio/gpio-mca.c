@@ -1,6 +1,6 @@
 /* gpio-mca.c - GPIO driver for MCA devices.
  *
- * Copyright (C) 2017 - 2022  Digi International Inc
+ * Copyright (C) 2017-2026  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -463,14 +463,24 @@ static int mca_gpio_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct device *mca_dev = mca->dev;
+	const struct mca_gpio_data *devdata;
 	struct regmap *regmap = mca->regmap;
 	int *gpio_base = &mca->gpio_base;
 	struct mca_gpio *gpio;
+
 	struct device_node *np;
 	struct property *prop;
 	const __be32 *p;
 	unsigned int val;
 	int ret, i, ngpio, nbank;
+
+	devdata = of_device_get_match_data(&pdev->dev);
+	if (!devdata)
+		return -EINVAL;
+
+	np = pdev->dev.of_node;
+	if (!np || !of_device_is_available(np))
+		return -ENODEV;
 
 	gpio = devm_kzalloc(&pdev->dev, sizeof(*gpio), GFP_KERNEL);
 	if (!gpio) {
@@ -509,40 +519,21 @@ static int mca_gpio_probe(struct platform_device *pdev)
 	gpio->gc.parent = &pdev->dev;
 	platform_set_drvdata(pdev, gpio);
 
-	/* Find entry in device-tree */
-	if (mca_dev->of_node) {
-		const struct mca_gpio_data *devdata =
-				    of_device_get_match_data(&pdev->dev);
-		const char * compatible = pdev->dev.driver->
-				    of_match_table[devdata->devtype].compatible;
+	/* Set controller label */
+	gpio->gc.label = devdata->label;
+	/* Get the list of IOs that can wake up from power off */
+	if (of_find_property(np, "pwroff-wakeup-capable-ios", NULL)) {
+		/* Disable all and enable those specified in the DT */
+		for (i = 0; i < MCA_MAX_GPIO_IRQ_BANKS; i++)
+			gpio->pwroff_wakeup_dis[i] = 0xff;
 
-		/* Return if node does not exist or if it is disabled */
-		np = of_find_compatible_node(mca_dev->of_node, NULL, compatible);
-		if (!np) {
-			ret = -ENODEV;
-			goto err;
-		}
-		if (!of_device_is_available(np)) {
-			ret = -ENODEV;
-			goto err;
-		}
-
-		/* Set controller label */
-		gpio->gc.label = devdata->label;
-		/* Get the list of IOs that can wake up from power off */
-		if (of_find_property(np, "pwroff-wakeup-capable-ios", NULL)) {
-			/* Disable all and enable those specified in the DT */
-			for (i = 0; i < MCA_MAX_GPIO_IRQ_BANKS; i++)
-				gpio->pwroff_wakeup_dis[i] = 0xff;
-
-			ret = of_property_count_u32_elems(np,
-						"pwroff-wakeup-capable-ios");
-			if (ret > 0) {
-				of_property_for_each_u32(np, "pwroff-wakeup-capable-ios",
-							 prop, p, val) {
-					if (val < MCA_MAX_IOS)
-						mca_gpio_pwroff_wakeup_enable(gpio, val, 1);
-				}
+		ret = of_property_count_u32_elems(np,
+					"pwroff-wakeup-capable-ios");
+		if (ret > 0) {
+			of_property_for_each_u32(np, "pwroff-wakeup-capable-ios",
+							prop, p, val) {
+				if (val < MCA_MAX_IOS)
+					mca_gpio_pwroff_wakeup_enable(gpio, val, 1);
 			}
 		}
 	}

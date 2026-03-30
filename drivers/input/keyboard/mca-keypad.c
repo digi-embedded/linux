@@ -1,6 +1,6 @@
 /* mca-keypad.c - Keypad driver for MCA devices.
  *
- * Copyright (C) 2020  Digi International Inc
+ * Copyright (C) 2020-2026 Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -248,19 +248,9 @@ static int mca_kp_probe(struct platform_device *pdev)
 	struct device_node *np = NULL;
 	int ret = 0;
 
-	if (!mca || !mca->dev || !mca->dev->parent ||
-	    !mca->dev->parent->of_node)
-		return -EPROBE_DEFER;
-
-	if (mca->dev->of_node) {
-		const char * compatible = pdev->dev.driver->
-				    of_match_table[0].compatible;
-
-		/* Return if keypad node does not exist or if it is disabled */
-		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
-		if (!np || !of_device_is_available(np))
-			return -ENODEV;
-	}
+	np = pdev->dev.of_node;
+	if (!np || !of_device_is_available(np))
+		return -ENODEV;
 
 	kp = devm_kzalloc(&pdev->dev, sizeof(struct mca_kp), GFP_KERNEL);
 	if (!kp) {

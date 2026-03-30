@@ -1,7 +1,7 @@
 /*
  * GPIO refresh watchdog driver for MCA on ConnectCore modules
  *
- * Copyright(c) 2021 - 2022 Digi International Inc.
+ * Copyright(c) 2021-2026 Digi International Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -193,6 +193,10 @@ static int mca_wdt_probe(struct platform_device *pdev)
 	struct device_node *np;
 	int ret, i;
 
+	np = pdev->dev.of_node;
+	if (!np || !of_device_is_available(np))
+		return -ENODEV;
+
 	wdt = devm_kzalloc(&pdev->dev, sizeof(*wdt), GFP_KERNEL);
 	if (!wdt) {
 		dev_err(mca->dev, "Failed to allocate watchdog device\n");
@@ -204,32 +208,13 @@ static int mca_wdt_probe(struct platform_device *pdev)
 	kref_init(&wdt->kref);
 	platform_set_drvdata(pdev, wdt);
 
-	/* Find entry in device-tree */
-        if (mca->dev->of_node) {
-		const char * compatible = pdev->dev.driver->
-				    of_match_table[0].compatible;
-		/*
-		 * Return silently if watchdog node does not exist
-		 * or if it is disabled
-		 */
-		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
-		if (!np) {
-			ret = -ENODEV;
-			goto err;
-		}
-		if (!of_device_is_available(np)) {
-			ret = -ENODEV;
-			goto err;
-		}
+	/* Parse DT properties */
+	ret = of_mca_wdt_init(np, wdt);
+	if (ret)
+		goto err;
 
-		/* Parse DT properties */
-		ret = of_mca_wdt_init(np, wdt);
-		if (ret)
-			goto err;
-        }
-
-        /* Configure WDT options */
-        ret = mca_config_options(wdt);
+	/* Configure WDT options */
+	ret = mca_config_options(wdt);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to configure WDT options\n");
 		goto err;

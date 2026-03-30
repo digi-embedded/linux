@@ -1,5 +1,5 @@
 /* rtc-mca.c - Real time clock device driver for MCA on ConnectCore modules
- * Copyright (C) 2016 - 2023  Digi International
+ * Copyright (C) 2016-2026  Digi International
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -459,8 +459,9 @@ static int mca_rtc_probe(struct platform_device *pdev)
 	struct device_node *np = NULL;
 	int ret = 0;
 
-	if (!mca || !mca->dev->parent->of_node)
-		return -EPROBE_DEFER;
+	np = pdev->dev.of_node;
+	if (!np || !of_device_is_available(np))
+		return -ENODEV;
 
 	rtc = devm_kzalloc(&pdev->dev, sizeof *rtc, GFP_KERNEL);
 	if (!rtc)
@@ -472,26 +473,6 @@ static int mca_rtc_probe(struct platform_device *pdev)
 
 	/* Use prepare command depending on the version of the firmware */
 	rtc->prepare_enabled = mca->rtc_prepare_enabled;
-
-	/* Find entry in device-tree */
-	if (mca->dev->of_node) {
-		const char * compatible = pdev->dev.driver->
-				    of_match_table[0].compatible;
-
-		/*
-		 * Return silently if RTC node does not exist
-		 * or if it is disabled
-		 */
-		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
-		if (!np) {
-			ret = -ENODEV;
-			goto err;
-		}
-		if (!of_device_is_available(np)) {
-			ret = -ENODEV;
-			goto err;
-		}
-	}
 
 	/* Enable RTC hardware */
 	ret = regmap_update_bits(mca->regmap, MCA_RTC_CONTROL,

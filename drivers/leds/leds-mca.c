@@ -1,5 +1,5 @@
 /*
- *  Copyright 2020-2022 Digi International Inc
+ *  Copyright 2020-2026 Digi International Inc
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -120,19 +120,13 @@ static int mca_led_probe(struct platform_device *pdev)
 	struct device_node *np = NULL;
 	int ret, num_leds;
 
+	np = pdev->dev.of_node;
+	if (!np || !of_device_is_available(np))
+		return -ENODEV;
+
 	/* wait for the gpio-mca driver until it is initialized */
 	if (mca->gpio_base == -1)
 		return -EPROBE_DEFER;
-
-	if (mca->dev->of_node) {
-		const char * compatible = pdev->dev.driver->
-				    of_match_table[0].compatible;
-
-		/* Return if mca-led node does not exist or if it is disabled */
-		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
-		if (!np || !of_device_is_available(np))
-			return -ENODEV;
-	}
 
 	if (!mca_feature_is_supported(mca, MCA_FUNC_LEDS)) {
 		dev_err(&pdev->dev,

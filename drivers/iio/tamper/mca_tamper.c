@@ -1,6 +1,6 @@
 /* mca_tamper.c - Tamper driver for MCA on ConnectCore modules
  *
- * Copyright (C) 2016 - 2022  Digi International Inc
+ * Copyright (C) 2016-2026  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -572,7 +572,7 @@ static int mca_tamper_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct mca_tamper **mca_tamper = NULL;
-	const struct mca_tamper_data *devdata = of_device_get_match_data(&pdev->dev);
+	const struct mca_tamper_data *devdata;
 	struct device_node *np;
 	struct property *prop;
 	const __be32 *cur;
@@ -581,9 +581,13 @@ static int mca_tamper_probe(struct platform_device *pdev)
 	u16 num_tamper_ifaces;
 	u16 digital_tamper_cnt;
 
-	if (!mca || !mca->dev || !mca->dev->of_node || !devdata \
-		 || mca->gpio_base < 0)
-		return -EPROBE_DEFER;
+	devdata = of_device_get_match_data(&pdev->dev);
+	if (!devdata)
+		return -EINVAL;
+
+	np = pdev->dev.of_node;
+	if (!np || !of_device_is_available(np))
+		return -ENODEV;
 
 	pr_info("Tamper driver for MCA\n");
 
@@ -603,17 +607,6 @@ static int mca_tamper_probe(struct platform_device *pdev)
 
 	for (iface = 0; iface < num_tamper_ifaces; iface++)
 		mca_tamper[iface] = NULL;
-
-	/* Return silently if RTC node does not exist or if it is disabled */
-	{
-		const char * compatible = pdev->dev.driver->
-				  of_match_table[0].compatible;
-		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
-	}
-	if (!np || !of_device_is_available(np)) {
-		ret = -ENODEV;
-		goto exit_error;
-	}
 
 	of_property_for_each_u32(np, "digi,tamper-if-list",
 				 prop, cur, iface) {
