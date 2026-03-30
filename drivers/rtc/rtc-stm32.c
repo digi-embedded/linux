@@ -847,6 +847,7 @@ static const struct stm32_rtc_data stm32mp25_data = {
 		.prer = 0x10,
 		.alrmar = 0x40,
 		.wpr = 0x24,
+		.calr = 0x28,
 		.sr = 0x50,
 		.scr = 0x5C,
 		.cfgr = 0x60,
@@ -891,7 +892,7 @@ static int stm32_rtc_init(struct platform_device *pdev,
 {
 	const struct stm32_rtc_registers *regs = &rtc->data->regs;
 	unsigned int prer, pred_a, pred_s, pred_a_max, pred_s_max, cr;
-	unsigned int calp, calm, calm_max;
+	unsigned int calp = 0, calm = 0, calm_max;
 	u32 calr, new_calr;
 	unsigned int rate;
 	int ret;
