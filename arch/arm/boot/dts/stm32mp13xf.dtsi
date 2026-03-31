@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2021 - All Rights Reserved
+ * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
+ */
+
+/ {
+	soc {
+		cryp: crypto@54002000 {
+			compatible = "st,stm32mp1-cryp";
+			reg = <0x54002000 0x400>;
+			interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&rcc CRYP1>;
+			resets = <&rcc CRYP1_R>;
+			dmas = <&mdma 28 0x0 0x400202 0x0 0x0 0x0>,
+			       <&mdma 29 0x3 0x400808 0x0 0x0 0x0>;
+			dma-names = "in", "out";
+			status = "disabled";
+		};
+	};
+};

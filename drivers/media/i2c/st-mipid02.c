@@ -50,6 +50,7 @@
 /* Bits definition for MIPID02_MODE_REG2 */
 #define MODE_HSYNC_ACTIVE_HIGH				BIT(1)
 #define MODE_VSYNC_ACTIVE_HIGH				BIT(2)
+#define MODE_PCLK_SAMPLE_RISING				BIT(3)
 /* Bits definition for MIPID02_DATA_SELECTION_CTRL */
 #define SELECTION_MANUAL_DATA				BIT(2)
 #define SELECTION_MANUAL_WIDTH				BIT(3)
@@ -63,7 +64,8 @@ static const u32 mipid02_supported_fmt_codes[] = {
 	MEDIA_BUS_FMT_SGRBG12_1X12, MEDIA_BUS_FMT_SRGGB12_1X12,
 	MEDIA_BUS_FMT_UYVY8_1X16, MEDIA_BUS_FMT_BGR888_1X24,
 	MEDIA_BUS_FMT_RGB565_2X8_LE, MEDIA_BUS_FMT_RGB565_2X8_BE,
-	MEDIA_BUS_FMT_YUYV8_2X8, MEDIA_BUS_FMT_UYVY8_2X8,
+	MEDIA_BUS_FMT_YUYV8_2X8, MEDIA_BUS_FMT_YVYU8_2X8,
+	MEDIA_BUS_FMT_UYVY8_2X8, MEDIA_BUS_FMT_VYUY8_2X8,
 	MEDIA_BUS_FMT_JPEG_1X8
 };
 
@@ -132,7 +134,9 @@ static int bpp_from_code(__u32 code)
 		return 12;
 	case MEDIA_BUS_FMT_UYVY8_1X16:
 	case MEDIA_BUS_FMT_YUYV8_2X8:
+	case MEDIA_BUS_FMT_YVYU8_2X8:
 	case MEDIA_BUS_FMT_UYVY8_2X8:
+	case MEDIA_BUS_FMT_VYUY8_2X8:
 	case MEDIA_BUS_FMT_RGB565_2X8_LE:
 	case MEDIA_BUS_FMT_RGB565_2X8_BE:
 		return 16;
@@ -163,7 +167,9 @@ static u8 data_type_from_code(__u32 code)
 		return 0x2c;
 	case MEDIA_BUS_FMT_UYVY8_1X16:
 	case MEDIA_BUS_FMT_YUYV8_2X8:
+	case MEDIA_BUS_FMT_YVYU8_2X8:
 	case MEDIA_BUS_FMT_UYVY8_2X8:
+	case MEDIA_BUS_FMT_VYUY8_2X8:
 		return 0x1e;
 	case MEDIA_BUS_FMT_BGR888_1X24:
 		return 0x24;
@@ -494,6 +500,8 @@ static int mipid02_configure_from_tx(struct mipid02_dev *bridge)
 		bridge->r.mode_reg2 |= MODE_HSYNC_ACTIVE_HIGH;
 	if (ep->bus.parallel.flags & V4L2_MBUS_VSYNC_ACTIVE_HIGH)
 		bridge->r.mode_reg2 |= MODE_VSYNC_ACTIVE_HIGH;
+	if (ep->bus.parallel.flags & V4L2_MBUS_PCLK_SAMPLE_RISING)
+		bridge->r.mode_reg2 |= MODE_PCLK_SAMPLE_RISING;
 
 	return 0;
 }

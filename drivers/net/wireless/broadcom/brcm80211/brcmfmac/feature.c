@@ -15,8 +15,9 @@
 #include "fwil_types.h"
 #include "feature.h"
 #include "common.h"
+#include "xtlv.h"
+#include "twt.h"
 
-#define BRCMF_FW_UNSUPPORTED	23
 
 /*
  * expand feature list to array of feature strings.
@@ -41,8 +42,14 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
 	{ BRCMF_FEAT_MONITOR_FLAG, "rtap" },
 	{ BRCMF_FEAT_MONITOR_FMT_RADIOTAP, "rtap" },
 	{ BRCMF_FEAT_DOT11H, "802.11h" },
-	{ BRCMF_FEAT_SAE, "sae" },
+	{ BRCMF_FEAT_SAE, "sae " },
 	{ BRCMF_FEAT_FWAUTH, "idauth" },
+	{ BRCMF_FEAT_SAE_EXT, "sae_ext " },
+	{ BRCMF_FEAT_FBT, "fbt " },
+	{ BRCMF_FEAT_OKC, "okc" },
+	{ BRCMF_FEAT_GCMP, "gcmp" },
+	{ BRCMF_FEAT_OFFLOADS, "offloads" },
+	{ BRCMF_FEAT_ULP, "ulp" },
 };
 
 #ifdef DEBUG
@@ -143,7 +150,7 @@ static void brcmf_feat_iovar_int_get(struct brcmf_if *ifp,
 	ifp->fwil_fwerr = true;
 
 	err = brcmf_fil_iovar_int_get(ifp, name, &data);
-	if (err == 0) {
+	if (err != -BRCMF_FW_UNSUPPORTED) {
 		brcmf_dbg(INFO, "enabling feature: %s\n", brcmf_feat_names[id]);
 		ifp->drvr->feat_flags |= BIT(id);
 	} else {
@@ -165,6 +172,30 @@ static void brcmf_feat_iovar_data_set(struct brcmf_if *ifp,
 
 	err = brcmf_fil_iovar_data_set(ifp, name, data, len);
 	if (err != -BRCMF_FW_UNSUPPORTED) {
+		brcmf_dbg(INFO, "enabling feature: %s\n", brcmf_feat_names[id]);
+		ifp->drvr->feat_flags |= BIT(id);
+	} else {
+		brcmf_dbg(TRACE, "%s feature check failed: %d\n",
+			  brcmf_feat_names[id], err);
+	}
+
+	ifp->fwil_fwerr = false;
+}
+
+static void brcmf_feat_iovar_enab_get(struct brcmf_if *ifp,
+					enum brcmf_feat_id id, char *name,
+					u16 subcmd_id)
+{
+	int err;
+	u8 val;
+
+	/* we need to know firmware error */
+	ifp->fwil_fwerr = true;
+
+	err = brcmf_fil_xtlv_data_get(ifp, name, subcmd_id,
+				      (void *)&val, sizeof(val));
+
+	if (!err) {
 		brcmf_dbg(INFO, "enabling feature: %s\n", brcmf_feat_names[id]);
 		ifp->drvr->feat_flags |= BIT(id);
 	} else {
@@ -248,7 +279,8 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
 	brcmf_feat_firmware_capabilities(ifp);
 	memset(&gscan_cfg, 0, sizeof(gscan_cfg));
 	if (drvr->bus_if->chip != BRCM_CC_43430_CHIP_ID &&
-	    drvr->bus_if->chip != BRCM_CC_4345_CHIP_ID)
+	    drvr->bus_if->chip != BRCM_CC_4345_CHIP_ID &&
+	    drvr->bus_if->chip != CY_CC_43439_CHIP_ID)
 		brcmf_feat_iovar_data_set(ifp, BRCMF_FEAT_GSCAN,
 					  "pfn_gscan_cfg",
 					  &gscan_cfg, sizeof(gscan_cfg));
@@ -279,6 +311,7 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
 	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_RSDB, "rsdb_mode");
 	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_TDLS, "tdls_enable");
 	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_MFP, "mfp");
+	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_DUMP_OBSS, "dump_obss");
 
 	pfn_mac.version = BRCMF_PFN_MACADDR_CFG_VER;
 	err = brcmf_fil_iovar_data_get(ifp, "pfn_macaddr", &pfn_mac,
@@ -287,6 +320,7 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
 		ifp->drvr->feat_flags |= BIT(BRCMF_FEAT_SCAN_RANDOM_MAC);
 
 	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_FWSUP, "sup_wpa");
+	brcmf_feat_iovar_enab_get(ifp, BRCMF_FEAT_TWT, "twt", BRCMF_TWT_CMD_ENAB);
 
 	if (drvr->settings->feature_disable) {
 		brcmf_dbg(INFO, "Features: 0x%02x, disable: 0x%02x\n",
@@ -326,4 +360,25 @@ bool brcmf_feat_is_quirk_enabled(struct brcmf_if *ifp,
 				 enum brcmf_feat_quirk quirk)
 {
 	return (ifp->drvr->chip_quirks & BIT(quirk));
+}
+
+bool brcmf_feat_is_6ghz_enabled(struct brcmf_if *ifp)
+{
+	return (!ifp->drvr->settings->disable_6ghz);
+}
+
+bool brcmf_feat_is_sdio_rxf_in_kthread(struct brcmf_pub *drvr)
+{
+	if (drvr)
+		return drvr->settings->sdio_rxf_in_kthread_enabled;
+	else
+		return false;
+}
+
+bool brcmf_feat_is_offloads_enabled(struct brcmf_if *ifp)
+{
+	if (ifp && ifp->drvr)
+		return ifp->drvr->settings->offload_prof;
+
+	return false;
 }

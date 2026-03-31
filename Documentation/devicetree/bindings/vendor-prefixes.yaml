@@ -427,6 +427,8 @@ patternProperties:
     description: Freescale Semiconductor
   "^fujitsu,.*":
     description: Fujitsu Ltd.
+  "^galaxycore,.*":
+    description: Galaxy Core Inc.
   "^gardena,.*":
     description: GARDENA GmbH
   "^gateworks,.*":

@@ -1,0 +1,23 @@
+regulator protection bindings
+
+
+Required properties:
+	compatible: "protection-consumer"
+	protection-supply: the phandle of the regulator to control
+
+Optional properties:
+--------------------
+	interrupt
+
+
+Example:
+
+	regulator_protection {
+		compatible = "protection-consumer";
+		protection-supply = <&vdd>;
+		status = "okay";
+
+		interrupts = <15 2>;
+		interrupt-parent = <&gpiof>;
+	};
+

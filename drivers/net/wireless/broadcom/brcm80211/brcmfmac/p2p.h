@@ -87,7 +87,7 @@ struct afx_hdl {
 	struct work_struct afx_work;
 	struct completion act_frm_scan;
 	bool is_active;
-	s32 peer_chan;
+	u16 peer_chan;
 	bool is_listen;
 	u16 my_listen_chan;
 	u16 peer_listen_chan;
@@ -138,6 +138,7 @@ struct brcmf_p2p_info {
 	bool block_gon_req_tx;
 	bool p2pdev_dynamically;
 	bool wait_for_offchan_complete;
+	struct wireless_dev *remin_on_channel_wdev;
 };
 
 s32 brcmf_p2p_attach(struct brcmf_cfg80211_info *cfg, bool p2pdev_forced);

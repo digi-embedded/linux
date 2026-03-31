@@ -23,6 +23,25 @@ config REMOTEPROC_CDEV
 
 	  It's safe to say N if you don't want to use this interface.
 
+config REMOTEPROC_SRM_CORE
+	tristate "Remoteproc System Resource Manager core"
+	depends on RPMSG
+	help
+	  Say y here to enable the core driver of the remoteproc System Resource
+	  Manager (SRM).
+	  The SRM handles resources allocated to remote processors.
+	  The core part is in charge of controlling the device children.
+
+config REMOTEPROC_SRM_DEV
+	tristate "Remoteproc System Resource Manager device"
+	depends on REMOTEPROC_SRM_CORE
+	help
+	  Say y here to enable the device driver of the remoteproc System
+	  Resource Manager (SRM).
+	  The SRM handles resources allocated to remote processors.
+	  The device part is in charge of reserving and initializing resources
+	  for a peripheral assigned to a coprocessor.
+
 config IMX_REMOTEPROC
 	tristate "i.MX remoteproc support"
 	depends on ARCH_MXC
@@ -279,6 +298,7 @@ config STM32_RPROC
 	depends on ARCH_STM32 || COMPILE_TEST
 	depends on REMOTEPROC
 	select MAILBOX
+	select TEE_REMOTEPROC
 	help
 	  Say y here to support STM32 MCU processors via the
 	  remote processor framework.
@@ -314,6 +334,15 @@ config TI_K3_R5_REMOTEPROC
 
 	  It's safe to say N here if you're not interested in utilizing
 	  a slave processor.
+
+
+config TEE_REMOTEPROC
+	tristate "trusted firmware support by a trusted application"
+	depends on OPTEE
+	help
+	  Support for trusted remote processors firmware. The firmware
+	  authentication and/or decryption are managed by a trusted application.
+	  This can be either built-in or a loadable module.
 
 endif # REMOTEPROC
 

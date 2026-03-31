@@ -31,11 +31,17 @@ struct stm32_vrefbuf {
 	void __iomem *base;
 	struct clk *clk;
 	struct device *dev;
+	u32 backup_val;
 };
 
 static const unsigned int stm32_vrefbuf_voltages[] = {
 	/* Matches resp. VRS = 000b, 001b, 010b, 011b */
 	2500000, 2048000, 1800000, 1500000,
+};
+
+static const unsigned int stm32mp13_vrefbuf_voltages[] = {
+	/* Matches resp. VRS = 000b, 001b, 010b, 011b */
+	2500000, 2048000, 1800000, 1650000,
 };
 
 static int stm32_vrefbuf_enable(struct regulator_dev *rdev)
@@ -180,11 +186,24 @@ static const struct regulator_desc stm32_vrefbuf_regu = {
 	.owner = THIS_MODULE,
 };
 
+static const struct regulator_desc stm32mp13_vrefbuf_regu = {
+	.name = "vref",
+	.supply_name = "vdda",
+	.volt_table = stm32mp13_vrefbuf_voltages,
+	.n_voltages = ARRAY_SIZE(stm32mp13_vrefbuf_voltages),
+	.ops = &stm32_vrefbuf_volt_ops,
+	.off_on_delay = 1000,
+	.type = REGULATOR_VOLTAGE,
+	.owner = THIS_MODULE,
+};
+
 static int stm32_vrefbuf_probe(struct platform_device *pdev)
 {
+	struct device *dev = &pdev->dev;
 	struct stm32_vrefbuf *priv;
 	struct regulator_config config = { };
 	struct regulator_dev *rdev;
+	const struct regulator_desc *desc;
 	int ret;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
@@ -213,14 +232,19 @@ static int stm32_vrefbuf_probe(struct platform_device *pdev)
 		goto err_pm_stop;
 	}
 
+	desc = (const struct regulator_desc *)
+		of_match_device(dev->driver->of_match_table, dev)->data;
+	if (!desc)
+		return -EINVAL;
+
 	config.dev = &pdev->dev;
 	config.driver_data = priv;
 	config.of_node = pdev->dev.of_node;
 	config.init_data = of_get_regulator_init_data(&pdev->dev,
 						      pdev->dev.of_node,
-						      &stm32_vrefbuf_regu);
+						      desc);
 
-	rdev = regulator_register(&stm32_vrefbuf_regu, &config);
+	rdev = regulator_register(desc, &config);
 	if (IS_ERR(rdev)) {
 		ret = PTR_ERR(rdev);
 		dev_err(&pdev->dev, "register failed with error %d\n", ret);
@@ -276,16 +300,51 @@ static int __maybe_unused stm32_vrefbuf_runtime_resume(struct device *dev)
 	return clk_prepare_enable(priv->clk);
 }
 
+#if defined(CONFIG_PM_SLEEP)
+static int stm32_vrefbuf_suspend(struct device *dev)
+{
+	struct regulator_dev *rdev = dev_get_drvdata(dev);
+	struct stm32_vrefbuf *priv = rdev_get_drvdata(rdev);
+	int ret;
+
+	ret = pm_runtime_get_sync(priv->dev);
+	if (ret < 0) {
+		pm_runtime_put_noidle(priv->dev);
+		return ret;
+	}
+
+	priv->backup_val = readl_relaxed(priv->base + STM32_VREFBUF_CSR);
+
+	return pm_runtime_force_suspend(dev);
+}
+
+static int stm32_vrefbuf_resume(struct device *dev)
+{
+	struct regulator_dev *rdev = dev_get_drvdata(dev);
+	struct stm32_vrefbuf *priv = rdev_get_drvdata(rdev);
+	int ret;
+
+	ret = pm_runtime_force_resume(dev);
+	if (ret < 0)
+		return ret;
+
+	writel_relaxed(priv->backup_val, priv->base + STM32_VREFBUF_CSR);
+
+	return 0;
+}
+#endif
+
 static const struct dev_pm_ops stm32_vrefbuf_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
-				pm_runtime_force_resume)
+	SET_SYSTEM_SLEEP_PM_OPS(stm32_vrefbuf_suspend,
+				stm32_vrefbuf_resume)
 	SET_RUNTIME_PM_OPS(stm32_vrefbuf_runtime_suspend,
 			   stm32_vrefbuf_runtime_resume,
 			   NULL)
 };
 
 static const struct of_device_id __maybe_unused stm32_vrefbuf_of_match[] = {
-	{ .compatible = "st,stm32-vrefbuf", },
+	{ .compatible = "st,stm32-vrefbuf", .data = (void *)&stm32_vrefbuf_regu },
+	{ .compatible = "st,stm32mp13-vrefbuf", .data = (void *)&stm32mp13_vrefbuf_regu },
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_vrefbuf_of_match);

@@ -37,6 +37,17 @@ config REGULATOR_FIXED_VOLTAGE
 	  useful for systems which use a combination of software
 	  managed regulators and simple non-configurable regulators.
 
+config REGULATOR_PROTECTION_CONSUMER
+	tristate "Regulator protection consumer"
+	depends on OF
+	help
+	  This driver handles regulator over-current detection in order to
+	  protect regulators from crashing. In case of over-current event
+	  or any IRQ, the protection consumer forces disable the regulator
+	  that was declared as supply.
+
+	  If unsure, say no.
+
 config REGULATOR_VIRTUAL_CONSUMER
 	tristate "Virtual regulator consumer support"
 	help

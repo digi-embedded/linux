@@ -534,6 +534,14 @@ static struct ubifs_sb_node *ubifs_read_sb_node(struct ubifs_info *c)
 		return ERR_PTR(err);
 	}
 
+	/* Fscrypt patch to use encrypted folder in standard rootfs */
+#if defined(CONFIG_FS_ENCRYPTION)
+	if (sup->fmt_version < 5) {
+		sup->flags |= (UBIFS_FLG_DOUBLE_HASH | UBIFS_FLG_ENCRYPTION);
+		sup->fmt_version = 5;
+	}
+#endif
+
 	return sup;
 }
 

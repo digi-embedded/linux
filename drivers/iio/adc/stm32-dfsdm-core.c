@@ -6,6 +6,7 @@
  * Author(s): Arnaud Pouliquen <arnaud.pouliquen@st.com> for STMicroelectronics.
  */
 
+#include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/iio/iio.h>
 #include <linux/iio/sysfs.h>
@@ -20,6 +21,7 @@
 #include "stm32-dfsdm.h"
 
 struct stm32_dfsdm_dev_data {
+	u32 ipid;
 	unsigned int num_filters;
 	unsigned int num_channels;
 	const struct regmap_config *regmap_cfg;
@@ -27,8 +29,6 @@ struct stm32_dfsdm_dev_data {
 
 #define STM32H7_DFSDM_NUM_FILTERS	4
 #define STM32H7_DFSDM_NUM_CHANNELS	8
-#define STM32MP1_DFSDM_NUM_FILTERS	6
-#define STM32MP1_DFSDM_NUM_CHANNELS	8
 
 static bool stm32_dfsdm_volatile_reg(struct device *dev, unsigned int reg)
 {
@@ -75,8 +75,7 @@ static const struct regmap_config stm32mp1_dfsdm_regmap_cfg = {
 };
 
 static const struct stm32_dfsdm_dev_data stm32mp1_dfsdm_data = {
-	.num_filters = STM32MP1_DFSDM_NUM_FILTERS,
-	.num_channels = STM32MP1_DFSDM_NUM_CHANNELS,
+	.ipid = STM32MP15_IPIDR_NUMBER,
 	.regmap_cfg = &stm32mp1_dfsdm_regmap_cfg,
 };
 
@@ -295,6 +294,64 @@ static const struct of_device_id stm32_dfsdm_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, stm32_dfsdm_of_match);
 
+static int stm32_dfsdm_config_check(struct platform_device *pdev,
+				    struct dfsdm_priv *priv,
+				    const struct stm32_dfsdm_dev_data *dev_data)
+{
+	struct device_node *np = pdev->dev.of_node;
+	struct device_node *child;
+	struct stm32_dfsdm *dfsdm = &priv->dfsdm;
+	const char *compat;
+	int ret, count = 0;
+	u32 id, val;
+
+	if (!dev_data->ipid) {
+		dfsdm->num_fls = dev_data->num_filters;
+		dfsdm->num_chs = dev_data->num_channels;
+		return 0;
+	}
+
+	ret = regmap_read(dfsdm->regmap, DFSDM_IPIDR, &val);
+	if (ret)
+		return ret;
+
+	id = FIELD_GET(DFSDM_IPIDR_MASK, val);
+	if (id != dev_data->ipid) {
+		dev_err(&pdev->dev, "Unexpected IP version: 0x%x", id);
+		return -EINVAL;
+	}
+
+	for_each_child_of_node(np, child) {
+		ret = of_property_read_string(child, "compatible", &compat);
+		if (ret)
+			continue;
+		count++;
+	}
+
+	ret = regmap_read(dfsdm->regmap, DFSDM_HWCFGR, &val);
+	if (ret)
+		return ret;
+
+	dfsdm->num_fls = FIELD_GET(DFSDM_HWCFGR_NBF_MASK, val);
+	dfsdm->num_chs = FIELD_GET(DFSDM_HWCFGR_NBT_MASK, val);
+
+	if (count > dfsdm->num_fls) {
+		dev_err(&pdev->dev, "Unexpected child number: %d", count);
+		return -EINVAL;
+	}
+
+	ret = regmap_read(dfsdm->regmap, DFSDM_VERR, &val);
+	if (ret)
+		return ret;
+
+	dev_dbg(&pdev->dev, "DFSDM version: %lu.%lu. %d channels/%d filters\n",
+		FIELD_GET(DFSDM_VERR_MAJREV_MASK, val),
+		FIELD_GET(DFSDM_VERR_MINREV_MASK, val),
+		dfsdm->num_chs, dfsdm->num_fls);
+
+	return 0;
+}
+
 static int stm32_dfsdm_probe(struct platform_device *pdev)
 {
 	struct dfsdm_priv *priv;
@@ -311,18 +368,6 @@ static int stm32_dfsdm_probe(struct platform_device *pdev)
 	dev_data = of_device_get_match_data(&pdev->dev);
 
 	dfsdm = &priv->dfsdm;
-	dfsdm->fl_list = devm_kcalloc(&pdev->dev, dev_data->num_filters,
-				      sizeof(*dfsdm->fl_list), GFP_KERNEL);
-	if (!dfsdm->fl_list)
-		return -ENOMEM;
-
-	dfsdm->num_fls = dev_data->num_filters;
-	dfsdm->ch_list = devm_kcalloc(&pdev->dev, dev_data->num_channels,
-				      sizeof(*dfsdm->ch_list),
-				      GFP_KERNEL);
-	if (!dfsdm->ch_list)
-		return -ENOMEM;
-	dfsdm->num_chs = dev_data->num_channels;
 
 	ret = stm32_dfsdm_parse_of(pdev, priv);
 	if (ret < 0)
@@ -337,6 +382,20 @@ static int stm32_dfsdm_probe(struct platform_device *pdev)
 			__func__, ret);
 		return ret;
 	}
+
+	ret = stm32_dfsdm_config_check(pdev, priv, dev_data);
+	if (ret < 0)
+		return ret;
+
+	dfsdm->fl_list = devm_kcalloc(&pdev->dev, dfsdm->num_fls,
+				      sizeof(*dfsdm->fl_list), GFP_KERNEL);
+	if (!dfsdm->fl_list)
+		return -ENOMEM;
+
+	dfsdm->ch_list = devm_kcalloc(&pdev->dev, dfsdm->num_chs,
+				      sizeof(*dfsdm->ch_list), GFP_KERNEL);
+	if (!dfsdm->ch_list)
+		return -ENOMEM;
 
 	platform_set_drvdata(pdev, dfsdm);
 

@@ -30,6 +30,8 @@
 #include <linux/uaccess.h>
 
 #include <asm/unaligned.h>
+#include <linux/of_device.h>
+#include <drm/drm_mipi_dsi.h>
 
 #define WORK_REGISTER_THRESHOLD		0x00
 #define WORK_REGISTER_REPORT_RATE	0x08
@@ -914,6 +916,10 @@ static int edt_ft5x06_ts_identify(struct i2c_client *client,
 			snprintf(model_name, EDT_NAME_LEN, "EP%i%i0ML00",
 				rdbuf[0] >> 4, rdbuf[0] & 0x0F);
 			break;
+		case 0x51:   /* Rocktech Rk043fn48h Display */
+			tsdata->version = EV_FT;
+			snprintf(model_name, EDT_NAME_LEN, "FT5336GQQ");
+			break;
 		case 0x5a:   /* Solomon Goldentek Display */
 			snprintf(model_name, EDT_NAME_LEN, "GKTW50SCED1R0");
 			break;
@@ -1078,12 +1084,37 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 	const struct edt_i2c_chip_data *chip_data;
 	struct edt_ft5x06_ts_data *tsdata;
 	u8 buf[2] = { 0xfc, 0x00 };
+	struct mipi_dsi_device *panel;
+	struct device_node *np;
 	struct input_dev *input;
 	unsigned long irq_flags;
+	struct device_link *dlink;
 	int error;
 	char fw_version[EDT_NAME_LEN];
 
 	dev_dbg(&client->dev, "probing for EDT FT5x06 I2C\n");
+
+	np = of_parse_phandle(client->dev.of_node, "panel", 0);
+	if (np) {
+		panel = of_find_mipi_dsi_device_by_node(np);
+		of_node_put(np);
+		if (!panel)
+			return -EPROBE_DEFER;
+
+		dlink = device_link_add(&client->dev, &panel->dev, DL_FLAG_AUTOREMOVE_CONSUMER);
+
+		if (IS_ERR(dlink)) {
+			error = PTR_ERR(dlink);
+			dev_err(&client->dev,
+				"Failed to add link to device %d\n", error);
+			return error;
+		}
+
+		if (dlink && dlink->status != DL_STATE_CONSUMER_PROBE)
+			return -EPROBE_DEFER;
+
+		put_device(&panel->dev);
+	}
 
 	tsdata = devm_kzalloc(&client->dev, sizeof(*tsdata), GFP_KERNEL);
 	if (!tsdata) {

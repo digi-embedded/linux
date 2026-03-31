@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/regulator/st,stm32mp1-hslv.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STM32MP1 HSLV IO Speed config assistant
+
+maintainers:
+  - Pascal Paillet <p.paillet@st.com>
+
+description: |
+  Some of the STMicroelectronics's STM32 MP13 IOs can be set to high speed mode
+  if their supply is lower than a 2.7V. The goal of this driver is to
+  automatically set the IOs to high speed mode depending on their supply's
+  regulator voltage value.
+
+properties:
+  compatible:
+    const: st,stm32mp13,hslv
+
+  hslv-supply:
+    description: Input supply phandle(s) for hslv input
+
+  st,syscon:
+    description: hslv sysconf register offset and mask
+
+required:
+  - compatible
+  - hslv-supply
+  - st,syscon
+
+additionalProperties: false
+
+examples:
+  - |
+      hslv@1 {
+            compatible = "st,stm32mp13,hslv";
+
+            /* sdmmc1 hslv = 0x50 + 4 * 4  = 0x60 */
+            st,syscon = <&syscfg 0x60 0x1018>;
+            hslv-supply = <&sdmmc1_regu>;
+      };
+...

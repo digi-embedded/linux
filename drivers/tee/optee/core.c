@@ -8,17 +8,22 @@
 #include <linux/arm-smccc.h>
 #include <linux/crash_dump.h>
 #include <linux/errno.h>
+#include <linux/interrupt.h>
 #include <linux/io.h>
+#include <linux/irqdomain.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/tee_drv.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
+#include <linux/xarray.h>
 #include "optee_private.h"
 #include "optee_smc.h"
 #include "shm_pool.h"
@@ -209,6 +214,8 @@ static void optee_get_version(struct tee_device *teedev,
 		v.gen_caps |= TEE_GEN_CAP_REG_MEM;
 	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL)
 		v.gen_caps |= TEE_GEN_CAP_MEMREF_NULL;
+	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_OCALL)
+		v.gen_caps |= TEE_GEN_CAP_OCALL;
 	*vers = v;
 }
 
@@ -254,11 +261,10 @@ static int optee_open(struct tee_context *ctx)
 	}
 	mutex_init(&ctxdata->mutex);
 	INIT_LIST_HEAD(&ctxdata->sess_list);
+	idr_init(&ctxdata->tmp_sess_list);
 
-	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL)
-		ctx->cap_memref_null  = true;
-	else
-		ctx->cap_memref_null = false;
+	ctx->cap_memref_null = optee->sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL;
+	ctx->cap_ocall = optee->sec_caps & OPTEE_SMC_SEC_CAP_OCALL;
 
 	ctx->data = ctxdata;
 	return 0;
@@ -304,6 +310,7 @@ static void optee_release(struct tee_context *ctx)
 		}
 		kfree(sess);
 	}
+	idr_destroy(&ctxdata->tmp_sess_list);
 	kfree(ctxdata);
 
 	if (!IS_ERR(shm))
@@ -355,6 +362,345 @@ static const struct tee_desc optee_supp_desc = {
 	.flags = TEE_DESC_PRIVILEGED,
 };
 
+static int simple_call_with_arg(struct tee_context *ctx, u32 cmd)
+{
+	struct optee_msg_arg *msg_arg;
+	struct tee_shm *shm;
+	phys_addr_t msg_parg;
+
+	shm = optee_get_msg_arg(ctx, 0, &msg_arg, &msg_parg);
+	if (IS_ERR(shm))
+		return PTR_ERR(shm);
+
+	msg_arg->cmd = cmd;
+	optee_do_call_with_arg(ctx, msg_parg);
+
+	tee_shm_free(shm);
+	return 0;
+}
+
+static u32 get_it_value(optee_invoke_fn *invoke_fn, bool *value_valid,
+			bool *value_pending)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_GET_IT_NOTIF_VALUE, 0, 0, 0, 0, 0, 0, 0, &res);
+
+	if (res.a0)
+		return 0;
+	*value_valid = (res.a2 & OPTEE_SMC_IT_NOTIF_VALUE_VALID);
+	*value_pending = (res.a2 & OPTEE_SMC_IT_NOTIF_VALUE_PENDING);
+	return res.a1;
+}
+
+static u32 set_it_mask(optee_invoke_fn *invoke_fn, u32 it_value, bool mask)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_SET_IT_NOTIF_MASK, it_value, mask, 0, 0, 0, 0, 0, &res);
+
+	if (res.a0)
+		return 0;
+
+	return res.a1;
+}
+
+static int handle_optee_it(struct optee *optee)
+{
+	bool value_valid;
+	bool value_pending;
+	u32 it;
+
+	do {
+		struct irq_desc *desc;
+
+		it = get_it_value(optee->invoke_fn, &value_valid,
+				  &value_pending);
+		if (!value_valid)
+			break;
+
+		desc = irq_to_desc(irq_find_mapping(optee->domain, it));
+		if (!desc) {
+			pr_err("no desc for optee IT:%d\n", it);
+			return -EIO;
+		}
+
+		handle_simple_irq(desc);
+
+	} while (value_pending);
+
+	return 0;
+}
+
+static void optee_it_irq_mask(struct irq_data *d)
+{
+	struct optee *optee = d->domain->host_data;
+
+	set_it_mask(optee->invoke_fn, d->hwirq, true);
+}
+
+static void optee_it_irq_unmask(struct irq_data *d)
+{
+	struct optee *optee = d->domain->host_data;
+
+	set_it_mask(optee->invoke_fn, d->hwirq, false);
+}
+
+static struct irq_chip optee_it_irq_chip = {
+	.name = "optee-it",
+	.irq_disable = optee_it_irq_mask,
+	.irq_enable = optee_it_irq_unmask,
+	.flags = IRQCHIP_SKIP_SET_WAKE,
+};
+
+static int optee_it_alloc(struct irq_domain *d, unsigned int virq,
+			  unsigned int nr_irqs, void *data)
+{
+	struct irq_fwspec *fwspec = data;
+	irq_hw_number_t hwirq;
+
+	hwirq = fwspec->param[0];
+
+	irq_domain_set_hwirq_and_chip(d, virq, hwirq, &optee_it_irq_chip, d->host_data);
+
+	return 0;
+}
+
+static const struct irq_domain_ops optee_it_irq_domain_ops = {
+	.alloc = optee_it_alloc,
+	.free = irq_domain_free_irqs_common,
+};
+
+static int optee_irq_domain_init(struct platform_device *pdev, struct optee *optee)
+{
+	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node;
+
+	optee->domain = irq_domain_add_linear(np, OPTEE_MAX_IT,
+					      &optee_it_irq_domain_ops,
+					      optee);
+	if (!optee->domain) {
+		pr_err("Unable to add irq domain!\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static void optee_irq_domain_uninit(struct optee *optee)
+{
+	irq_domain_remove(optee->domain);
+}
+
+static int optee_smc_do_bottom_half(struct tee_context *ctx)
+{
+	return simple_call_with_arg(ctx, OPTEE_MSG_CMD_DO_BOTTOM_HALF);
+}
+
+static int optee_smc_stop_async_notif(struct tee_context *ctx)
+{
+	return simple_call_with_arg(ctx, OPTEE_MSG_CMD_STOP_ASYNC_NOTIF);
+}
+
+static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
+				 bool *value_pending)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_GET_ASYNC_NOTIF_VALUE, 0, 0, 0, 0, 0, 0, 0, &res);
+
+	if (res.a0)
+		return 0;
+	*value_valid = (res.a2 & OPTEE_SMC_ASYNC_NOTIF_VALUE_VALID);
+	*value_pending = (res.a2 & OPTEE_SMC_ASYNC_NOTIF_VALUE_PENDING);
+	return res.a1;
+}
+
+static irqreturn_t notif_irq_handler(int irq, void *dev_id)
+{
+	struct optee_pcpu *optee_pcpu;
+	struct optee *optee;
+	bool do_bottom_half = false;
+	bool value_valid;
+	bool value_pending;
+	u32 value;
+
+	if (irq_is_percpu_devid(irq)) {
+		optee_pcpu = (struct optee_pcpu *)dev_id;
+		optee = optee_pcpu->optee;
+	} else {
+		optee = dev_id;
+	}
+
+	do {
+		value = get_async_notif_value(optee->invoke_fn,
+					      &value_valid, &value_pending);
+		if (!value_valid)
+			break;
+
+		if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF)
+			do_bottom_half = true;
+		else if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT)
+			handle_optee_it(optee);
+		else
+			optee_notif_send(optee, value);
+	} while (value_pending);
+
+	if (do_bottom_half) {
+		if (irq_is_percpu_devid(irq))
+			queue_work(optee->notif_pcpu_wq, &optee->notif_pcpu_work);
+		else
+			return IRQ_WAKE_THREAD;
+	}
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t notif_irq_thread_fn(int irq, void *dev_id)
+{
+	struct optee *optee = dev_id;
+
+	optee_smc_do_bottom_half(optee->notif.ctx);
+
+	return IRQ_HANDLED;
+}
+
+static void optee_pcpu_notif(struct work_struct *work)
+{
+	struct optee *optee = container_of(work, struct optee, notif_pcpu_work);
+
+	optee_smc_do_bottom_half(optee->notif.ctx);
+}
+
+static int optee_smc_notif_init_irq(struct optee *optee, u_int irq)
+{
+	struct tee_context *ctx;
+	int rc;
+
+	ctx = teedev_open(optee->teedev);
+	if (IS_ERR(ctx))
+		return PTR_ERR(ctx);
+
+	optee->notif.ctx = ctx;
+	rc = request_threaded_irq(irq, notif_irq_handler,
+				  notif_irq_thread_fn,
+				  0, "optee_notification", optee);
+	if (rc)
+		goto err_close_ctx;
+
+	optee->notif_irq = irq;
+
+	return 0;
+
+err_close_ctx:
+	teedev_close_context(optee->notif.ctx);
+	optee->notif.ctx = NULL;
+
+	return rc;
+}
+
+static int optee_smc_notif_pcpu_init_irq(struct optee *optee, u_int irq)
+{
+	struct optee_pcpu *optee_pcpu;
+	struct tee_context *ctx;
+	spinlock_t lock;
+	int cpu;
+	int rc;
+
+	/* Alloc per-cpu port structure */
+	optee_pcpu = alloc_percpu(struct optee_pcpu);
+	if (!optee_pcpu)
+		return -ENOMEM;
+
+	for_each_present_cpu(cpu) {
+		struct optee_pcpu *p = per_cpu_ptr(optee_pcpu, cpu);
+
+		p->optee = optee;
+	}
+
+	ctx = teedev_open(optee->teedev);
+	if (IS_ERR(ctx)) {
+		rc = PTR_ERR(ctx);
+		goto err_free_pcpu;
+	}
+
+	optee->notif.ctx = ctx;
+
+	rc = request_percpu_irq(irq, notif_irq_handler, "optee_pcpu_notification",
+				optee_pcpu);
+	if (rc) {
+		rc = PTR_ERR(ctx);
+		goto err_close_ctx;
+	}
+
+	spin_lock_init(&lock);
+
+	spin_lock(&lock);
+	enable_percpu_irq(irq, 0);
+	spin_unlock(&lock);
+
+	INIT_WORK(&optee->notif_pcpu_work, optee_pcpu_notif);
+	optee->notif_pcpu_wq = create_workqueue("optee_pcpu_notification");
+	if (!optee->notif_pcpu_wq) {
+		rc = -EINVAL;
+		goto err_free_pcpu_irq;
+	}
+
+	optee->optee_pcpu = optee_pcpu;
+	optee->notif_pcpu_irq = irq;
+
+	return 0;
+
+err_free_pcpu_irq:
+	spin_lock(&lock);
+	disable_percpu_irq(irq);
+	spin_unlock(&lock);
+	free_percpu_irq(irq, optee_pcpu);
+err_close_ctx:
+	teedev_close_context(optee->notif.ctx);
+	optee->notif.ctx = NULL;
+err_free_pcpu:
+	free_percpu(optee_pcpu);
+
+	return rc;
+}
+
+static void optee_smc_notif_uninit_irq(struct optee *optee)
+{
+	if (optee->notif.ctx) {
+		optee_smc_stop_async_notif(optee->notif.ctx);
+		if (optee->notif_irq) {
+			free_irq(optee->notif_irq, optee);
+			irq_dispose_mapping(optee->notif_irq);
+		} else if (optee->notif_pcpu_irq) {
+			free_percpu_irq(optee->notif_irq, optee->optee_pcpu);
+			irq_dispose_mapping(optee->notif_irq);
+		}
+
+		/*
+		 * The thread normally working with optee->notif.ctx was
+		 * stopped with free_irq() above.
+		 *
+		 * Note we're not using teedev_close_context() or
+		 * tee_client_close_context() since we have already called
+		 * tee_device_put() while initializing to avoid a circular
+		 * reference counting.
+		 */
+		teedev_close_context(optee->notif.ctx);
+	}
+}
+
+static int enable_async_notif(optee_invoke_fn *invoke_fn)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_ENABLE_ASYNC_NOTIF, 0, 0, 0, 0, 0, 0, 0, &res);
+
+	if (res.a0)
+		return -EINVAL;
+	return 0;
+}
+
 static bool optee_msg_api_uid_is_optee_api(optee_invoke_fn *invoke_fn)
 {
 	struct arm_smccc_res res;
@@ -404,7 +750,7 @@ static bool optee_msg_api_revision_is_compatible(optee_invoke_fn *invoke_fn)
 }
 
 static bool optee_msg_exchange_capabilities(optee_invoke_fn *invoke_fn,
-					    u32 *sec_caps)
+					    u32 *sec_caps, u32 *max_notif_value)
 {
 	union {
 		struct arm_smccc_res smccc;
@@ -427,6 +773,12 @@ static bool optee_msg_exchange_capabilities(optee_invoke_fn *invoke_fn,
 		return false;
 
 	*sec_caps = res.result.capabilities;
+
+	if (*sec_caps & OPTEE_SMC_SEC_CAP_ASYNC_NOTIF)
+		*max_notif_value = res.result.max_notif_value;
+	else
+		*max_notif_value = OPTEE_DEFAULT_MAX_NOTIF_VALUE;
+
 	return true;
 }
 
@@ -596,6 +948,10 @@ static int optee_remove(struct platform_device *pdev)
 	 */
 	optee_disable_shm_cache(optee);
 
+	optee_irq_domain_uninit(optee);
+
+	optee_smc_notif_uninit_irq(optee);
+
 	/*
 	 * The two devices have to be unregistered before we can free the
 	 * other resources.
@@ -606,7 +962,6 @@ static int optee_remove(struct platform_device *pdev)
 	tee_shm_pool_free(optee->pool);
 	if (optee->memremaped_shm)
 		memunmap(optee->memremaped_shm);
-	optee_wait_queue_exit(&optee->wait_queue);
 	optee_supp_uninit(&optee->supp);
 	mutex_destroy(&optee->call_queue.mutex);
 
@@ -635,6 +990,7 @@ static int optee_probe(struct platform_device *pdev)
 	void *memremaped_shm = NULL;
 	struct tee_device *teedev;
 	struct tee_context *ctx;
+	u32 max_notif_value;
 	u32 sec_caps;
 	int rc;
 
@@ -664,7 +1020,8 @@ static int optee_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	if (!optee_msg_exchange_capabilities(invoke_fn, &sec_caps)) {
+	if (!optee_msg_exchange_capabilities(invoke_fn, &sec_caps,
+					     &max_notif_value)) {
 		pr_warn("capabilities mismatch\n");
 		return -EINVAL;
 	}
@@ -687,7 +1044,7 @@ static int optee_probe(struct platform_device *pdev)
 	optee = kzalloc(sizeof(*optee), GFP_KERNEL);
 	if (!optee) {
 		rc = -ENOMEM;
-		goto err;
+		goto err_free_pool;
 	}
 
 	optee->invoke_fn = invoke_fn;
@@ -696,37 +1053,72 @@ static int optee_probe(struct platform_device *pdev)
 	teedev = tee_device_alloc(&optee_desc, NULL, pool, optee);
 	if (IS_ERR(teedev)) {
 		rc = PTR_ERR(teedev);
-		goto err;
+		goto err_free_optee;
 	}
 	optee->teedev = teedev;
 
 	teedev = tee_device_alloc(&optee_supp_desc, NULL, pool, optee);
 	if (IS_ERR(teedev)) {
 		rc = PTR_ERR(teedev);
-		goto err;
+		goto err_unreg_teedev;
 	}
 	optee->supp_teedev = teedev;
 
 	rc = tee_device_register(optee->teedev);
 	if (rc)
-		goto err;
+		goto err_unreg_supp_teedev;
 
 	rc = tee_device_register(optee->supp_teedev);
 	if (rc)
-		goto err;
+		goto err_unreg_supp_teedev;
 
 	mutex_init(&optee->call_queue.mutex);
 	INIT_LIST_HEAD(&optee->call_queue.waiters);
-	optee_wait_queue_init(&optee->wait_queue);
 	optee_supp_init(&optee->supp);
 	optee->memremaped_shm = memremaped_shm;
 	optee->pool = pool;
+
 	ctx = teedev_open(optee->teedev);
 	if (IS_ERR(ctx)) {
 		rc = PTR_ERR(ctx);
-		goto err;
+		goto err_supp_uninit;
 	}
 	optee->ctx = ctx;
+
+	platform_set_drvdata(pdev, optee);
+	rc = optee_notif_init(optee, max_notif_value);
+	if (rc)
+		goto err_close_ctx;
+
+	if (sec_caps & OPTEE_SMC_SEC_CAP_ASYNC_NOTIF) {
+		unsigned int irq;
+
+		rc = platform_get_irq(pdev, 0);
+		if (rc < 0) {
+			pr_err("platform_get_irq: ret %d\n", rc);
+			goto err_notif_uninit;
+		}
+		irq = rc;
+
+		if (irq_is_percpu_devid(irq))
+			rc = optee_smc_notif_pcpu_init_irq(optee, irq);
+		else
+			rc = optee_smc_notif_init_irq(optee, irq);
+
+		if (rc) {
+			irq_dispose_mapping(irq);
+			goto err_notif_uninit;
+		}
+
+		rc = optee_irq_domain_init(pdev, optee);
+		if (rc) {
+			irq_dispose_mapping(irq);
+			goto err_notif_uninit;
+		}
+
+		enable_async_notif(optee->invoke_fn);
+		pr_info("Asynchronous notifications enabled\n");
+	}
 
 	/*
 	 * Ensure that there are no pre-existing shm objects before enabling
@@ -742,31 +1134,36 @@ static int optee_probe(struct platform_device *pdev)
 	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_DYNAMIC_SHM)
 		pr_info("dynamic shared memory is enabled\n");
 
-	platform_set_drvdata(pdev, optee);
-
 	rc = optee_enumerate_devices(PTA_CMD_GET_DEVICES);
-	if (rc) {
-		optee_remove(pdev);
-		return rc;
-	}
+	if (rc)
+		goto err_disable_shm_cache;
 
 	pr_info("initialized driver\n");
 	return 0;
-err:
-	if (optee) {
-		/*
-		 * tee_device_unregister() is safe to call even if the
-		 * devices hasn't been registered with
-		 * tee_device_register() yet.
-		 */
-		tee_device_unregister(optee->supp_teedev);
-		tee_device_unregister(optee->teedev);
-		kfree(optee);
-	}
-	if (pool)
-		tee_shm_pool_free(pool);
+
+err_disable_shm_cache:
+	optee_disable_shm_cache(optee);
+	optee_smc_notif_uninit_irq(optee);
+	optee_unregister_devices();
+	optee_irq_domain_uninit(optee);
+err_notif_uninit:
+	optee_notif_uninit(optee);
+err_close_ctx:
+	teedev_close_context(optee->ctx);
+err_supp_uninit:
+	optee_supp_uninit(&optee->supp);
+	mutex_destroy(&optee->call_queue.mutex);
+err_unreg_supp_teedev:
+	tee_device_unregister(optee->supp_teedev);
+err_unreg_teedev:
+	tee_device_unregister(optee->teedev);
+err_free_optee:
+	kfree(optee);
+err_free_pool:
+	tee_shm_pool_free(pool);
 	if (memremaped_shm)
 		memunmap(memremaped_shm);
+
 	return rc;
 }
 

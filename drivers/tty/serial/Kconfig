@@ -713,6 +713,17 @@ config SERIAL_CORE_CONSOLE
 config CONSOLE_POLL
 	bool
 
+config SERIAL_MCA
+	tristate "Digi ConnectCore Micro Controller Assist UART"
+	select MFD_MCA
+	help
+	  If you say Y here you will get support for the UART(s) in the Micro
+	  Controller Assist of Digi ConnectCore system-on-module.
+	  CC6UL requires MCA version 1.19 or higher.
+
+	  This driver can also be built as a module, if so, the module
+	  will be called "mca-uart".
+
 config SERIAL_MCF
 	bool "Coldfire serial support"
 	depends on COLDFIRE
@@ -1440,6 +1451,7 @@ config SERIAL_STM32_CONSOLE
 	bool "Support for console on STM32"
 	depends on SERIAL_STM32
 	select SERIAL_CORE_CONSOLE
+	select SERIAL_EARLYCON
 
 config SERIAL_MVEBU_UART
 	bool "Marvell EBU serial port support"

@@ -45,6 +45,7 @@ static struct smsc_hw_stat smsc_hw_stats[] = {
 
 struct smsc_phy_priv {
 	bool energy_enable;
+	bool wakeup_enable;
 	struct clk *refclk;
 };
 
@@ -57,6 +58,8 @@ static int smsc_phy_ack_interrupt(struct phy_device *phydev)
 
 static int smsc_phy_config_intr(struct phy_device *phydev)
 {
+	struct smsc_phy_priv *priv = phydev->priv;
+	u16 intmask = 0;
 	int rc;
 
 	if (phydev->interrupts == PHY_INTERRUPT_ENABLED) {
@@ -64,8 +67,11 @@ static int smsc_phy_config_intr(struct phy_device *phydev)
 		if (rc)
 			return rc;
 
-		rc = phy_write(phydev, MII_LAN83C185_IM,
-			       MII_LAN83C185_ISF_INT_PHYLIB_EVENTS);
+		intmask = MII_LAN83C185_ISF_INT_PHYLIB_EVENTS;
+		if (priv->wakeup_enable)
+			intmask |= MII_LAN83C185_ISF_INT8;
+
+		rc = phy_write(phydev, MII_LAN83C185_IM, intmask);
 	} else {
 		rc = phy_write(phydev, MII_LAN83C185_IM, 0);
 		if (rc)
@@ -95,10 +101,51 @@ static irqreturn_t smsc_phy_handle_interrupt(struct phy_device *phydev)
 	return IRQ_HANDLED;
 }
 
+static int smsc_phy_config_wol(struct phy_device *phydev)
+{
+	int i, wol_ctrl, wol_filter;
+	u16 pwd[3] = {0, 0, 0};
+
+	/* Write @MAC in LAN8742_MMD3_MAC_ADDRA/B/C registers */
+	u8 *mac_addr = phydev->attached_dev->dev_addr;
+	/* Store the device address for the magic packet */
+	for (i = 0; i < ARRAY_SIZE(pwd); i++)
+		pwd[i] = mac_addr[5 - i * 2] << 8 | mac_addr[5 - (i * 2 + 1)];
+
+	phy_write_mmd(phydev, 3, LAN8742_MMD3_MAC_ADDRA,
+		      pwd[0]);
+
+	phy_write_mmd(phydev, 3, LAN8742_MMD3_MAC_ADDRB,
+		      pwd[1]);
+
+	phy_write_mmd(phydev, 3, LAN8742_MMD3_MAC_ADDRC,
+		      pwd[2]);
+
+	/* Configure WoL */
+	wol_ctrl = phy_read_mmd(phydev, 3, LAN8742_MMD3_WAKEUP_CTRL);
+
+	/* Configure LED2 functions as nPME, WoL Configured, Magic Packet Enable */
+	wol_ctrl |= (LAN8742_MMD3_WUCSR_LED2_AS_NPME | LAN8742_MMD3_WUCSR_WOL | LAN8742_MMD3_WUCSR_MPEN);
+	phy_write_mmd(phydev, 3, LAN8742_MMD3_WAKEUP_CTRL,
+		      wol_ctrl);
+
+	wol_filter = phy_read_mmd(phydev, 3, LAN8742_MMD3_WAKEUP_FILTER);
+
+	/* Configure Filter enabled, Address Match Enable */
+	wol_filter |= (LAN8742_MMD3_WUF_CFGA_FE | LAN8742_MMD3_WUF_CFGA_AME);
+	phy_write_mmd(phydev, 3, LAN8742_MMD3_WAKEUP_FILTER,
+		      wol_filter);
+
+	return 0;
+}
+
 static int smsc_phy_config_init(struct phy_device *phydev)
 {
 	struct smsc_phy_priv *priv = phydev->priv;
 	int rc;
+
+	if (priv->wakeup_enable)
+		smsc_phy_config_wol(phydev);
 
 	if (!priv->energy_enable || phydev->irq != PHY_POLL)
 		return 0;
@@ -134,6 +181,17 @@ static int smsc_phy_reset(struct phy_device *phydev)
 
 	/* reset the phy */
 	return genphy_soft_reset(phydev);
+}
+
+static int smsc_phy_suspend(struct phy_device *phydev)
+{
+	struct device *dev = &phydev->mdio.dev;
+
+	/* do not power down PHY when PHY enable power/wakeup */
+	if (!device_may_wakeup(dev))
+		return genphy_suspend(phydev);
+
+	return 0;
 }
 
 static int lan911x_config_init(struct phy_device *phydev)
@@ -212,6 +270,23 @@ static int lan95xx_config_aneg_ext(struct phy_device *phydev)
 	return lan87xx_config_aneg(phydev);
 }
 
+static int lan87xx_get_features(struct phy_device *phydev)
+{
+	int val;
+
+	/* Verify if PHY is ready to read registers */
+	val = phy_read(phydev, MII_BMSR);
+	if (val < 0)
+		return val;
+	if (val == 0x0000 || val == 0xffff) {
+		phydev_err(phydev, "PHY is not accessible\n");
+		return -EPROBE_DEFER;
+	}
+
+	/* Call PHY core function to read PHY abilities */
+	return genphy_read_abilities(phydev);
+}
+
 /*
  * The LAN87xx suffers from rare absence of the ENERGYON-bit when Ethernet cable
  * plugs in while LAN87xx is in Energy Detect Power-Down mode. This leads to
@@ -264,6 +339,20 @@ static int lan87xx_read_status(struct phy_device *phydev)
 			return rc;
 	}
 
+	if (priv->wakeup_enable) {
+		/* Check status of WUCSR bits 7:4 : Perfect DA Frame, Remote Wakeup
+		 * Frame, Magic Packet, Broadcast Frame Received, if one of these bits
+		 * are 1, clearing them*/
+		int wol_ctrl = phy_read_mmd(phydev, 3, LAN8742_MMD3_WAKEUP_CTRL);
+
+		if ((wol_ctrl & (LAN8742_MMD3_WUCSR_PFDA_FR | LAN8742_MMD3_WUCSR_WUFR |
+				 LAN8742_MMD3_WUCSR_MPR | LAN8742_MMD3_WUCSR_BCAST_FR)) > 0) {
+			wol_ctrl |= (LAN8742_MMD3_WUCSR_PFDA_FR | LAN8742_MMD3_WUCSR_WUFR |
+				     LAN8742_MMD3_WUCSR_MPR | LAN8742_MMD3_WUCSR_BCAST_FR);
+			phy_write_mmd(phydev, 3, LAN8742_MMD3_WAKEUP_CTRL,
+				      wol_ctrl);
+		}
+	}
 	return err;
 }
 
@@ -326,9 +415,15 @@ static int smsc_phy_probe(struct phy_device *phydev)
 		return -ENOMEM;
 
 	priv->energy_enable = true;
+	priv->wakeup_enable = false;
 
 	if (of_property_read_bool(of_node, "smsc,disable-energy-detect"))
 		priv->energy_enable = false;
+
+	if (of_property_read_bool(of_node, "wakeup-source")) {
+		device_set_wakeup_capable(dev, true);
+		priv->wakeup_enable = true;
+	}
 
 	phydev->priv = priv;
 
@@ -453,6 +548,7 @@ static struct phy_driver smsc_phy_driver[] = {
 	/* PHY_BASIC_FEATURES */
 
 	.flags		= PHY_RST_AFTER_CLK_EN,
+	.get_features 	= lan87xx_get_features,
 	.probe		= smsc_phy_probe,
 	.remove		= smsc_phy_remove,
 
@@ -499,6 +595,32 @@ static struct phy_driver smsc_phy_driver[] = {
 
 	.suspend	= genphy_suspend,
 	.resume		= genphy_resume,
+}, {
+	.phy_id		= 0x0007c130,
+	.phy_id_mask	= 0xfffffff0,
+	.name		= "SMSC LAN8742A",
+
+	/* PHY_BASIC_FEATURES */
+	.flags		= PHY_RST_AFTER_CLK_EN,
+
+	.probe		= smsc_phy_probe,
+
+	/* basic functions */
+	.read_status	= lan87xx_read_status,
+	.config_init	= smsc_phy_config_init,
+	.soft_reset	= smsc_phy_reset,
+
+	/* IRQ related */
+	.config_intr	= smsc_phy_config_intr,
+	.handle_interrupt = smsc_phy_handle_interrupt,
+
+	/* Statistics */
+	.get_sset_count = smsc_get_sset_count,
+	.get_strings	= smsc_get_strings,
+	.get_stats	= smsc_get_stats,
+
+	.suspend	= smsc_phy_suspend,
+	.resume		= genphy_resume,
 } };
 
 module_phy_driver(smsc_phy_driver);
@@ -514,6 +636,7 @@ static struct mdio_device_id __maybe_unused smsc_tbl[] = {
 	{ 0x0007c0d0, 0xfffffff0 },
 	{ 0x0007c0f0, 0xfffffff0 },
 	{ 0x0007c110, 0xfffffff0 },
+	{ 0x0007c130, 0xfffffff0 },
 	{ }
 };
 

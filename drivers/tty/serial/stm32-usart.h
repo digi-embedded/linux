@@ -20,6 +20,7 @@ struct stm32_usart_offsets {
 	u8 icr;
 	u8 rdr;
 	u8 tdr;
+	u8 presc;
 };
 
 struct stm32_usart_config {
@@ -52,6 +53,7 @@ struct stm32_usart_info stm32f4_info = {
 		.rtor	= UNDEF_REG,
 		.rqr	= UNDEF_REG,
 		.icr	= UNDEF_REG,
+		.presc	= UNDEF_REG,
 	},
 	.cfg = {
 		.uart_enable_bit = 13,
@@ -73,6 +75,7 @@ struct stm32_usart_info stm32f7_info = {
 		.icr	= 0x20,
 		.rdr	= 0x24,
 		.tdr	= 0x28,
+		.presc	= UNDEF_REG,
 	},
 	.cfg = {
 		.uart_enable_bit = 0,
@@ -95,6 +98,7 @@ struct stm32_usart_info stm32h7_info = {
 		.icr	= 0x20,
 		.rdr	= 0x24,
 		.tdr	= 0x28,
+		.presc	= 0x2c,
 	},
 	.cfg = {
 		.uart_enable_bit = 0,
@@ -137,6 +141,7 @@ struct stm32_usart_info stm32h7_info = {
 /* USART_BRR */
 #define USART_BRR_DIV_F_MASK	GENMASK(3, 0)
 #define USART_BRR_DIV_M_MASK	GENMASK(15, 4)
+#define USART_BRR_MASK		(USART_BRR_DIV_F_MASK | USART_BRR_DIV_M_MASK)
 #define USART_BRR_DIV_M_SHIFT	4
 #define USART_BRR_04_R_SHIFT	1
 
@@ -244,12 +249,19 @@ struct stm32_usart_info stm32h7_info = {
 #define USART_ICR_CMCF		BIT(17)		/* F7 */
 #define USART_ICR_WUCF		BIT(20)		/* H7 */
 
+/* USART_PRESC */
+#define USART_PRESC		GENMASK(3, 0)	/* H7 */
+#define USART_PRESC_MAX		0b1011
+static const unsigned int STM32_USART_PRESC_VAL[] = {1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256};
+
 #define STM32_SERIAL_NAME "ttySTM"
 #define STM32_MAX_PORTS 8
 
 #define RX_BUF_L 4096		 /* dma rx buffer length     */
 #define RX_BUF_P (RX_BUF_L / 2)	 /* dma rx buffer period     */
 #define TX_BUF_L RX_BUF_L	 /* dma tx buffer length     */
+
+#define STM32_USART_TIMEOUT_USEC USEC_PER_SEC /* 1s timeout in µs */
 
 struct stm32_port {
 	struct uart_port port;
@@ -264,7 +276,9 @@ struct stm32_port {
 	u32 cr1_irq;		 /* USART_CR1_RXNEIE or RTOIE */
 	u32 cr3_irq;		 /* USART_CR3_RXFTIE */
 	int last_res;
-	bool tx_dma_busy;	 /* dma tx busy               */
+	bool tx_dma_busy;	 /* dma tx transaction in progress */
+	bool rx_dma_busy;	 /* dma rx transaction in progress */
+	bool throttled;		 /* port throttled            */
 	bool hw_flow_control;
 	bool swap;		 /* swap RX & TX pins */
 	bool fifoen;

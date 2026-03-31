@@ -575,6 +575,7 @@ static int panel_dpi_probe(struct device *dev,
 	struct panel_desc *desc;
 	unsigned int bus_flags;
 	struct videomode vm;
+	const char *mapping;
 	int ret;
 
 	np = dev->of_node;
@@ -598,6 +599,21 @@ static int panel_dpi_probe(struct device *dev,
 
 	of_property_read_u32(np, "width-mm", &desc->size.width);
 	of_property_read_u32(np, "height-mm", &desc->size.height);
+
+	of_property_read_string(np, "data-mapping", &mapping);
+	if (!strcmp(mapping, "rgb24")) {
+		desc->bus_format = MEDIA_BUS_FMT_RGB888_1X24;
+		desc->bpc = 8;
+	} else if (!strcmp(mapping, "rgb565")) {
+		desc->bus_format = MEDIA_BUS_FMT_RGB565_1X16;
+		desc->bpc = 6;
+	} else if (!strcmp(mapping, "bgr666")) {
+		desc->bus_format = MEDIA_BUS_FMT_RGB666_1X18;
+		desc->bpc = 6;
+	} else if (!strcmp(mapping, "lvds666")) {
+		desc->bus_format = MEDIA_BUS_FMT_RGB666_1X24_CPADHI;
+		desc->bpc = 6;
+	}
 
 	/* Extract bus_flags from display_timing */
 	bus_flags = 0;
@@ -5203,6 +5219,55 @@ static const struct panel_desc_dsi osd101t2045_53ts = {
 	.lanes = 4,
 };
 
+static const struct drm_display_mode sv4e_mipi_analyzer_mode = {
+	.clock = 25000,
+	.hdisplay = 640,
+	.hsync_start = 640 + 4,	     /* hdisplay + hback */
+	.hsync_end = 640 + 4 + 2,    /* hdisplay + hback + hsync */
+	.htotal = 640 + 4 + 2 + 10,  /* hdisplay + hback + hsync + hfront */
+	.vdisplay = 480,
+	.vsync_start = 480 + 34,     /* hdisplay + hback */
+	.vsync_end = 480 + 34 + 2,   /* hdisplay + hback + hsync */
+	.vtotal = 480 + 34 + 2 + 20, /* hdisplay + hback + hsync + hfront */
+	.flags = DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC,
+};
+
+static const struct panel_desc_dsi sv4e_mipi_analyzer = {
+	.desc = {
+		.modes = &sv4e_mipi_analyzer_mode,
+		.num_modes = 1,
+		.bpc = 8,
+		.size = {
+			.width = 107,
+			.height = 172,
+		},
+		.connector_type = DRM_MODE_CONNECTOR_DSI,
+	},
+	.flags = MIPI_DSI_MODE_VIDEO |
+		 MIPI_DSI_MODE_VIDEO_BURST |
+		 MIPI_DSI_MODE_VIDEO_SYNC_PULSE,
+	.format = MIPI_DSI_FMT_RGB888,
+	.lanes = 4,
+};
+
+static const struct panel_desc_dsi sv4e_2_lane_mipi_analyzer = {
+	.desc = {
+		.modes = &sv4e_mipi_analyzer_mode,
+		.num_modes = 1,
+		.bpc = 8,
+		.size = {
+			.width = 107,
+			.height = 172,
+		},
+		.connector_type = DRM_MODE_CONNECTOR_DSI,
+	},
+	.flags = MIPI_DSI_MODE_VIDEO |
+		 MIPI_DSI_MODE_VIDEO_BURST |
+		 MIPI_DSI_MODE_VIDEO_SYNC_PULSE,
+	.format = MIPI_DSI_FMT_RGB888,
+	.lanes = 2,
+};
+
 static const struct of_device_id dsi_of_match[] = {
 	{
 		.compatible = "auo,b080uan01",
@@ -5225,6 +5290,12 @@ static const struct of_device_id dsi_of_match[] = {
 	}, {
 		.compatible = "osddisplays,osd101t2045-53ts",
 		.data = &osd101t2045_53ts
+	}, {
+		.compatible = "introspect,sv4e-mipi-analyzer",
+		.data = &sv4e_mipi_analyzer
+	}, {
+		.compatible = "introspect,sv4e-2-lane-mipi-analyzer",
+		.data = &sv4e_2_lane_mipi_analyzer
 	}, {
 		/* sentinel */
 	}

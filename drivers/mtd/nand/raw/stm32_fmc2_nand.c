@@ -9,6 +9,7 @@
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/errno.h>
+#include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
 #include <linux/iopoll.h>
 #include <linux/mfd/syscon.h>
@@ -231,6 +232,7 @@ struct stm32_fmc2_timings {
 
 struct stm32_fmc2_nand {
 	struct nand_chip chip;
+	struct gpio_desc *wp_gpio;
 	struct stm32_fmc2_timings timings;
 	int ncs;
 	int cs_used[FMC2_MAX_CE];
@@ -1702,6 +1704,7 @@ static int stm32_fmc2_nfc_attach_chip(struct nand_chip *chip)
 {
 	struct stm32_fmc2_nfc *nfc = to_stm32_nfc(chip->controller);
 	struct mtd_info *mtd = nand_to_mtd(chip);
+	struct nand_device *nand = mtd_to_nanddev(nand_to_mtd(chip));
 	int ret;
 
 	/*
@@ -1715,6 +1718,13 @@ static int stm32_fmc2_nfc_attach_chip(struct nand_chip *chip)
 		dev_err(nfc->dev,
 			"nand_ecc_engine_type is not well defined in the DT\n");
 		return -EINVAL;
+	}
+
+	/* Use the ECC strength reported by the NAND via ONFI if available */
+	if (nand->ecc.requirements.strength > 0) {
+		chip->ecc.strength = nand->ecc.requirements.strength;
+		chip->ecc.size = nand->ecc.requirements.step_size;
+		stm32_fmc2_nfc_select_chip(chip, chip->cur_cs);
 	}
 
 	/* Default ECC settings in case they are not set in the device tree */
@@ -1754,6 +1764,18 @@ static const struct nand_controller_ops stm32_fmc2_nfc_controller_ops = {
 	.setup_interface = stm32_fmc2_nfc_setup_interface,
 };
 
+static void stm32_fmc2_nfc_wp_enable(struct stm32_fmc2_nand *nand)
+{
+	if (nand->wp_gpio)
+		gpiod_set_value(nand->wp_gpio, 1);
+}
+
+static void stm32_fmc2_nfc_wp_disable(struct stm32_fmc2_nand *nand)
+{
+	if (nand->wp_gpio)
+		gpiod_set_value(nand->wp_gpio, 0);
+}
+
 static int stm32_fmc2_nfc_parse_child(struct stm32_fmc2_nfc *nfc,
 				      struct device_node *dn)
 {
@@ -1790,6 +1812,18 @@ static int stm32_fmc2_nfc_parse_child(struct stm32_fmc2_nfc *nfc,
 
 		nfc->cs_assigned |= BIT(cs);
 		nand->cs_used[i] = cs;
+	}
+
+	nand->wp_gpio = devm_gpiod_get_from_of_node(nfc->dev, dn,
+						    "wp-gpios", 0,
+						    GPIOD_OUT_HIGH, "wp");
+	if (IS_ERR(nand->wp_gpio)) {
+		ret = PTR_ERR(nand->wp_gpio);
+		if (ret != -ENOENT)
+			return dev_err_probe(nfc->dev, ret,
+					     "failed to request WP GPIO\n");
+
+		nand->wp_gpio = NULL;
 	}
 
 	nand_set_flash_node(&nand->chip, dn);
@@ -1967,10 +2001,12 @@ static int stm32_fmc2_nfc_probe(struct platform_device *pdev)
 	chip->options |= NAND_BUSWIDTH_AUTO | NAND_NO_SUBPAGE_WRITE |
 			 NAND_USES_DMA;
 
+	stm32_fmc2_nfc_wp_disable(nand);
+
 	/* Scan to find existence of the device */
 	ret = nand_scan(chip, nand->ncs);
 	if (ret)
-		goto err_release_dma;
+		goto err_wp_enable;
 
 	ret = mtd_device_register(mtd, NULL, 0);
 	if (ret)
@@ -1982,6 +2018,9 @@ static int stm32_fmc2_nfc_probe(struct platform_device *pdev)
 
 err_nand_cleanup:
 	nand_cleanup(chip);
+
+err_wp_enable:
+	stm32_fmc2_nfc_wp_enable(nand);
 
 err_release_dma:
 	if (nfc->dma_ecc_ch)
@@ -2023,14 +2062,19 @@ static int stm32_fmc2_nfc_remove(struct platform_device *pdev)
 
 	clk_disable_unprepare(nfc->clk);
 
+	stm32_fmc2_nfc_wp_enable(nand);
+
 	return 0;
 }
 
 static int __maybe_unused stm32_fmc2_nfc_suspend(struct device *dev)
 {
 	struct stm32_fmc2_nfc *nfc = dev_get_drvdata(dev);
+	struct stm32_fmc2_nand *nand = &nfc->nand;
 
 	clk_disable_unprepare(nfc->clk);
+
+	stm32_fmc2_nfc_wp_enable(nand);
 
 	pinctrl_pm_select_sleep_state(dev);
 
@@ -2052,6 +2096,8 @@ static int __maybe_unused stm32_fmc2_nfc_resume(struct device *dev)
 	}
 
 	stm32_fmc2_nfc_init(nfc);
+
+	stm32_fmc2_nfc_wp_disable(nand);
 
 	for (chip_cs = 0; chip_cs < FMC2_MAX_CE; chip_cs++) {
 		if (!(nfc->cs_assigned & BIT(chip_cs)))

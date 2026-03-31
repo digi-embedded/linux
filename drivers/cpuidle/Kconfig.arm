@@ -91,6 +91,14 @@ config ARM_EXYNOS_CPUIDLE
 	help
 	  Select this to enable cpuidle for Exynos processors.
 
+config ARM_STM32_CPUIDLE
+	bool "Cpu Idle Driver for the STM32 processors"
+	depends on MACH_STM32MP157
+	select DT_IDLE_STATES
+	select ARCH_NEEDS_CPU_IDLE_COUPLED if SMP
+	help
+	  Select this to enable cpuidle for STM32 processors.
+
 config ARM_MVEBU_V7_CPUIDLE
 	bool "CPU Idle Driver for mvebu v7 family processors"
 	depends on (ARCH_MVEBU || COMPILE_TEST) && !ARM64

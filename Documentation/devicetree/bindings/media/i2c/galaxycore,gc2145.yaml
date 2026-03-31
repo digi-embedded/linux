@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/media/i2c/galaxycore,gc2145.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Galaxy Core 1/5'' UXGA CMOS Image Sensor
+
+maintainers:
+  - Alain Volmat <alain.volmat@foss.st.com>
+
+description: |
+  The Galaxy Core GC2145 is a high quality 2 Mega CMOS image sensor, for mobile phone camera
+  applications and digital camera products. GC2145 incorporates a 1616V x 1232H active pixel
+  array, on-chip 10-bit ADC, and image signal processor. It is programmable through an I2C
+  interface. Image data is sent either through a parallel interface or through MIPI CSI-2.
+
+allOf:
+  - $ref: ../video-interface-devices.yaml#
+
+properties:
+  compatible:
+    const: galaxycore,gc2145
+
+  reg:
+    enum:
+      - 0x3c
+
+  clocks:
+    description: Reference to the xclk clock.
+    maxItems: 1
+
+  powerdown-gpios:
+    description: GPIO descriptor for the powerdown pin.
+    maxItems: 1
+
+  reset-gpios:
+    description: GPIO descriptor for the reset pin.
+    maxItems: 1
+
+  IOVDD-supply:
+    description: Power Supply for I/O circuits (1.7 - 3V).
+
+  AVDD-supply:
+    description: Power for analog circuit/sensor array (2.7 - 3V).
+
+  DVDD-supply:
+    description: Power for digital core (1.7 - 1.9V).
+
+  port:
+    $ref: /schemas/graph.yaml#/$defs/port-base
+    description: |
+      Video output port.
+
+    properties:
+      endpoint:
+        $ref: /schemas/media/video-interfaces.yaml#
+        unevaluatedProperties: false
+
+        properties:
+          data-lanes:
+            anyOf:
+              - items:
+                  - const: 1
+                  - const: 2
+              - items:
+                  - const: 1
+                  - const: 2
+
+        required:
+          - data-lanes
+
+    additionalProperties: false
+
+required:
+  - compatible
+  - reg
+  - clocks
+  - powerdown-gpios
+  - reset-gpios
+  - IOVDD-supply
+  - AVDD-supply
+  - DVDD-supply
+  - port
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/gpio/gpio.h>
+
+    i2c5 {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        gc2145@3c {
+            compatible = "galaxycore,gc2145";
+            reg = <0x3c>;
+            clocks = <&clk_ext_camera>;
+            IOVDD-supply = <&scmi_v3v3_sw>;
+            AVDD-supply = <&scmi_v3v3_sw>;
+            DVDD-supply = <&scmi_v3v3_sw>;
+            powerdown-gpios = <&mcp23017 3 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
+            reset-gpios = <&mcp23017 4 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
+
+            port {
+                gc2145_ep: endpoint {
+                    remote-endpoint = <&mipid02_0>;
+                    data-lanes = <1 2>;
+                };
+            };
+        };
+    };
+
+...

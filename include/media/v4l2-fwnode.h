@@ -49,11 +49,13 @@ struct v4l2_fwnode_bus_mipi_csi2 {
  * @flags: media bus (V4L2_MBUS_*) flags
  * @bus_width: bus width in bits
  * @data_shift: data shift in bits
+ * @max_pclk_frequency: maximum pixel clock in hertz
  */
 struct v4l2_fwnode_bus_parallel {
 	unsigned int flags;
 	unsigned char bus_width;
 	unsigned char data_shift;
+	unsigned int pclk_max_frequency;
 };
 
 /**

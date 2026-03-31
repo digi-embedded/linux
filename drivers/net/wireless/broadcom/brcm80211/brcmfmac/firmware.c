@@ -22,6 +22,15 @@
 #define BRCMF_FW_NVRAM_PCIEDEV_LEN		10	/* pcie/1/4/ + \0 */
 #define BRCMF_FW_DEFAULT_BOARDREV		"boardrev=0xff"
 
+static int brcmf_testmode = 0;
+module_param_named(testmode, brcmf_testmode, int, 0444);
+MODULE_PARM_DESC(testmode, "Enable Test Mode Operation");
+
+#define MAX_REGDMN_LEN					10
+static char brcmf_regdmn[MAX_REGDMN_LEN] = "US";
+module_param_string(regdmn, brcmf_regdmn, MAX_REGDMN_LEN, 0444);
+MODULE_PARM_DESC(regdmn, "Regulatory domain");
+
 enum nvram_parser_state {
 	IDLE,
 	KEY,
@@ -508,7 +517,8 @@ static void brcmf_fw_free_request(struct brcmf_fw_request *req)
 	int i;
 
 	for (i = 0, item = &req->items[0]; i < req->n_items; i++, item++) {
-		if (item->type == BRCMF_FW_TYPE_BINARY)
+		if (item->type == BRCMF_FW_TYPE_BINARY ||
+		    item->type == BRCMF_FW_TYPE_TRXSE)
 			release_firmware(item->binary);
 		else if (item->type == BRCMF_FW_TYPE_NVRAM)
 			brcmf_fw_nvram_free(item->nv_data.data);
@@ -579,6 +589,7 @@ static int brcmf_fw_complete_request(const struct firmware *fw,
 		ret = brcmf_fw_request_nvram_done(fw, fwctx);
 		break;
 	case BRCMF_FW_TYPE_BINARY:
+	case BRCMF_FW_TYPE_TRXSE:
 		if (fw)
 			cur->binary = fw;
 		else
@@ -628,9 +639,12 @@ static int brcmf_fw_request_firmware(const struct firmware **fw,
 		if (!alt_path)
 			goto fallback;
 
-		ret = request_firmware(fw, alt_path, fwctx->dev);
+		ret = request_firmware_direct(fw, alt_path, fwctx->dev);
 		kfree(alt_path);
-		if (ret == 0)
+		if (ret)
+			brcmf_info("no board-specific nvram available (ret=%d), device will use %s\n",
+				   ret, cur->path);
+		else
 			return ret;
 	}
 
@@ -641,7 +655,18 @@ fallback:
 static void brcmf_fw_request_done(const struct firmware *fw, void *ctx)
 {
 	struct brcmf_fw *fwctx = ctx;
+	struct brcmf_fw_item *cur = &fwctx->req->items[fwctx->curpos];
+	char alt_path[BRCMF_FW_NAME_LEN];
 	int ret;
+
+	if (!fw && cur->type == BRCMF_FW_TYPE_TRXSE) {
+		strlcpy(alt_path, cur->path, BRCMF_FW_NAME_LEN);
+		/* strip 'se' from .trxse at the end */
+		alt_path[strlen(alt_path) - 2] = 0;
+		ret = request_firmware(&fw, alt_path, fwctx->dev);
+		if (!ret)
+			cur->path = alt_path;
+	}
 
 	ret = brcmf_fw_complete_request(fw, fwctx);
 
@@ -793,6 +818,23 @@ brcmf_fw_alloc_request(u32 chip, u32 chiprev,
 		}
 		strlcat(fwnames[j].path, mapping_table[i].fw_base,
 			BRCMF_FW_NAME_LEN);
+
+		/* If brcmfmac.testmode=1, load '_mfgtest' binary instead */
+		if (!strcmp(fwnames[j].extension, ".bin")) {
+			if (brcmf_testmode) {
+				brcmf_info("loading 'mfgtest' firmware\n");
+				strlcat(fwnames[j].path, "_mfgtest", BRCMF_FW_NAME_LEN);
+			}
+		}
+		/* If brcmfmac.regdmn=XX, load a specific CLM blob file (default: US) */
+		else if (!strcmp(fwnames[j].extension, ".clm_blob")) {
+			char regdmn_suffix[MAX_REGDMN_LEN+1];
+
+			brcmf_info("loading '%s' CLM blob file\n", brcmf_regdmn);
+			snprintf(regdmn_suffix, MAX_REGDMN_LEN+1, "_%s", brcmf_regdmn);
+			strlcat(fwnames[j].path, regdmn_suffix, BRCMF_FW_NAME_LEN);
+		}
+
 		strlcat(fwnames[j].path, fwnames[j].extension,
 			BRCMF_FW_NAME_LEN);
 		fwreq->items[j].path = fwnames[j].path;

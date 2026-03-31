@@ -95,6 +95,9 @@ enum state {
 #define MIN_HEIGHT	16U
 #define MAX_HEIGHT	2592U
 
+/* DMA can sustain YUV 720p@15fps max */
+#define MAX_DMA_BANDWIDTH	(1280 * 720 * 2 * 15)
+
 #define TIMEOUT_MS	1000
 
 #define OVERRUN_ERROR_THRESHOLD	3
@@ -113,7 +116,7 @@ struct dcmi_framesize {
 struct dcmi_buf {
 	struct vb2_v4l2_buffer	vb;
 	bool			prepared;
-	dma_addr_t		paddr;
+	struct sg_table		sgt;
 	size_t			size;
 	struct list_head	list;
 };
@@ -157,6 +160,7 @@ struct stm32_dcmi {
 	enum state			state;
 	struct dma_chan			*dma_chan;
 	dma_cookie_t			dma_cookie;
+	u32				dma_max_burst;
 	u32				misr;
 	int				errors_count;
 	int				overrun_count;
@@ -326,13 +330,12 @@ static int dcmi_start_dma(struct stm32_dcmi *dcmi,
 	mutex_lock(&dcmi->dma_lock);
 
 	/* Prepare a DMA transaction */
-	desc = dmaengine_prep_slave_single(dcmi->dma_chan, buf->paddr,
-					   buf->size,
+	desc = dmaengine_prep_slave_sg(dcmi->dma_chan, buf->sgt.sgl,
+					   buf->sgt.nents,
 					   DMA_DEV_TO_MEM,
 					   DMA_PREP_INTERRUPT);
 	if (!desc) {
-		dev_err(dcmi->dev, "%s: DMA dmaengine_prep_slave_single failed for buffer phy=%pad size=%zu\n",
-			__func__, &buf->paddr, buf->size);
+		dev_err(dcmi->dev, "%s: DMA dmaengine_prep_slave_sg failed\n", __func__);
 		mutex_unlock(&dcmi->dma_lock);
 		return -EINVAL;
 	}
@@ -470,16 +473,11 @@ static irqreturn_t dcmi_irq_thread(int irq, void *arg)
 static irqreturn_t dcmi_irq_callback(int irq, void *arg)
 {
 	struct stm32_dcmi *dcmi = arg;
-	unsigned long flags;
-
-	spin_lock_irqsave(&dcmi->irqlock, flags);
 
 	dcmi->misr = reg_read(dcmi->regs, DCMI_MIS);
 
 	/* Clear interrupt */
 	reg_set(dcmi->regs, DCMI_ICR, IT_FRAME | IT_OVR | IT_ERR);
-
-	spin_unlock_irqrestore(&dcmi->irqlock, flags);
 
 	return IRQ_WAKE_THREAD;
 }
@@ -524,6 +522,10 @@ static int dcmi_buf_prepare(struct vb2_buffer *vb)
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
 	struct dcmi_buf *buf = container_of(vbuf, struct dcmi_buf, vb);
 	unsigned long size;
+	unsigned int num_sgs;
+	dma_addr_t dma_buf;
+	struct scatterlist *sg;
+	int i, ret;
 
 	size = dcmi->fmt.fmt.pix.sizeimage;
 
@@ -537,15 +539,35 @@ static int dcmi_buf_prepare(struct vb2_buffer *vb)
 
 	if (!buf->prepared) {
 		/* Get memory addresses */
-		buf->paddr =
-			vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, 0);
 		buf->size = vb2_plane_size(&buf->vb.vb2_buf, 0);
+		if (buf->size <= dcmi->dma_max_burst)
+			num_sgs = 1;
+		else
+			num_sgs = DIV_ROUND_UP(buf->size, dcmi->dma_max_burst);
+
+		ret = sg_alloc_table(&buf->sgt, num_sgs, GFP_ATOMIC);
+		if (ret) {
+			dev_err(dcmi->dev, "sg table alloc failed\n");
+			return ret;
+		}
+
+		dma_buf = vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, 0);
+
+		dev_dbg(dcmi->dev, "buffer[%d] phy=%pad size=%zu\n",
+			vb->index, &dma_buf, buf->size);
+
+		for_each_sg(buf->sgt.sgl, sg, num_sgs, i) {
+			size_t bytes = min_t(size_t, size, dcmi->dma_max_burst);
+
+			sg_dma_address(sg) = dma_buf;
+			sg_dma_len(sg) = bytes;
+			dma_buf += bytes;
+			size -= bytes;
+		}
+
 		buf->prepared = true;
 
 		vb2_set_plane_payload(&buf->vb.vb2_buf, 0, buf->size);
-
-		dev_dbg(dcmi->dev, "buffer[%d] phy=%pad size=%zu\n",
-			vb->index, &buf->paddr, buf->size);
 	}
 
 	return 0;
@@ -577,6 +599,15 @@ static void dcmi_buf_queue(struct vb2_buffer *vb)
 	}
 
 	spin_unlock_irq(&dcmi->irqlock);
+}
+
+static void dcmi_buf_cleanup(struct vb2_buffer *vb)
+{
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
+	struct dcmi_buf *buf = container_of(vbuf, struct dcmi_buf, vb);
+
+	if (buf->prepared)
+		sg_free_table(&buf->sgt);
 }
 
 static struct media_entity *dcmi_find_source(struct stm32_dcmi *dcmi)
@@ -742,6 +773,33 @@ static int dcmi_start_streaming(struct vb2_queue *vq, unsigned int count)
 	if (ret)
 		goto err_media_pipeline_stop;
 
+	/* Check if snapshop mode is necessary for jpeg capture */
+	if (dcmi->sd_format->fourcc == V4L2_PIX_FMT_JPEG) {
+		unsigned int rate;
+		struct v4l2_streamparm p = {
+			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE
+		};
+		struct v4l2_fract frame_interval = {1, 30};
+
+		ret = v4l2_g_parm_cap(dcmi->vdev, dcmi->source, &p);
+		if (!ret)
+			frame_interval = p.parm.capture.timeperframe;
+
+		rate = dcmi->fmt.fmt.pix.sizeimage *
+		       frame_interval.denominator / frame_interval.numerator;
+
+		/*
+		 * If rate exceed DMA capabilities, switch to snapshot mode
+		 * to ensure that current DMA transfer is elapsed before
+		 * capturing a new JPEG.
+		 */
+		if (rate > MAX_DMA_BANDWIDTH) {
+			val |= CR_CM;
+			dev_dbg(dcmi->dev, "Capture rate is too high for continuous mode (%d > %d bytes/s), switch to snapshot mode\n",
+				rate, MAX_DMA_BANDWIDTH);
+		}
+	}
+
 	spin_lock_irq(&dcmi->irqlock);
 
 	/* Set bus width */
@@ -794,10 +852,6 @@ static int dcmi_start_streaming(struct vb2_queue *vq, unsigned int count)
 	/* Set crop */
 	if (dcmi->do_crop)
 		dcmi_set_crop(dcmi);
-
-	/* Enable jpeg capture */
-	if (dcmi->sd_format->fourcc == V4L2_PIX_FMT_JPEG)
-		reg_set(dcmi->regs, DCMI_CR, CR_CM);/* Snapshot mode */
 
 	/* Enable dcmi */
 	reg_set(dcmi->regs, DCMI_CR, CR_ENABLE);
@@ -914,6 +968,7 @@ static const struct vb2_ops dcmi_video_qops = {
 	.buf_init		= dcmi_buf_init,
 	.buf_prepare		= dcmi_buf_prepare,
 	.buf_queue		= dcmi_buf_queue,
+	.buf_cleanup		= dcmi_buf_cleanup,
 	.start_streaming	= dcmi_start_streaming,
 	.stop_streaming		= dcmi_stop_streaming,
 	.wait_prepare		= vb2_ops_wait_prepare,
@@ -1793,6 +1848,15 @@ static int dcmi_graph_notify_bound(struct v4l2_async_notifier *notifier,
 
 	dev_dbg(dcmi->dev, "Subdev \"%s\" bound\n", subdev->name);
 
+	ret = video_register_device(dcmi->vdev, VFL_TYPE_VIDEO, -1);
+	if (ret) {
+		dev_err(dcmi->dev, "Failed to register video device\n");
+		return ret;
+	}
+
+	dev_dbg(dcmi->dev, "Device registered as %s\n",
+		video_device_node_name(dcmi->vdev));
+
 	/*
 	 * Link this sub-device to DCMI, it could be
 	 * a parallel camera sensor or a bridge
@@ -1805,10 +1869,11 @@ static int dcmi_graph_notify_bound(struct v4l2_async_notifier *notifier,
 				    &dcmi->vdev->entity, 0,
 				    MEDIA_LNK_FL_IMMUTABLE |
 				    MEDIA_LNK_FL_ENABLED);
-	if (ret)
+	if (ret) {
 		dev_err(dcmi->dev, "Failed to create media pad link with subdev \"%s\"\n",
 			subdev->name);
-	else
+		video_unregister_device(dcmi->vdev);
+	} else
 		dev_dbg(dcmi->dev, "DCMI is now linked to \"%s\"\n",
 			subdev->name);
 
@@ -1866,6 +1931,7 @@ static int dcmi_probe(struct platform_device *pdev)
 	struct stm32_dcmi *dcmi;
 	struct vb2_queue *q;
 	struct dma_chan *chan;
+	struct dma_slave_caps caps;
 	struct clk *mclk;
 	int irq;
 	int ret = 0;
@@ -1953,6 +2019,12 @@ static int dcmi_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	dcmi->dma_max_burst = UINT_MAX;
+	ret = dma_get_slave_caps(chan, &caps);
+	if (!ret && caps.max_sg_burst)
+		dcmi->dma_max_burst = caps.max_sg_burst	*
+				      DMA_SLAVE_BUSWIDTH_4_BYTES;
+
 	spin_lock_init(&dcmi->irqlock);
 	mutex_init(&dcmi->lock);
 	mutex_init(&dcmi->dma_lock);
@@ -2008,15 +2080,6 @@ static int dcmi_probe(struct platform_device *pdev)
 	}
 	dcmi->vdev->entity.flags |= MEDIA_ENT_FL_DEFAULT;
 
-	ret = video_register_device(dcmi->vdev, VFL_TYPE_VIDEO, -1);
-	if (ret) {
-		dev_err(dcmi->dev, "Failed to register video device\n");
-		goto err_media_entity_cleanup;
-	}
-
-	dev_dbg(dcmi->dev, "Device registered as %s\n",
-		video_device_node_name(dcmi->vdev));
-
 	/* Buffer queue */
 	q->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	q->io_modes = VB2_MMAP | VB2_READ | VB2_DMABUF;
@@ -2037,7 +2100,7 @@ static int dcmi_probe(struct platform_device *pdev)
 
 	ret = dcmi_graph_init(dcmi);
 	if (ret < 0)
-		goto err_media_entity_cleanup;
+		goto err_vb2_queue_release;
 
 	/* Reset device */
 	ret = reset_control_assert(dcmi->rstc);
@@ -2063,7 +2126,10 @@ static int dcmi_probe(struct platform_device *pdev)
 	return 0;
 
 err_cleanup:
+	v4l2_async_notifier_unregister(&dcmi->notifier);
 	v4l2_async_notifier_cleanup(&dcmi->notifier);
+err_vb2_queue_release:
+	vb2_queue_release(q);
 err_media_entity_cleanup:
 	media_entity_cleanup(&dcmi->vdev->entity);
 err_device_release:
@@ -2085,6 +2151,7 @@ static int dcmi_remove(struct platform_device *pdev)
 
 	v4l2_async_notifier_unregister(&dcmi->notifier);
 	v4l2_async_notifier_cleanup(&dcmi->notifier);
+	vb2_queue_release(&dcmi->queue);
 	media_entity_cleanup(&dcmi->vdev->entity);
 	v4l2_device_unregister(&dcmi->v4l2_dev);
 	media_device_cleanup(&dcmi->mdev);

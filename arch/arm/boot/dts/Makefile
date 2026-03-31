@@ -1,4 +1,44 @@
 # SPDX-License-Identifier: GPL-2.0
+
+# board-specific dtc flags
+DTC_FLAGS_stm32mp157c-dk2 += -@
+DTC_FLAGS_stm32f429-disco += -@
+DTC_FLAGS_stm32f469-disco += -@
+DTC_FLAGS_stm32f746-disco += -@
+DTC_FLAGS_stm32f769-disco += -@
+DTC_FLAGS_stm32429i-eval += -@
+DTC_FLAGS_stm32746g-eval += -@
+DTC_FLAGS_stm32h743i-eval += -@
+DTC_FLAGS_stm32h743i-disco += -@
+DTC_FLAGS_stm32mp135f-dk += -@
+DTC_FLAGS_stm32mp135f-dk-a7-examples +=-@
+DTC_FLAGS_stm32mp157a-dk1 += -@
+DTC_FLAGS_stm32mp157a-dk1-a7-examples += -@
+DTC_FLAGS_stm32mp157a-dk1-m4-examples += -@
+DTC_FLAGS_stm32mp157d-dk1 += -@
+DTC_FLAGS_stm32mp157d-dk1-a7-examples += -@
+DTC_FLAGS_stm32mp157d-dk1-m4-examples += -@
+DTC_FLAGS_stm32mp157c-dk2 += -@
+DTC_FLAGS_stm32mp157f-dk2 += -@
+DTC_FLAGS_stm32mp157c-dk2-a7-examples += -@
+DTC_FLAGS_stm32mp157c-dk2-m4-examples += -@
+DTC_FLAGS_stm32mp157f-dk2-a7-examples += -@
+DTC_FLAGS_stm32mp157f-dk2-m4-examples += -@
+DTC_FLAGS_stm32mp157a-ed1 += -@
+DTC_FLAGS_stm32mp157c-ed1 += -@
+DTC_FLAGS_stm32mp157d-ed1 += -@
+DTC_FLAGS_stm32mp157f-ed1 += -@
+DTC_FLAGS_stm32mp157a-ev1 += -@
+DTC_FLAGS_stm32mp157c-ev1 += -@
+DTC_FLAGS_stm32mp157d-ev1 += -@
+DTC_FLAGS_stm32mp157f-ev1 += -@
+DTC_FLAGS_stm32mp157c-ev1-a7-examples += -@
+DTC_FLAGS_stm32mp157c-ev1-m4-examples += -@
+DTC_FLAGS_stm32mp157f-ev1-a7-examples += -@
+DTC_FLAGS_stm32mp157f-ev1-m4-examples += -@
+DTC_FLAGS_ccmp133-dvk += -@
+DTC_FLAGS_ccmp157-dvk += -@
+
 dtb-$(CONFIG_ARCH_ALPINE) += \
 	alpine-db.dtb
 dtb-$(CONFIG_MACH_ARTPEC6) += \
@@ -1106,6 +1146,39 @@ dtb-$(CONFIG_ARCH_STI) += \
 	stih418-b2199.dtb \
 	stih418-b2264.dtb
 dtb-$(CONFIG_ARCH_STM32) += \
+	ccmp133-dvk.dtb \
+	ccmp133-mfg-functional.dtb \
+	ccmp133-mfg-functional-wb.dtb \
+	ccmp157-dvk.dtb \
+	ccmp157-mfg-functional.dtb \
+	ccmp157-mfg-functional-wb.dtb \
+	_ov_board_mikroe-accel2-click_ccmp13-dvk.dtbo \
+	_ov_board_mikroe-accel2-click_ccmp15-dvk.dtbo \
+	_ov_board_mikroe-gyro-click_ccmp13-dvk.dtbo \
+	_ov_board_mikroe-gyro-click_ccmp15-dvk.dtbo \
+	_ov_board_mikroe-i2c-to-spi-click_ccmp13-dvk.dtbo \
+	_ov_board_mikroe-i2c-to-spi-click_ccmp15-dvk.dtbo \
+	_ov_board_nhd-3-5-640480ef-msxp-mipi-dsi_ccmp15-dvk.dtbo \
+	_ov_board_can1_ccmp15-dvk.dtbo \
+	_ov_board_can2_ccmp15-dvk.dtbo \
+	_ov_board_dlc0200ccp04df-mipi-dsi_ccmp15-dvk.dtbo \
+	_ov_board_eth0-10-100_ccmp15-dvk.dtbo \
+	_ov_board_fusion10-lvds_ccmp15-dvk.dtbo \
+	_ov_board_fusion7-parallel_ccmp15-dvk.dtbo \
+	_ov_board_g101evn010-lvds_ccmp15-dvk.dtbo \
+	_ov_board_sv4e-mipi-analyzer_ccmp15-dvk.dtbo \
+	_ov_board_pwm8_ccmp13-dvk.dtbo \
+	_ov_board_v1_ccmp15-dvk.dtbo \
+	_ov_board_v2_ccmp13-dvk.dtbo \
+	_ov_board_v2_ccmp15-dvk.dtbo \
+	_ov_board_v3_ccmp13-dvk.dtbo \
+	_ov_som_bt_ccmp13.dtbo \
+	_ov_som_bt_ccmp15.dtbo \
+	_ov_som_bt_test_ccmp13.dtbo \
+	_ov_som_bt_test_ccmp15.dtbo \
+	_ov_som_v1_ccmp15.dtbo \
+	_ov_som_wifi_ccmp13.dtbo \
+	_ov_som_wifi_ccmp15.dtbo \
 	stm32f429-disco.dtb \
 	stm32f469-disco.dtb \
 	stm32f746-disco.dtb \
@@ -1115,10 +1188,17 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	stm32h743i-eval.dtb \
 	stm32h743i-disco.dtb \
 	stm32h750i-art-pi.dtb \
+	stm32mp135f-dk.dtb \
+	stm32mp135f-dk-a7-examples.dtb \
 	stm32mp153c-dhcom-drc02.dtb \
 	stm32mp157a-avenger96.dtb \
 	stm32mp157a-dhcor-avenger96.dtb \
 	stm32mp157a-dk1.dtb \
+	stm32mp157a-dk1-a7-examples.dtb \
+	stm32mp157a-dk1-m4-examples.dtb \
+	stm32mp157d-dk1.dtb \
+	stm32mp157d-dk1-a7-examples.dtb \
+	stm32mp157d-dk1-m4-examples.dtb \
 	stm32mp157a-iot-box.dtb \
 	stm32mp157a-microgea-stm32mp1-microdev2.0.dtb \
 	stm32mp157a-microgea-stm32mp1-microdev2.0-of7.dtb \
@@ -1128,8 +1208,23 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	stm32mp157c-dhcom-pdk2.dtb \
 	stm32mp157c-dhcom-picoitx.dtb \
 	stm32mp157c-dk2.dtb \
+	stm32mp157c-dk2-a7-examples.dtb \
+	stm32mp157c-dk2-m4-examples.dtb \
+	stm32mp157f-dk2.dtb \
+	stm32mp157f-dk2-a7-examples.dtb \
+	stm32mp157f-dk2-m4-examples.dtb \
+	stm32mp157a-ed1.dtb \
 	stm32mp157c-ed1.dtb \
+	stm32mp157d-ed1.dtb \
+	stm32mp157f-ed1.dtb \
+	stm32mp157a-ev1.dtb \
 	stm32mp157c-ev1.dtb \
+	stm32mp157c-ev1-a7-examples.dtb \
+	stm32mp157c-ev1-m4-examples.dtb \
+	stm32mp157d-ev1.dtb \
+	stm32mp157f-ev1.dtb \
+	stm32mp157f-ev1-a7-examples.dtb \
+	stm32mp157f-ev1-m4-examples.dtb \
 	stm32mp157c-lxa-mc1.dtb \
 	stm32mp157c-odyssey.dtb
 dtb-$(CONFIG_MACH_SUN4I) += \

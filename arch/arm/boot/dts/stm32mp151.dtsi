@@ -5,6 +5,7 @@
  */
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/stm32mp1-clks.h>
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/reset/stm32mp1-resets.h>
 
 / {
@@ -17,9 +18,14 @@
 
 		cpu0: cpu@0 {
 			compatible = "arm,cortex-a7";
-			clock-frequency = <650000000>;
 			device_type = "cpu";
 			reg = <0>;
+			clocks = <&scmi_clk CK_SCMI_MPU>;
+			clock-names = "cpu";
+			operating-points-v2 = <&cpu0_opp_table>;
+			nvmem-cells = <&part_number_otp>;
+			nvmem-cell-names = "part_number";
+			#cooling-cells = <2>;
 		};
 	};
 
@@ -28,6 +34,49 @@
 		interrupts = <GIC_SPI 200 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-affinity = <&cpu0>;
 		interrupt-parent = <&intc>;
+	};
+
+	cpu0_opp_table: cpu0-opp-table {
+		compatible = "operating-points-v2";
+		opp-shared;
+	};
+
+	scmi_sram: sram@2ffff000 {
+		compatible = "mmio-sram";
+		reg = <0x2ffff000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0 0x2ffff000 0x1000>;
+
+		scmi_shm: scmi_shm@0 {
+			compatible = "arm,scmi-shmem";
+			reg = <0 0x80>;
+		};
+	};
+
+	firmware {
+		optee {
+			compatible = "linaro,optee-tz";
+			method = "smc";
+		};
+
+		scmi: scmi {
+			compatible = "linaro,scmi-optee";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			linaro,optee-channel-id = <0>;
+			shmem = <&scmi_shm>;
+
+			scmi_clk: protocol@14 {
+				reg = <0x14>;
+				#clock-cells = <1>;
+			};
+
+			scmi_reset: protocol@16 {
+				reg = <0x16>;
+				#reset-cells = <1>;
+			};
+		};
 	};
 
 	psci {
@@ -45,43 +94,11 @@
 
 	timer {
 		compatible = "arm,armv7-timer";
-		interrupts = <GIC_PPI 13 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>,
-			     <GIC_PPI 14 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>,
-			     <GIC_PPI 11 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>,
-			     <GIC_PPI 10 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>;
+		interrupts = <GIC_PPI 13 (GIC_CPU_MASK_SIMPLE(1) | IRQ_TYPE_LEVEL_LOW)>,
+			     <GIC_PPI 14 (GIC_CPU_MASK_SIMPLE(1) | IRQ_TYPE_LEVEL_LOW)>,
+			     <GIC_PPI 11 (GIC_CPU_MASK_SIMPLE(1) | IRQ_TYPE_LEVEL_LOW)>,
+			     <GIC_PPI 10 (GIC_CPU_MASK_SIMPLE(1) | IRQ_TYPE_LEVEL_LOW)>;
 		interrupt-parent = <&intc>;
-	};
-
-	clocks {
-		clk_hse: clk-hse {
-			#clock-cells = <0>;
-			compatible = "fixed-clock";
-			clock-frequency = <24000000>;
-		};
-
-		clk_hsi: clk-hsi {
-			#clock-cells = <0>;
-			compatible = "fixed-clock";
-			clock-frequency = <64000000>;
-		};
-
-		clk_lse: clk-lse {
-			#clock-cells = <0>;
-			compatible = "fixed-clock";
-			clock-frequency = <32768>;
-		};
-
-		clk_lsi: clk-lsi {
-			#clock-cells = <0>;
-			compatible = "fixed-clock";
-			clock-frequency = <32000>;
-		};
-
-		clk_csi: clk-csi {
-			#clock-cells = <0>;
-			compatible = "fixed-clock";
-			clock-frequency = <4000000>;
-		};
 	};
 
 	thermal-zones {
@@ -91,12 +108,6 @@
 			thermal-sensors = <&dts>;
 
 			trips {
-				cpu_alert1: cpu-alert1 {
-					temperature = <85000>;
-					hysteresis = <0>;
-					type = "passive";
-				};
-
 				cpu-crit {
 					temperature = <120000>;
 					hysteresis = <0>;
@@ -115,12 +126,40 @@
 		status = "disabled";
 	};
 
+	pm_domain {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "st,stm32mp157c-pd";
+
+		pd_core_ret: core-ret-power-domain@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+			#power-domain-cells = <0>;
+			label = "CORE-RETENTION";
+
+			pd_core: core-power-domain@2 {
+				reg = <2>;
+				#power-domain-cells = <0>;
+				label = "CORE";
+			};
+		};
+	};
+
 	soc {
 		compatible = "simple-bus";
 		#address-cells = <1>;
 		#size-cells = <1>;
 		interrupt-parent = <&intc>;
 		ranges;
+
+		sram: sram@10000000 {
+			compatible = "mmio-sram";
+			reg = <0x10000000 0x60000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0 0x10000000 0x60000>;
+		};
 
 		timers2: timer@40000000 {
 			#address-cells = <1>;
@@ -129,11 +168,11 @@
 			reg = <0x40000000 0x400>;
 			clocks = <&rcc TIM2_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 18 0x400 0x1>,
-			       <&dmamux1 19 0x400 0x1>,
-			       <&dmamux1 20 0x400 0x1>,
-			       <&dmamux1 21 0x400 0x1>,
-			       <&dmamux1 22 0x400 0x1>;
+			dmas = <&dmamux1 18 0x400 0x80000001>,
+			       <&dmamux1 19 0x400 0x80000001>,
+			       <&dmamux1 20 0x400 0x80000001>,
+			       <&dmamux1 21 0x400 0x80000001>,
+			       <&dmamux1 22 0x400 0x80000001>;
 			dma-names = "ch1", "ch2", "ch3", "ch4", "up";
 			status = "disabled";
 
@@ -162,12 +201,12 @@
 			reg = <0x40001000 0x400>;
 			clocks = <&rcc TIM3_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 23 0x400 0x1>,
-			       <&dmamux1 24 0x400 0x1>,
-			       <&dmamux1 25 0x400 0x1>,
-			       <&dmamux1 26 0x400 0x1>,
-			       <&dmamux1 27 0x400 0x1>,
-			       <&dmamux1 28 0x400 0x1>;
+			dmas = <&dmamux1 23 0x400 0x80000001>,
+			       <&dmamux1 24 0x400 0x80000001>,
+			       <&dmamux1 25 0x400 0x80000001>,
+			       <&dmamux1 26 0x400 0x80000001>,
+			       <&dmamux1 27 0x400 0x80000001>,
+			       <&dmamux1 28 0x400 0x80000001>;
 			dma-names = "ch1", "ch2", "ch3", "ch4", "up", "trig";
 			status = "disabled";
 
@@ -196,10 +235,10 @@
 			reg = <0x40002000 0x400>;
 			clocks = <&rcc TIM4_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 29 0x400 0x1>,
-			       <&dmamux1 30 0x400 0x1>,
-			       <&dmamux1 31 0x400 0x1>,
-			       <&dmamux1 32 0x400 0x1>;
+			dmas = <&dmamux1 29 0x400 0x80000001>,
+			       <&dmamux1 30 0x400 0x80000001>,
+			       <&dmamux1 31 0x400 0x80000001>,
+			       <&dmamux1 32 0x400 0x80000001>;
 			dma-names = "ch1", "ch2", "ch3", "ch4";
 			status = "disabled";
 
@@ -228,12 +267,12 @@
 			reg = <0x40003000 0x400>;
 			clocks = <&rcc TIM5_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 55 0x400 0x1>,
-			       <&dmamux1 56 0x400 0x1>,
-			       <&dmamux1 57 0x400 0x1>,
-			       <&dmamux1 58 0x400 0x1>,
-			       <&dmamux1 59 0x400 0x1>,
-			       <&dmamux1 60 0x400 0x1>;
+			dmas = <&dmamux1 55 0x400 0x80000001>,
+			       <&dmamux1 56 0x400 0x80000001>,
+			       <&dmamux1 57 0x400 0x80000001>,
+			       <&dmamux1 58 0x400 0x80000001>,
+			       <&dmamux1 59 0x400 0x80000001>,
+			       <&dmamux1 60 0x400 0x80000001>;
 			dma-names = "ch1", "ch2", "ch3", "ch4", "up", "trig";
 			status = "disabled";
 
@@ -262,7 +301,7 @@
 			reg = <0x40004000 0x400>;
 			clocks = <&rcc TIM6_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 69 0x400 0x1>;
+			dmas = <&dmamux1 69 0x400 0x80000001>;
 			dma-names = "up";
 			status = "disabled";
 
@@ -280,7 +319,7 @@
 			reg = <0x40005000 0x400>;
 			clocks = <&rcc TIM7_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 70 0x400 0x1>;
+			dmas = <&dmamux1 70 0x400 0x80000001>;
 			dma-names = "up";
 			status = "disabled";
 
@@ -365,6 +404,7 @@
 			interrupts-extended = <&exti 47 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc LPTIM1_K>;
 			clock-names = "mux";
+			power-domains = <&pd_core>;
 			wakeup-source;
 			status = "disabled";
 
@@ -384,20 +424,11 @@
 				compatible = "st,stm32-lptimer-counter";
 				status = "disabled";
 			};
-		};
 
-		spi2: spi@4000b000 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			compatible = "st,stm32h7-spi";
-			reg = <0x4000b000 0x400>;
-			interrupts = <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&rcc SPI2_K>;
-			resets = <&rcc SPI2_R>;
-			dmas = <&dmamux1 39 0x400 0x05>,
-			       <&dmamux1 40 0x400 0x05>;
-			dma-names = "rx", "tx";
-			status = "disabled";
+			timer {
+				compatible = "st,stm32-lptimer-timer";
+				status = "disabled";
+			};
 		};
 
 		i2s2: audio-controller@4000b000 {
@@ -411,16 +442,16 @@
 			status = "disabled";
 		};
 
-		spi3: spi@4000c000 {
+		spi2: spi@4000b000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			compatible = "st,stm32h7-spi";
-			reg = <0x4000c000 0x400>;
-			interrupts = <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&rcc SPI3_K>;
-			resets = <&rcc SPI3_R>;
-			dmas = <&dmamux1 61 0x400 0x05>,
-			       <&dmamux1 62 0x400 0x05>;
+			reg = <0x4000b000 0x400>;
+			interrupts = <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&rcc SPI2_K>;
+			resets = <&rcc SPI2_R>;
+			dmas = <&dmamux1 39 0x400 0x01>,
+			       <&dmamux1 40 0x400 0x01>;
 			dma-names = "rx", "tx";
 			status = "disabled";
 		};
@@ -430,6 +461,20 @@
 			#sound-dai-cells = <0>;
 			reg = <0x4000c000 0x400>;
 			interrupts = <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH>;
+			dmas = <&dmamux1 61 0x400 0x01>,
+			       <&dmamux1 62 0x400 0x01>;
+			dma-names = "rx", "tx";
+			status = "disabled";
+		};
+
+		spi3: spi@4000c000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "st,stm32h7-spi";
+			reg = <0x4000c000 0x400>;
+			interrupts = <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&rcc SPI3_K>;
+			resets = <&rcc SPI3_R>;
 			dmas = <&dmamux1 61 0x400 0x01>,
 			       <&dmamux1 62 0x400 0x01>;
 			dma-names = "rx", "tx";
@@ -455,6 +500,10 @@
 			interrupts-extended = <&exti 27 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc USART2_K>;
 			wakeup-source;
+			power-domains = <&pd_core>;
+			dmas = <&dmamux1 43 0x400 0x15>,
+			       <&dmamux1 44 0x400 0x11>;
+			dma-names = "rx", "tx";
 			status = "disabled";
 		};
 
@@ -464,6 +513,10 @@
 			interrupts-extended = <&exti 28 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc USART3_K>;
 			wakeup-source;
+			power-domains = <&pd_core>;
+			dmas = <&dmamux1 45 0x400 0x15>,
+			       <&dmamux1 46 0x400 0x11>;
+			dma-names = "rx", "tx";
 			status = "disabled";
 		};
 
@@ -473,6 +526,10 @@
 			interrupts-extended = <&exti 30 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc UART4_K>;
 			wakeup-source;
+			power-domains = <&pd_core>;
+			dmas = <&dmamux1 63 0x400 0x15>,
+			       <&dmamux1 64 0x400 0x11>;
+			dma-names = "rx", "tx";
 			status = "disabled";
 		};
 
@@ -482,6 +539,10 @@
 			interrupts-extended = <&exti 31 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc UART5_K>;
 			wakeup-source;
+			power-domains = <&pd_core>;
+			dmas = <&dmamux1 65 0x400 0x15>,
+			       <&dmamux1 66 0x400 0x11>;
+			dma-names = "rx", "tx";
 			status = "disabled";
 		};
 
@@ -489,12 +550,16 @@
 			compatible = "st,stm32mp15-i2c";
 			reg = <0x40012000 0x400>;
 			interrupt-names = "event", "error";
-			interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts-extended = <&exti 21 IRQ_TYPE_LEVEL_HIGH>,
+					      <&intc GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc I2C1_K>;
 			resets = <&rcc I2C1_R>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			dmas = <&dmamux1 33 0x400 0x80000001>,
+			       <&dmamux1 34 0x400 0x80000001>;
+			dma-names = "rx", "tx";
+			power-domains = <&pd_core>;
 			st,syscfg-fmp = <&syscfg 0x4 0x1>;
 			wakeup-source;
 			i2c-analog-filter;
@@ -505,12 +570,16 @@
 			compatible = "st,stm32mp15-i2c";
 			reg = <0x40013000 0x400>;
 			interrupt-names = "event", "error";
-			interrupts = <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts-extended = <&exti 22 IRQ_TYPE_LEVEL_HIGH>,
+					      <&intc GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc I2C2_K>;
 			resets = <&rcc I2C2_R>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			dmas = <&dmamux1 35 0x400 0x80000001>,
+			       <&dmamux1 36 0x400 0x80000001>;
+			dma-names = "rx", "tx";
+			power-domains = <&pd_core>;
 			st,syscfg-fmp = <&syscfg 0x4 0x2>;
 			wakeup-source;
 			i2c-analog-filter;
@@ -521,12 +590,16 @@
 			compatible = "st,stm32mp15-i2c";
 			reg = <0x40014000 0x400>;
 			interrupt-names = "event", "error";
-			interrupts = <GIC_SPI 72 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 73 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts-extended = <&exti 23 IRQ_TYPE_LEVEL_HIGH>,
+					      <&intc GIC_SPI 73 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc I2C3_K>;
 			resets = <&rcc I2C3_R>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			dmas = <&dmamux1 73 0x400 0x80000001>,
+			       <&dmamux1 74 0x400 0x80000001>;
+			dma-names = "rx", "tx";
+			power-domains = <&pd_core>;
 			st,syscfg-fmp = <&syscfg 0x4 0x4>;
 			wakeup-source;
 			i2c-analog-filter;
@@ -537,12 +610,16 @@
 			compatible = "st,stm32mp15-i2c";
 			reg = <0x40015000 0x400>;
 			interrupt-names = "event", "error";
-			interrupts = <GIC_SPI 107 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts-extended = <&exti 25 IRQ_TYPE_LEVEL_HIGH>,
+					      <&intc GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc I2C5_K>;
 			resets = <&rcc I2C5_R>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			dmas = <&dmamux1 115 0x400 0x80000001>,
+			       <&dmamux1 116 0x400 0x80000001>;
+			dma-names = "rx", "tx";
+			power-domains = <&pd_core>;
 			st,syscfg-fmp = <&syscfg 0x4 0x10>;
 			wakeup-source;
 			i2c-analog-filter;
@@ -588,6 +665,10 @@
 			interrupts-extended = <&exti 32 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc UART7_K>;
 			wakeup-source;
+			power-domains = <&pd_core>;
+			dmas = <&dmamux1 79 0x400 0x15>,
+			       <&dmamux1 80 0x400 0x11>;
+			dma-names = "rx", "tx";
 			status = "disabled";
 		};
 
@@ -597,6 +678,10 @@
 			interrupts-extended = <&exti 33 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc UART8_K>;
 			wakeup-source;
+			power-domains = <&pd_core>;
+			dmas = <&dmamux1 81 0x400 0x15>,
+			       <&dmamux1 82 0x400 0x11>;
+			dma-names = "rx", "tx";
 			status = "disabled";
 		};
 
@@ -607,13 +692,13 @@
 			reg = <0x44000000 0x400>;
 			clocks = <&rcc TIM1_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 11 0x400 0x1>,
-			       <&dmamux1 12 0x400 0x1>,
-			       <&dmamux1 13 0x400 0x1>,
-			       <&dmamux1 14 0x400 0x1>,
-			       <&dmamux1 15 0x400 0x1>,
-			       <&dmamux1 16 0x400 0x1>,
-			       <&dmamux1 17 0x400 0x1>;
+			dmas = <&dmamux1 11 0x400 0x80000001>,
+			       <&dmamux1 12 0x400 0x80000001>,
+			       <&dmamux1 13 0x400 0x80000001>,
+			       <&dmamux1 14 0x400 0x80000001>,
+			       <&dmamux1 15 0x400 0x80000001>,
+			       <&dmamux1 16 0x400 0x80000001>,
+			       <&dmamux1 17 0x400 0x80000001>;
 			dma-names = "ch1", "ch2", "ch3", "ch4",
 				    "up", "trig", "com";
 			status = "disabled";
@@ -643,13 +728,13 @@
 			reg = <0x44001000 0x400>;
 			clocks = <&rcc TIM8_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 47 0x400 0x1>,
-			       <&dmamux1 48 0x400 0x1>,
-			       <&dmamux1 49 0x400 0x1>,
-			       <&dmamux1 50 0x400 0x1>,
-			       <&dmamux1 51 0x400 0x1>,
-			       <&dmamux1 52 0x400 0x1>,
-			       <&dmamux1 53 0x400 0x1>;
+			dmas = <&dmamux1 47 0x400 0x80000001>,
+			       <&dmamux1 48 0x400 0x80000001>,
+			       <&dmamux1 49 0x400 0x80000001>,
+			       <&dmamux1 50 0x400 0x80000001>,
+			       <&dmamux1 51 0x400 0x80000001>,
+			       <&dmamux1 52 0x400 0x80000001>,
+			       <&dmamux1 53 0x400 0x80000001>;
 			dma-names = "ch1", "ch2", "ch3", "ch4",
 				    "up", "trig", "com";
 			status = "disabled";
@@ -678,19 +763,9 @@
 			interrupts-extended = <&exti 29 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc USART6_K>;
 			wakeup-source;
-			status = "disabled";
-		};
-
-		spi1: spi@44004000 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			compatible = "st,stm32h7-spi";
-			reg = <0x44004000 0x400>;
-			interrupts = <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&rcc SPI1_K>;
-			resets = <&rcc SPI1_R>;
-			dmas = <&dmamux1 37 0x400 0x05>,
-			       <&dmamux1 38 0x400 0x05>;
+			power-domains = <&pd_core>;
+			dmas = <&dmamux1 71 0x400 0x15>,
+			       <&dmamux1 72 0x400 0x11>;
 			dma-names = "rx", "tx";
 			status = "disabled";
 		};
@@ -706,6 +781,20 @@
 			status = "disabled";
 		};
 
+		spi1: spi@44004000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "st,stm32h7-spi";
+			reg = <0x44004000 0x400>;
+			interrupts = <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&rcc SPI1_K>;
+			resets = <&rcc SPI1_R>;
+			dmas = <&dmamux1 37 0x400 0x01>,
+			       <&dmamux1 38 0x400 0x01>;
+			dma-names = "rx", "tx";
+			status = "disabled";
+		};
+
 		spi4: spi@44005000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -714,8 +803,8 @@
 			interrupts = <GIC_SPI 84 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc SPI4_K>;
 			resets = <&rcc SPI4_R>;
-			dmas = <&dmamux1 83 0x400 0x05>,
-			       <&dmamux1 84 0x400 0x05>;
+			dmas = <&dmamux1 83 0x400 0x01>,
+			       <&dmamux1 84 0x400 0x01>;
 			dma-names = "rx", "tx";
 			status = "disabled";
 		};
@@ -727,10 +816,10 @@
 			reg = <0x44006000 0x400>;
 			clocks = <&rcc TIM15_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 105 0x400 0x1>,
-			       <&dmamux1 106 0x400 0x1>,
-			       <&dmamux1 107 0x400 0x1>,
-			       <&dmamux1 108 0x400 0x1>;
+			dmas = <&dmamux1 105 0x400 0x80000001>,
+			       <&dmamux1 106 0x400 0x80000001>,
+			       <&dmamux1 107 0x400 0x80000001>,
+			       <&dmamux1 108 0x400 0x80000001>;
 			dma-names = "ch1", "up", "trig", "com";
 			status = "disabled";
 
@@ -754,8 +843,8 @@
 			reg = <0x44007000 0x400>;
 			clocks = <&rcc TIM16_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 109 0x400 0x1>,
-			       <&dmamux1 110 0x400 0x1>;
+			dmas = <&dmamux1 109 0x400 0x80000001>,
+			       <&dmamux1 110 0x400 0x80000001>;
 			dma-names = "ch1", "up";
 			status = "disabled";
 
@@ -778,8 +867,8 @@
 			reg = <0x44008000 0x400>;
 			clocks = <&rcc TIM17_K>;
 			clock-names = "int";
-			dmas = <&dmamux1 111 0x400 0x1>,
-			       <&dmamux1 112 0x400 0x1>;
+			dmas = <&dmamux1 111 0x400 0x80000001>,
+			       <&dmamux1 112 0x400 0x80000001>;
 			dma-names = "ch1", "up";
 			status = "disabled";
 
@@ -804,8 +893,8 @@
 			interrupts = <GIC_SPI 85 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc SPI5_K>;
 			resets = <&rcc SPI5_R>;
-			dmas = <&dmamux1 85 0x400 0x05>,
-			       <&dmamux1 86 0x400 0x05>;
+			dmas = <&dmamux1 85 0x400 0x01>,
+			       <&dmamux1 86 0x400 0x01>;
 			dma-names = "rx", "tx";
 			status = "disabled";
 		};
@@ -990,6 +1079,15 @@
 			#dma-cells = <4>;
 			st,mem2mem;
 			dma-requests = <8>;
+			dmas = <&mdma1 0 0x3 0x1200000a 0x48000008 0x00000020 1>,
+			       <&mdma1 1 0x3 0x1200000a 0x48000008 0x00000800 1>,
+			       <&mdma1 2 0x3 0x1200000a 0x48000008 0x00200000 1>,
+			       <&mdma1 3 0x3 0x1200000a 0x48000008 0x08000000 1>,
+			       <&mdma1 4 0x3 0x1200000a 0x4800000C 0x00000020 1>,
+			       <&mdma1 5 0x3 0x1200000a 0x4800000C 0x00000800 1>,
+			       <&mdma1 6 0x3 0x1200000a 0x4800000C 0x00200000 1>,
+			       <&mdma1 7 0x3 0x1200000a 0x4800000C 0x08000000 1>;
+			dma-names = "ch0", "ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7";
 		};
 
 		dma2: dma-controller@48001000 {
@@ -1008,6 +1106,15 @@
 			#dma-cells = <4>;
 			st,mem2mem;
 			dma-requests = <8>;
+			dmas = <&mdma1 8 0x3 0x1200000a 0x48001008 0x00000020 1>,
+			       <&mdma1 9 0x3 0x1200000a 0x48001008 0x00000800 1>,
+			       <&mdma1 10 0x3 0x1200000a 0x48001008 0x00200000 1>,
+			       <&mdma1 11 0x3 0x1200000a 0x48001008 0x08000000 1>,
+			       <&mdma1 12 0x3 0x1200000a 0x4800100C 0x00000020 1>,
+			       <&mdma1 13 0x3 0x1200000a 0x4800100C 0x00000800 1>,
+			       <&mdma1 14 0x3 0x1200000a 0x4800100C 0x00200000 1>,
+			       <&mdma1 15 0x3 0x1200000a 0x4800100C 0x08000000 1>;
+			dma-names = "ch0", "ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7";
 		};
 
 		dmamux1: dma-router@48002000 {
@@ -1038,10 +1145,12 @@
 			adc1: adc@0 {
 				compatible = "st,stm32mp1-adc";
 				#io-channel-cells = <1>;
+				#address-cells = <1>;
+				#size-cells = <0>;
 				reg = <0x0>;
 				interrupt-parent = <&adc>;
 				interrupts = <0>;
-				dmas = <&dmamux1 9 0x400 0x01>;
+				dmas = <&dmamux1 9 0x400 0x80000001>;
 				dma-names = "rx";
 				status = "disabled";
 			};
@@ -1049,17 +1158,29 @@
 			adc2: adc@100 {
 				compatible = "st,stm32mp1-adc";
 				#io-channel-cells = <1>;
+				#address-cells = <1>;
+				#size-cells = <0>;
 				reg = <0x100>;
 				interrupt-parent = <&adc>;
 				interrupts = <1>;
-				dmas = <&dmamux1 10 0x400 0x01>;
+				dmas = <&dmamux1 10 0x400 0x80000001>;
 				dma-names = "rx";
+				nvmem-cells = <&vrefint>;
+				nvmem-cell-names = "vrefint";
 				status = "disabled";
+				channel@13 {
+					reg = <13>;
+					label = "vrefint";
+				};
+				channel@14 {
+					reg = <14>;
+					label = "vddcore";
+				};
 			};
 		};
 
 		sdmmc3: mmc@48004000 {
-			compatible = "arm,pl18x", "arm,primecell";
+			compatible = "st,stm32-sdmmc2", "arm,pl18x", "arm,primecell";
 			arm,primecell-periphid = <0x00253180>;
 			reg = <0x48004000 0x400>;
 			interrupts = <GIC_SPI 137 IRQ_TYPE_LEVEL_HIGH>;
@@ -1076,17 +1197,28 @@
 		usbotg_hs: usb-otg@49000000 {
 			compatible = "st,stm32mp15-hsotg", "snps,dwc2";
 			reg = <0x49000000 0x10000>;
-			clocks = <&rcc USBO_K>;
-			clock-names = "otg";
+			clocks = <&rcc USBO_K>, <&usbphyc>;
+			clock-names = "otg", "utmi";
 			resets = <&rcc USBO_R>;
 			reset-names = "dwc2";
-			interrupts = <GIC_SPI 98 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts-extended = <&exti 44 IRQ_TYPE_LEVEL_HIGH>;
 			g-rx-fifo-size = <512>;
 			g-np-tx-fifo-size = <32>;
 			g-tx-fifo-size = <256 16 16 16 16 16 16 16>;
 			dr_mode = "otg";
+			otg-rev = <0x200>;
 			usb33d-supply = <&usb33>;
+			power-domains = <&pd_core>;
+			wakeup-source;
 			status = "disabled";
+		};
+
+		hsem: hwspinlock@4c000000 {
+			compatible = "st,stm32-hwspinlock";
+			#hwlock-cells = <2>;
+			reg = <0x4c000000 0x400>;
+			clocks = <&rcc HSEM>;
+			clock-names = "hsem";
 		};
 
 		ipcc: mailbox@4c001000 {
@@ -1095,12 +1227,12 @@
 			reg = <0x4c001000 0x400>;
 			st,proc-id = <0>;
 			interrupts-extended =
-				<&intc GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH>,
-				<&intc GIC_SPI 101 IRQ_TYPE_LEVEL_HIGH>,
-				<&exti 61 1>;
-			interrupt-names = "rx", "tx", "wakeup";
+				<&exti 61 1>,
+				<&intc GIC_SPI 101 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "rx", "tx";
 			clocks = <&rcc IPCC>;
 			wakeup-source;
+			power-domains = <&pd_core>;
 			status = "disabled";
 		};
 
@@ -1111,21 +1243,29 @@
 			resets = <&rcc CAMITF_R>;
 			clocks = <&rcc DCMI>;
 			clock-names = "mclk";
-			dmas = <&dmamux1 75 0x400 0x01>;
+			dmas = <&dmamux1 75 0x400 0xe0000001>;
 			dma-names = "tx";
 			status = "disabled";
 		};
 
 		rcc: rcc@50000000 {
-			compatible = "st,stm32mp1-rcc", "syscon";
+			compatible = "st,stm32mp1-rcc-secure", "st,stm32mp1-rcc", "syscon";
 			reg = <0x50000000 0x1000>;
 			#clock-cells = <1>;
 			#reset-cells = <1>;
+
+			clock-names = "hse", "hsi", "csi", "lse", "lsi";
+			clocks = <&scmi_clk CK_SCMI_HSE>,
+				 <&scmi_clk CK_SCMI_HSI>,
+				 <&scmi_clk CK_SCMI_CSI>,
+				 <&scmi_clk CK_SCMI_LSE>,
+				 <&scmi_clk CK_SCMI_LSI>;
 		};
 
 		pwr_regulators: pwr@50001000 {
 			compatible = "st,stm32mp1,pwr-reg";
 			reg = <0x50001000 0x10>;
+			st,tzcr = <&rcc 0x0 0x1>;
 
 			reg11: reg11 {
 				regulator-name = "reg11";
@@ -1151,11 +1291,87 @@
 			reg = <0x50001014 0x4>;
 		};
 
+		pwr_irq: pwr@50001020 {
+			compatible = "st,stm32mp1-pwr";
+			reg = <0x50001020 0x100>;
+			interrupts = <GIC_SPI 149 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-controller;
+			#interrupt-cells = <3>;
+
+			st,wakeup-pins = <&gpioa 0 GPIO_ACTIVE_HIGH>,
+					 <&gpioa 2 GPIO_ACTIVE_HIGH>,
+					 <&gpioc 13 GPIO_ACTIVE_HIGH>,
+					 <&gpioi 8 GPIO_ACTIVE_HIGH>,
+					 <&gpioi 11 GPIO_ACTIVE_HIGH>,
+					 <&gpioc 1 GPIO_ACTIVE_HIGH>;
+		};
+
 		exti: interrupt-controller@5000d000 {
 			compatible = "st,stm32mp1-exti", "syscon";
 			interrupt-controller;
 			#interrupt-cells = <2>;
+			#address-cells = <0>;
 			reg = <0x5000d000 0x400>;
+			hwlocks = <&hsem 1 1>;
+			wakeup-parent = <&pwr_irq>;
+
+			exti-interrupt-map {
+				#address-cells = <0>;
+				#interrupt-cells = <2>;
+				interrupt-map-mask = <0xffffffff 0>;
+				interrupt-map =
+					<0  0 &intc GIC_SPI 6   IRQ_TYPE_LEVEL_HIGH>,
+					<1  0 &intc GIC_SPI 7   IRQ_TYPE_LEVEL_HIGH>,
+					<2  0 &intc GIC_SPI 8   IRQ_TYPE_LEVEL_HIGH>,
+					<3  0 &intc GIC_SPI 9   IRQ_TYPE_LEVEL_HIGH>,
+					<4  0 &intc GIC_SPI 10  IRQ_TYPE_LEVEL_HIGH>,
+					<5  0 &intc GIC_SPI 23  IRQ_TYPE_LEVEL_HIGH>,
+					<6  0 &intc GIC_SPI 64  IRQ_TYPE_LEVEL_HIGH>,
+					<7  0 &intc GIC_SPI 65  IRQ_TYPE_LEVEL_HIGH>,
+					<8  0 &intc GIC_SPI 66  IRQ_TYPE_LEVEL_HIGH>,
+					<9  0 &intc GIC_SPI 67  IRQ_TYPE_LEVEL_HIGH>,
+					<10 0 &intc GIC_SPI 40  IRQ_TYPE_LEVEL_HIGH>,
+					<11 0 &intc GIC_SPI 42  IRQ_TYPE_LEVEL_HIGH>,
+					<12 0 &intc GIC_SPI 76  IRQ_TYPE_LEVEL_HIGH>,
+					<13 0 &intc GIC_SPI 77  IRQ_TYPE_LEVEL_HIGH>,
+					<14 0 &intc GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>,
+					<15 0 &intc GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>,
+					<16 0 &intc GIC_SPI 1   IRQ_TYPE_LEVEL_HIGH>,
+					<19 0 &intc GIC_SPI 3   IRQ_TYPE_LEVEL_HIGH>,
+					<21 0 &intc GIC_SPI 31  IRQ_TYPE_LEVEL_HIGH>,
+					<22 0 &intc GIC_SPI 33  IRQ_TYPE_LEVEL_HIGH>,
+					<23 0 &intc GIC_SPI 72  IRQ_TYPE_LEVEL_HIGH>,
+					<24 0 &intc GIC_SPI 95  IRQ_TYPE_LEVEL_HIGH>,
+					<25 0 &intc GIC_SPI 107 IRQ_TYPE_LEVEL_HIGH>,
+					<26 0 &intc GIC_SPI 37  IRQ_TYPE_LEVEL_HIGH>,
+					<27 0 &intc GIC_SPI 38  IRQ_TYPE_LEVEL_HIGH>,
+					<28 0 &intc GIC_SPI 39  IRQ_TYPE_LEVEL_HIGH>,
+					<29 0 &intc GIC_SPI 71  IRQ_TYPE_LEVEL_HIGH>,
+					<30 0 &intc GIC_SPI 52  IRQ_TYPE_LEVEL_HIGH>,
+					<31 0 &intc GIC_SPI 53  IRQ_TYPE_LEVEL_HIGH>,
+					<32 0 &intc GIC_SPI 82  IRQ_TYPE_LEVEL_HIGH>,
+					<33 0 &intc GIC_SPI 83  IRQ_TYPE_LEVEL_HIGH>,
+					<43 0 &intc GIC_SPI 75  IRQ_TYPE_LEVEL_HIGH>,
+					<44 0 &intc GIC_SPI 98  IRQ_TYPE_LEVEL_HIGH>,
+					<47 0 &intc GIC_SPI 93  IRQ_TYPE_LEVEL_HIGH>,
+					<48 0 &intc GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>,
+					<50 0 &intc GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>,
+					<52 0 &intc GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>,
+					<53 0 &intc GIC_SPI 141 IRQ_TYPE_LEVEL_HIGH>,
+					<54 0 &intc GIC_SPI 135 IRQ_TYPE_LEVEL_HIGH>,
+					<55 0 &pwr_irq 0 IRQ_TYPE_EDGE_FALLING 0>,
+					<56 0 &pwr_irq 1 IRQ_TYPE_EDGE_FALLING 0>,
+					<57 0 &pwr_irq 2 IRQ_TYPE_EDGE_FALLING 0>,
+					<58 0 &pwr_irq 3 IRQ_TYPE_EDGE_FALLING 0>,
+					<59 0 &pwr_irq 4 IRQ_TYPE_EDGE_FALLING 0>,
+					<60 0 &pwr_irq 5 IRQ_TYPE_EDGE_FALLING 0>,
+					<61 0 &intc GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH>,
+					<65 0 &intc GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>,
+					<68 0 &intc GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>,
+					<69 0 &intc GIC_SPI 94  IRQ_TYPE_LEVEL_HIGH>,
+					<70 0 &intc GIC_SPI 62  IRQ_TYPE_LEVEL_HIGH>,
+					<73 0 &intc GIC_SPI 129 IRQ_TYPE_LEVEL_HIGH>;
+			};
 		};
 
 		syscfg: syscon@50020000 {
@@ -1172,6 +1388,7 @@
 			interrupts-extended = <&exti 48 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc LPTIM2_K>;
 			clock-names = "mux";
+			power-domains = <&pd_core>;
 			wakeup-source;
 			status = "disabled";
 
@@ -1191,6 +1408,11 @@
 				compatible = "st,stm32-lptimer-counter";
 				status = "disabled";
 			};
+
+			timer {
+				compatible = "st,stm32-lptimer-timer";
+				status = "disabled";
+			};
 		};
 
 		lptimer3: timer@50022000 {
@@ -1201,6 +1423,7 @@
 			interrupts-extended = <&exti 50 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc LPTIM3_K>;
 			clock-names = "mux";
+			power-domains = <&pd_core>;
 			wakeup-source;
 			status = "disabled";
 
@@ -1215,6 +1438,11 @@
 				reg = <2>;
 				status = "disabled";
 			};
+
+			timer {
+				compatible = "st,stm32-lptimer-timer";
+				status = "disabled";
+			};
 		};
 
 		lptimer4: timer@50023000 {
@@ -1223,12 +1451,18 @@
 			interrupts-extended = <&exti 52 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc LPTIM4_K>;
 			clock-names = "mux";
+			power-domains = <&pd_core>;
 			wakeup-source;
 			status = "disabled";
 
 			pwm {
 				compatible = "st,stm32-pwm-lp";
 				#pwm-cells = <3>;
+				status = "disabled";
+			};
+
+			timer {
+				compatible = "st,stm32-lptimer-timer";
 				status = "disabled";
 			};
 		};
@@ -1239,12 +1473,18 @@
 			interrupts-extended = <&exti 53 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc LPTIM5_K>;
 			clock-names = "mux";
+			power-domains = <&pd_core>;
 			wakeup-source;
 			status = "disabled";
 
 			pwm {
 				compatible = "st,stm32-pwm-lp";
 				#pwm-cells = <3>;
+				status = "disabled";
+			};
+
+			timer {
+				compatible = "st,stm32-lptimer-timer";
 				status = "disabled";
 			};
 		};
@@ -1299,13 +1539,21 @@
 			status = "disabled";
 		};
 
+		hdp: hdp@5002a000 {
+			compatible = "st,stm32mp1-hdp";
+			reg = <0x5002a000 0x400>;
+			clocks = <&rcc HDP>;
+			clock-names = "hdp";
+			status = "disabled";
+		};
+
 		hash1: hash@54002000 {
 			compatible = "st,stm32f756-hash";
 			reg = <0x54002000 0x400>;
 			interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&rcc HASH1>;
-			resets = <&rcc HASH1_R>;
-			dmas = <&mdma1 31 0x2 0x1000A02 0x0 0x0>;
+			clocks = <&scmi_clk CK_SCMI_HASH1>;
+			resets = <&scmi_reset RST_SCMI_HASH1>;
+			dmas = <&mdma1 31 0x2 0x1000A02 0x0 0x0 0x0>;
 			dma-names = "in";
 			dma-maxburst = <2>;
 			status = "disabled";
@@ -1314,8 +1562,8 @@
 		rng1: rng@54003000 {
 			compatible = "st,stm32-rng";
 			reg = <0x54003000 0x400>;
-			clocks = <&rcc RNG1_K>;
-			resets = <&rcc RNG1_R>;
+			clocks = <&scmi_clk CK_SCMI_RNG1>;
+			resets = <&scmi_reset RST_SCMI_RNG1>;
 			status = "disabled";
 		};
 
@@ -1324,8 +1572,8 @@
 			reg = <0x58000000 0x1000>;
 			interrupts = <GIC_SPI 122 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc MDMA>;
-			resets = <&rcc MDMA_R>;
-			#dma-cells = <5>;
+			resets = <&scmi_reset RST_SCMI_MDMA>;
+			#dma-cells = <6>;
 			dma-channels = <32>;
 			dma-requests = <48>;
 		};
@@ -1356,9 +1604,9 @@
 				      <4 0x09010000 0x1000>,
 				      <4 0x09020000 0x1000>;
 				interrupts = <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
-				dmas = <&mdma1 20 0x2 0x12000a02 0x0 0x0>,
-				       <&mdma1 20 0x2 0x12000a08 0x0 0x0>,
-				       <&mdma1 21 0x2 0x12000a0a 0x0 0x0>;
+				dmas = <&mdma1 20 0x2 0x12000a02 0x0 0x0 0x0>,
+				       <&mdma1 20 0x2 0x12000a08 0x0 0x0 0x0>,
+				       <&mdma1 21 0x2 0x12000a0a 0x0 0x0 0x0>;
 				dma-names = "tx", "rx", "ecc";
 				status = "disabled";
 			};
@@ -1369,8 +1617,8 @@
 			reg = <0x58003000 0x1000>, <0x70000000 0x10000000>;
 			reg-names = "qspi", "qspi_mm";
 			interrupts = <GIC_SPI 92 IRQ_TYPE_LEVEL_HIGH>;
-			dmas = <&mdma1 22 0x2 0x10100002 0x0 0x0>,
-			       <&mdma1 22 0x2 0x10100008 0x0 0x0>;
+			dmas = <&mdma1 22 0x2 0x10100002 0x0 0x0 0x0>,
+			       <&mdma1 22 0x2 0x10100008 0x0 0x0 0x0>;
 			dma-names = "tx", "rx";
 			clocks = <&rcc QSPI_K>;
 			resets = <&rcc QSPI_R>;
@@ -1380,7 +1628,7 @@
 		};
 
 		sdmmc1: mmc@58005000 {
-			compatible = "arm,pl18x", "arm,primecell";
+			compatible = "st,stm32-sdmmc2", "arm,pl18x", "arm,primecell";
 			arm,primecell-periphid = <0x00253180>;
 			reg = <0x58005000 0x1000>;
 			interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>;
@@ -1395,7 +1643,7 @@
 		};
 
 		sdmmc2: mmc@58007000 {
-			compatible = "arm,pl18x", "arm,primecell";
+			compatible = "st,stm32-sdmmc2", "arm,pl18x", "arm,primecell";
 			arm,primecell-periphid = <0x00253180>;
 			reg = <0x58007000 0x1000>;
 			interrupts = <GIC_SPI 124 IRQ_TYPE_LEVEL_HIGH>;
@@ -1420,8 +1668,10 @@
 			compatible = "st,stm32mp1-dwmac", "snps,dwmac-4.20a";
 			reg = <0x5800a000 0x2000>;
 			reg-names = "stmmaceth";
-			interrupts-extended = <&intc GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-names = "macirq";
+			interrupts-extended = <&intc GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>,
+					      <&exti 70 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "macirq",
+					  "eth_wake_irq";
 			clock-names = "stmmaceth",
 				      "mac-clk-tx",
 				      "mac-clk-rx",
@@ -1441,6 +1691,7 @@
 			snps,axi-config = <&stmmac_axi_config_0>;
 			snps,tso;
 			status = "disabled";
+			power-domains = <&pd_core>;
 
 			stmmac_axi_config_0: stmmac-axi-config {
 				snps,wr_osr_lmt = <0x7>;
@@ -1463,8 +1714,10 @@
 			reg = <0x5800d000 0x1000>;
 			clocks = <&usbphyc>, <&rcc USBH>;
 			resets = <&rcc USBH_R>;
-			interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts-extended = <&exti 43 IRQ_TYPE_LEVEL_HIGH>;
 			companion = <&usbh_ohci>;
+			power-domains = <&pd_core>;
+			wakeup-source;
 			status = "disabled";
 		};
 
@@ -1487,7 +1740,7 @@
 		iwdg2: watchdog@5a002000 {
 			compatible = "st,stm32mp1-iwdg";
 			reg = <0x5a002000 0x400>;
-			clocks = <&rcc IWDG2>, <&rcc CK_LSI>;
+			clocks = <&rcc IWDG2>, <&scmi_clk CK_SCMI_LSI>;
 			clock-names = "pclk", "lsi";
 			status = "disabled";
 		};
@@ -1515,12 +1768,21 @@
 			};
 		};
 
+		ddrperfm: perf@5a007000 {
+			compatible = "st,stm32-ddr-pmu";
+			reg = <0x5a007000 0x400>;
+			clocks = <&rcc DDRPERFM>;
+			resets = <&rcc DDRPERFM_R>;
+			status = "disabled";
+		};
+
 		usart1: serial@5c000000 {
 			compatible = "st,stm32h7-uart";
 			reg = <0x5c000000 0x400>;
 			interrupts-extended = <&exti 26 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&rcc USART1_K>;
+			clocks = <&scmi_clk CK_SCMI_USART1>;
 			wakeup-source;
+			power-domains = <&pd_core>;
 			status = "disabled";
 		};
 
@@ -1530,10 +1792,10 @@
 			compatible = "st,stm32h7-spi";
 			reg = <0x5c001000 0x400>;
 			interrupts = <GIC_SPI 86 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&rcc SPI6_K>;
-			resets = <&rcc SPI6_R>;
-			dmas = <&mdma1 34 0x0 0x40008 0x0 0x0>,
-			       <&mdma1 35 0x0 0x40002 0x0 0x0>;
+			clocks = <&scmi_clk CK_SCMI_SPI6>;
+			resets = <&scmi_reset RST_SCMI_SPI6>;
+			dmas = <&mdma1 34 0x0 0x40008 0x0 0x0 0x0>,
+			       <&mdma1 35 0x0 0x40002 0x0 0x0 0x0>;
 			dma-names = "rx", "tx";
 			status = "disabled";
 		};
@@ -1542,12 +1804,16 @@
 			compatible = "st,stm32mp15-i2c";
 			reg = <0x5c002000 0x400>;
 			interrupt-names = "event", "error";
-			interrupts = <GIC_SPI 95 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 96 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&rcc I2C4_K>;
-			resets = <&rcc I2C4_R>;
+			interrupts-extended = <&exti 24 IRQ_TYPE_LEVEL_HIGH>,
+					      <&intc GIC_SPI 96 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&scmi_clk CK_SCMI_I2C4>;
+			resets = <&scmi_reset RST_SCMI_I2C4>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			dmas = <&mdma1 36 0x0 0x40008 0x0 0x0 0>,
+			       <&mdma1 37 0x0 0x40002 0x0 0x0 0>;
+			dma-names = "rx", "tx";
+			power-domains = <&pd_core>;
 			st,syscfg-fmp = <&syscfg 0x4 0x8>;
 			wakeup-source;
 			i2c-analog-filter;
@@ -1557,22 +1823,33 @@
 		rtc: rtc@5c004000 {
 			compatible = "st,stm32mp1-rtc";
 			reg = <0x5c004000 0x400>;
-			clocks = <&rcc RTCAPB>, <&rcc RTC>;
+			clocks = <&scmi_clk CK_SCMI_RTCAPB>,
+				 <&scmi_clk CK_SCMI_RTC>;
 			clock-names = "pclk", "rtc_ck";
-			interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts-extended = <&exti 19 IRQ_TYPE_LEVEL_HIGH>;
 			status = "disabled";
 		};
 
 		bsec: efuse@5c005000 {
 			compatible = "st,stm32mp15-bsec";
 			reg = <0x5c005000 0x400>;
+			clocks = <&scmi_clk CK_SCMI_BSEC>;
 			#address-cells = <1>;
 			#size-cells = <1>;
+			part_number_otp: part_number_otp@4 {
+				reg = <0x4 0x1>;
+			};
+			vrefint: calib@52 {
+				reg = <0x52 0x2>;
+			};
 			ts_cal1: calib@5c {
 				reg = <0x5c 0x2>;
 			};
 			ts_cal2: calib@5e {
 				reg = <0x5e 0x2>;
+			};
+			ethernet_mac_address: mac@e4 {
+				reg = <0xe4 0x6>;
 			};
 		};
 
@@ -1580,12 +1857,16 @@
 			compatible = "st,stm32mp15-i2c";
 			reg = <0x5c009000 0x400>;
 			interrupt-names = "event", "error";
-			interrupts = <GIC_SPI 135 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&rcc I2C6_K>;
-			resets = <&rcc I2C6_R>;
+			interrupts-extended = <&exti 54 IRQ_TYPE_LEVEL_HIGH>,
+					      <&intc GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&scmi_clk CK_SCMI_I2C6>;
+			resets = <&scmi_reset RST_SCMI_I2C6>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			dmas = <&mdma1 38 0x0 0x40008 0x0 0x0 0>,
+			       <&mdma1 39 0x0 0x40002 0x0 0x0 0>;
+			dma-names = "rx", "tx";
+			power-domains = <&pd_core>;
 			st,syscfg-fmp = <&syscfg 0x4 0x20>;
 			wakeup-source;
 			i2c-analog-filter;
@@ -1595,19 +1876,33 @@
 		tamp: tamp@5c00a000 {
 			compatible = "st,stm32-tamp", "syscon", "simple-mfd";
 			reg = <0x5c00a000 0x400>;
+
+			reboot-mode {
+				compatible = "syscon-reboot-mode";
+				offset = <0x150>; /* reg20 */
+				mask = <0xff>;
+				mode-normal = <0>;
+				mode-fastboot = <0x1>;
+				mode-recovery = <0x2>;
+				mode-stm32cubeprogrammer = <0x3>;
+				mode-ums_mmc0 = <0x10>;
+				mode-ums_mmc1 = <0x11>;
+				mode-ums_mmc2 = <0x12>;
+			};
 		};
 
 		/*
 		 * Break node order to solve dependency probe issue between
 		 * pinctrl and exti.
 		 */
-		pinctrl: pin-controller@50002000 {
+		pinctrl: pinctrl@50002000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "st,stm32mp157-pinctrl";
 			ranges = <0 0x50002000 0xa400>;
 			interrupt-parent = <&exti>;
 			st,syscfg = <&exti 0x60 0xff>;
+			hwlocks = <&hsem 0 1>;
 			pins-are-numbered;
 
 			gpioa: gpio@50002000 {
@@ -1732,7 +2027,7 @@
 			};
 		};
 
-		pinctrl_z: pin-controller-z@54004000 {
+		pinctrl_z: pinctrl@54004000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "st,stm32mp157-z-pinctrl";
@@ -1740,6 +2035,7 @@
 			pins-are-numbered;
 			interrupt-parent = <&exti>;
 			st,syscfg = <&exti 0x60 0xff>;
+			hwlocks = <&hsem 0 1>;
 
 			gpioz: gpio@54004000 {
 				gpio-controller;
@@ -1747,7 +2043,7 @@
 				interrupt-controller;
 				#interrupt-cells = <2>;
 				reg = <0 0x400>;
-				clocks = <&rcc GPIOZ>;
+				clocks = <&scmi_clk CK_SCMI_GPIOZ>;
 				st,bank-name = "GPIOZ";
 				st,bank-ioport = <11>;
 				status = "disabled";
@@ -1769,13 +2065,18 @@
 			reg = <0x10000000 0x40000>,
 			      <0x30000000 0x40000>,
 			      <0x38000000 0x10000>;
-			resets = <&rcc MCU_R>;
-			st,syscfg-holdboot = <&rcc 0x10C 0x1>;
-			st,syscfg-tz = <&rcc 0x000 0x1>;
+			resets = <&scmi_reset RST_SCMI_MCU>,
+				 <&scmi_reset RST_SCMI_MCU_HOLD_BOOT>;
+			reset-names = "mcu_rst", "hold_boot";
 			st,syscfg-pdds = <&pwr_mcu 0x0 0x1>;
 			st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
 			st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
 			status = "disabled";
+
+			m4_system_resources {
+				compatible = "rproc-srm-core";
+				status = "disabled";
+			};
 		};
 	};
 };

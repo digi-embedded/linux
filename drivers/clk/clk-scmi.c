@@ -9,6 +9,7 @@
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/of.h>
+#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/scmi_protocol.h>
 #include <asm/div64.h>
@@ -37,6 +38,37 @@ static unsigned long scmi_clk_recalc_rate(struct clk_hw *hw,
 	return rate;
 }
 
+static unsigned long scmi_clk_round_rate_get(struct clk_hw *hw,
+					     unsigned long rate,
+					     unsigned long *parent_rate)
+{
+	int ret;
+	u64 round_rate = rate;
+	struct scmi_clk *clk = to_scmi_clk(hw);
+
+	ret = scmi_proto_clk_ops->round_rate_get(clk->ph, clk->id, &round_rate);
+	if (ret)
+		return 0;
+
+	return round_rate;
+}
+
+static int scmi_clk_get_duty_cycle(struct clk_hw *hw, struct clk_duty *duty)
+{
+	struct scmi_clk *clk = to_scmi_clk(hw);
+	int ret;
+
+	ret = scmi_proto_clk_ops->get_duty_cycle(clk->ph, clk->id,
+						 &duty->num, &duty->den);
+	if (ret) {
+		/* Assume a default value of 50% */
+		duty->num = 1;
+		duty->den = 2;
+	}
+
+	return 0;
+}
+
 static long scmi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 				unsigned long *parent_rate)
 {
@@ -58,6 +90,9 @@ static long scmi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 		return fmin;
 	else if (rate >= fmax)
 		return fmax;
+
+	if (clk->info->range.step_size == 0)
+		return scmi_clk_round_rate_get(hw, rate, parent_rate);
 
 	ftmp = rate - fmin;
 	ftmp += clk->info->range.step_size - 1; /* to round up */
@@ -100,6 +135,7 @@ static const struct clk_ops scmi_clk_ops = {
 	 */
 	.prepare = scmi_clk_enable,
 	.unprepare = scmi_clk_disable,
+	.get_duty_cycle = scmi_clk_get_duty_cycle,
 };
 
 static int scmi_clk_ops_init(struct device *dev, struct scmi_clk *sclk)

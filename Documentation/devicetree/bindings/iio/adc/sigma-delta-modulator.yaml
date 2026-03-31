@@ -21,6 +21,9 @@ properties:
   '#io-channel-cells':
     const: 0
 
+  vref-supply:
+    description: Phandle to the vref input analog reference voltage.
+
 required:
   - compatible
   - '#io-channel-cells'

@@ -50,6 +50,8 @@ struct tee_shm_pool;
  *              non-blocking in nature.
  * @cap_memref_null: flag indicating if the TEE Client support shared
  *                   memory buffer with a NULL pointer.
+ * @cap_ocall:       flag indicating that OP-TEE supports OCALLs, allowing TAs
+ *                   to invoke commands on their CA.
  */
 struct tee_context {
 	struct tee_device *teedev;
@@ -58,6 +60,7 @@ struct tee_context {
 	bool releasing;
 	bool supp_nowait;
 	bool cap_memref_null;
+	bool cap_ocall;
 };
 
 struct tee_param_memref {
@@ -101,11 +104,15 @@ struct tee_driver_ops {
 	void (*release)(struct tee_context *ctx);
 	int (*open_session)(struct tee_context *ctx,
 			    struct tee_ioctl_open_session_arg *arg,
-			    struct tee_param *param);
+			    struct tee_param *normal_param,
+			    u32 num_normal_params,
+			    struct tee_param *ocall_param);
 	int (*close_session)(struct tee_context *ctx, u32 session);
 	int (*invoke_func)(struct tee_context *ctx,
 			   struct tee_ioctl_invoke_arg *arg,
-			   struct tee_param *param);
+			   struct tee_param *normal_param,
+			   u32 num_normal_params,
+			   struct tee_param *ocall_param);
 	int (*cancel_req)(struct tee_context *ctx, u32 cancel_id, u32 session);
 	int (*supp_recv)(struct tee_context *ctx, u32 *func, u32 *num_params,
 			 struct tee_param *param);
@@ -362,6 +369,12 @@ static inline bool tee_shm_is_registered(struct tee_shm *shm)
  * @shm:	Handle to shared memory to free
  */
 void tee_shm_free(struct tee_shm *shm);
+
+/**
+ * tee_shm_get() - Increase reference count on a shared memory handle
+ * @shm:	Shared memory handle
+ */
+void tee_shm_get(struct tee_shm *shm);
 
 /**
  * tee_shm_put() - Decrease reference count on a shared memory handle

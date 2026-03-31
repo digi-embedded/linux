@@ -1,0 +1,307 @@
+/*
+ * Copyright 2022-2024 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+#include "stm32mp133.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/mfd/st,stpmic1.h>
+#include <dt-bindings/pinctrl/stm32-pinfunc.h>
+
+/ {
+	aliases {
+		i2c1 = &i2c1;
+		i2c2 = &i2c2;
+		i2c3 = &i2c3;
+		i2c4 = &i2c4;
+		i2c5 = &i2c5;
+	};
+
+	memory@c0000000 {
+		device_type = "memory";
+		reg = <0xc0000000 0x10000000>; /* 256 MB */
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		optee_framebuffer@cd000000 {
+			reg = <0xcd000000 0x1000000>;
+			no-map;
+		};
+
+		optee@ce000000 {
+			reg = <0xce000000 0x2000000>;
+			no-map;
+		};
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3v3_rf: regulator-som@1 {
+			/* Filled-in by Wi-Fi/BT DT overlays */
+			reg = <1>;
+			status = "disabled";
+		};
+
+		reg_rf_wl_en: regulator-som@2 {
+			/* Filled-in by Wi-Fi DT overlay */
+			reg = <2>;
+			status = "disabled";
+		};
+	};
+
+	vin: vin {
+		compatible = "regulator-fixed";
+		regulator-name = "vin";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-always-on;
+	};
+};
+
+&adc_1 {
+	vdda-supply = <&scmi_vdd_adc>;
+};
+
+&adc_2 {
+	vdda-supply = <&scmi_vdd_adc>;
+};
+
+&bsec {
+	/* By default, make the OTP bits read-only */
+	read-only;
+
+	/* Digi hardware ID (HWID) stored in OTP59, OTP60, OTP61 */
+	hwid: hwid@ec {
+		reg = <0xec 0xc>;
+	};
+};
+
+&crc1 {
+	status = "okay";
+};
+
+&dma1 {
+	sram = <&dma_pool>;
+};
+
+&dma2 {
+	sram = <&dma_pool>;
+};
+
+&dts {
+	status = "okay";
+};
+
+&fmc {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&ccmp13_fmc_pins_a>;
+	pinctrl-1 = <&ccmp13_fmc_sleep_pins_a>;
+	status = "okay";
+
+	nand-controller@4,0 {
+		status = "okay";
+
+		nand@0 {
+			reg = <0>;
+			nand-on-flash-bbt;
+			#address-cells = <1>;
+			#size-cells = <1>;
+		};
+	};
+};
+
+&i2c4 {
+	clock-frequency = <400000>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&ccmp13_i2c4_pins_a>;
+	pinctrl-1 = <&ccmp13_i2c4_sleep_pins_a>;
+	i2c-scl-rising-time-ns = <185>;
+	i2c-scl-falling-time-ns = <20>;
+	status = "okay";
+	/* spare dmas for other usage */
+	/delete-property/dmas;
+	/delete-property/dma-names;
+};
+
+&iwdg2 {
+	timeout-sec = <32>;
+	status = "okay";
+};
+
+&rtc {
+	st,alarm = <RTC_OUT1>;
+	pinctrl-0 = <&ccmp13_rtc_out1_pins_a>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&scmi_regu {
+	scmi_vdd: voltd-vdd {
+		voltd-name = "vdd";
+		regulator-name = "vdd";
+		regulator-always-on;
+	};
+	scmi_vdd_adc: voltd-vdd_adc {
+		voltd-name = "vdd_adc";
+		regulator-name = "vdd_adc";
+	};
+	scmi_ldo2: voltd-ldo2 {
+		voltd-name = "ldo2";
+		regulator-name = "ldo2";
+	};
+	scmi_vdd_usb: voltd-vdd_usb {
+		voltd-name = "vdd_usb";
+		regulator-name = "vdd_usb";
+	};
+	scmi_vdd_sd: voltd-vdd_sd {
+		voltd-name = "vdd_sd";
+		regulator-name = "vdd_sd";
+	};
+	scmi_ldo6: voltd-ldo6 {
+		voltd-name = "ldo6";
+		regulator-name = "ldo6";
+	};
+	scmi_vbus_otg: voltd-vbus_otg {
+		voltd-name = "vbus_otg";
+		regulator-name = "vbus_otg";
+	};
+	scmi_vbus_sw: voltd-vbus_sw {
+		voltd-name = "vbus_sw";
+		regulator-name = "vbus_sw";
+	};
+	scmi_vrefbuf: voltd-vrefbuf {
+		voltd-name = "vrefbuf";
+		regulator-name = "vrefbuf";
+	};
+};
+
+&sram {
+	dma_pool: dma-sram@0 {
+		reg = <0x0 0x4000>;
+		pool;
+	};
+};
+
+&pinctrl {
+	ccmp13_fmc_pins_a: ccmp13_fmc-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('D', 4, AF12)>, /* FMC_NOE */
+				 <STM32_PINMUX('D', 5, AF12)>, /* FMC_NWE */
+				 <STM32_PINMUX('D', 11, AF12)>, /* FMC_A16_FMC_CLE */
+				 <STM32_PINMUX('D', 12, AF12)>, /* FMC_A17_FMC_ALE */
+				 <STM32_PINMUX('D', 14, AF12)>, /* FMC_D0 */
+				 <STM32_PINMUX('D', 15, AF12)>, /* FMC_D1 */
+				 <STM32_PINMUX('D', 0, AF12)>, /* FMC_D2 */
+				 <STM32_PINMUX('D', 1, AF12)>, /* FMC_D3 */
+				 <STM32_PINMUX('E', 7, AF12)>, /* FMC_D4 */
+				 <STM32_PINMUX('E', 8, AF12)>, /* FMC_D5 */
+				 <STM32_PINMUX('E', 9, AF12)>, /* FMC_D6 */
+				 <STM32_PINMUX('E', 10, AF12)>, /* FMC_D7 */
+				 <STM32_PINMUX('G', 9, AF12)>; /* FMC_NE2_FMC_NCE */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <2>; /* OSPEEDR at High speed (0x10) */
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('A', 9, AF10)>; /* FMC_NWAIT */
+			bias-pull-up;
+			slew-rate = <2>; /* OSPEEDR at High speed (0x10) */
+		};
+	};
+
+	ccmp13_fmc_sleep_pins_a: ccmp13_fmc-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('D', 4, ANALOG)>, /* FMC_NOE */
+				 <STM32_PINMUX('D', 5, ANALOG)>, /* FMC_NWE */
+				 <STM32_PINMUX('D', 11, ANALOG)>, /* FMC_A16_FMC_CLE */
+				 <STM32_PINMUX('D', 12, ANALOG)>, /* FMC_A17_FMC_ALE */
+				 <STM32_PINMUX('D', 14, ANALOG)>, /* FMC_D0 */
+				 <STM32_PINMUX('D', 15, ANALOG)>, /* FMC_D1 */
+				 <STM32_PINMUX('D', 0, ANALOG)>, /* FMC_D2 */
+				 <STM32_PINMUX('D', 1, ANALOG)>, /* FMC_D3 */
+				 <STM32_PINMUX('E', 7, ANALOG)>, /* FMC_D4 */
+				 <STM32_PINMUX('E', 8, ANALOG)>, /* FMC_D5 */
+				 <STM32_PINMUX('E', 9, ANALOG)>, /* FMC_D6 */
+				 <STM32_PINMUX('E', 10, ANALOG)>, /* FMC_D7 */
+				 <STM32_PINMUX('A', 9, ANALOG)>, /* FMC_NWAIT */
+				 <STM32_PINMUX('G', 9, ANALOG)>; /* FMC_NE2_FMC_NCE */
+		};
+	};
+
+	ccmp13_i2c4_pins_a: ccmp13_i2c4-0 {
+		pins {
+			pinmux = <STM32_PINMUX('E', 15, AF6)>, /* I2C4_SCL */
+				 <STM32_PINMUX('B', 9, AF6)>; /* I2C4_SDA */
+			bias-disable;
+			drive-open-drain;
+			slew-rate = <0>;
+		};
+	};
+
+	ccmp13_i2c4_sleep_pins_a: ccmp13_i2c4-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('E', 15, ANALOG)>, /* I2C4_SCL */
+				 <STM32_PINMUX('B', 9, ANALOG)>; /* I2C4_SDA */
+		};
+	};
+
+	ccmp13_rtc_out1_pins_a: ccmp13_rtc-out1-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 13, ANALOG)>; /* RTC_OUT1 */
+		};
+	};
+
+	ccmp13_usart2_pins_a: ccmp13_usart2-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('H', 12, AF1)>, /* USART2_TX */
+				 <STM32_PINMUX('A', 1, AF7)>; /* USART2_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('H', 8, AF3)>, /* USART2_RX */
+				 <STM32_PINMUX('D', 3, AF3)>; /* USART2_CTS_NSS */
+			bias-disable;
+		};
+	};
+
+	ccmp13_usart2_idle_pins_a: ccmp13_usart2-idle-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('H', 12, ANALOG)>, /* USART2_TX */
+				 <STM32_PINMUX('D', 3, ANALOG)>; /* USART2_CTS_NSS */
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('A', 1, AF3)>; /* USART2_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins3 {
+			pinmux = <STM32_PINMUX('H', 8, AF3)>; /* USART2_RX */
+			bias-disable;
+		};
+	};
+
+	ccmp13_usart2_sleep_pins_a: ccmp13_usart2-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('H', 12, ANALOG)>, /* USART2_TX */
+				 <STM32_PINMUX('H', 8, ANALOG)>, /* USART2_RTS */
+				 <STM32_PINMUX('A', 1, ANALOG)>, /* USART2_RX */
+				 <STM32_PINMUX('D', 3, ANALOG)>; /* USART2_CTS_NSS */
+		};
+	};
+};

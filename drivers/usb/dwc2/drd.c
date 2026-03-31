@@ -13,6 +13,10 @@
 #include <linux/usb/role.h>
 #include "core.h"
 
+#define dwc2_ovr_gotgctl(gotgctl) \
+	((gotgctl) |= GOTGCTL_BVALOEN | GOTGCTL_AVALOEN | GOTGCTL_VBVALOEN | \
+	 GOTGCTL_DBNCE_FLTR_BYPASS)
+
 static void dwc2_ovr_init(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
@@ -21,9 +25,12 @@ static void dwc2_ovr_init(struct dwc2_hsotg *hsotg)
 	spin_lock_irqsave(&hsotg->lock, flags);
 
 	gotgctl = dwc2_readl(hsotg, GOTGCTL);
-	gotgctl |= GOTGCTL_BVALOEN | GOTGCTL_AVALOEN | GOTGCTL_VBVALOEN;
-	gotgctl |= GOTGCTL_DBNCE_FLTR_BYPASS;
+	dwc2_ovr_gotgctl(gotgctl);
 	gotgctl &= ~(GOTGCTL_BVALOVAL | GOTGCTL_AVALOVAL | GOTGCTL_VBVALOVAL);
+	if (hsotg->role_sw_default_mode == USB_DR_MODE_HOST)
+		gotgctl |= GOTGCTL_AVALOVAL | GOTGCTL_VBVALOVAL;
+	else if (hsotg->role_sw_default_mode == USB_DR_MODE_PERIPHERAL)
+		gotgctl |= GOTGCTL_BVALOVAL | GOTGCTL_VBVALOVAL;
 	dwc2_writel(hsotg, gotgctl, GOTGCTL);
 
 	spin_unlock_irqrestore(&hsotg->lock, flags);
@@ -36,9 +43,12 @@ static int dwc2_ovr_avalid(struct dwc2_hsotg *hsotg, bool valid)
 	u32 gotgctl = dwc2_readl(hsotg, GOTGCTL);
 
 	/* Check if A-Session is already in the right state */
-	if ((valid && (gotgctl & GOTGCTL_ASESVLD)) ||
-	    (!valid && !(gotgctl & GOTGCTL_ASESVLD)))
+	if ((valid && (gotgctl & GOTGCTL_AVALOVAL) && (gotgctl & GOTGCTL_VBVALOVAL)) ||
+	    (!valid && !(gotgctl & (GOTGCTL_AVALOVAL | GOTGCTL_VBVALOVAL))))
 		return -EALREADY;
+
+	/* Always enable overrides to handle the resume case */
+	dwc2_ovr_gotgctl(gotgctl);
 
 	gotgctl &= ~GOTGCTL_BVALOVAL;
 	if (valid)
@@ -55,9 +65,12 @@ static int dwc2_ovr_bvalid(struct dwc2_hsotg *hsotg, bool valid)
 	u32 gotgctl = dwc2_readl(hsotg, GOTGCTL);
 
 	/* Check if B-Session is already in the right state */
-	if ((valid && (gotgctl & GOTGCTL_BSESVLD)) ||
-	    (!valid && !(gotgctl & GOTGCTL_BSESVLD)))
+	if ((valid && (gotgctl & GOTGCTL_BVALOVAL) && (gotgctl & GOTGCTL_VBVALOVAL)) ||
+	    (!valid && !(gotgctl & (GOTGCTL_BVALOVAL | GOTGCTL_VBVALOVAL))))
 		return -EALREADY;
+
+	/* Always enable overrides to handle the resume case */
+	dwc2_ovr_gotgctl(gotgctl);
 
 	gotgctl &= ~GOTGCTL_AVALOVAL;
 	if (valid)
@@ -134,9 +147,18 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 
-	if (!already && hsotg->dr_mode == USB_DR_MODE_OTG)
+	if (!already && hsotg->dr_mode == USB_DR_MODE_OTG) {
+		/*
+		 * The bus may have been suspended (typically in hcd), need to resume as the HW
+		 * may not be HW accessible. Schedule work to call dwc2_conn_id_status_change
+		 * to handle the port resume before switching mode.
+		 */
+		if (hsotg->bus_suspended && hsotg->wq_otg)
+			queue_work(hsotg->wq_otg, &hsotg->wf_otg);
+
 		/* This will raise a Connector ID Status Change Interrupt */
 		dwc2_force_mode(hsotg, role == USB_ROLE_HOST);
+	}
 
 	if (!hsotg->ll_hw_enabled && hsotg->clk)
 		clk_disable_unprepare(hsotg->clk);
@@ -152,10 +174,20 @@ int dwc2_drd_init(struct dwc2_hsotg *hsotg)
 {
 	struct usb_role_switch_desc role_sw_desc = {0};
 	struct usb_role_switch *role_sw;
+	const char *str;
 	int ret;
 
 	if (!device_property_read_bool(hsotg->dev, "usb-role-switch"))
 		return 0;
+
+	hsotg->role_sw_default_mode = USB_DR_MODE_UNKNOWN;
+	ret = device_property_read_string(hsotg->dev, "role-switch-default-mode", &str);
+	if (!ret) {
+		if (!strncmp(str, "host", strlen("host")))
+			hsotg->role_sw_default_mode = USB_DR_MODE_HOST;
+		else if (!strncmp(str, "peripheral", strlen("peripheral")))
+			hsotg->role_sw_default_mode = USB_DR_MODE_PERIPHERAL;
+	}
 
 	role_sw_desc.driver_data = hsotg;
 	role_sw_desc.fwnode = dev_fwnode(hsotg->dev);
@@ -194,6 +226,31 @@ void dwc2_drd_suspend(struct dwc2_hsotg *hsotg)
 void dwc2_drd_resume(struct dwc2_hsotg *hsotg)
 {
 	u32 gintsts, gintmsk;
+	enum usb_role role;
+
+	if (hsotg->role_sw) {
+		/* get last known role (as the get ops isn't implemented by this driver) */
+		role = usb_role_switch_get_role(hsotg->role_sw);
+
+		if (role == USB_ROLE_NONE) {
+			if (hsotg->role_sw_default_mode == USB_DR_MODE_HOST)
+				role = USB_ROLE_HOST;
+			else if (hsotg->role_sw_default_mode == USB_DR_MODE_PERIPHERAL)
+				role = USB_ROLE_DEVICE;
+		}
+
+		/* restore last role that may have been lost */
+		if (role == USB_ROLE_HOST)
+			dwc2_ovr_avalid(hsotg, true);
+		else if (role == USB_ROLE_DEVICE)
+			dwc2_ovr_bvalid(hsotg, true);
+
+		dwc2_force_mode(hsotg, role == USB_ROLE_HOST);
+
+		dev_dbg(hsotg->dev, "resuming %s-session valid\n",
+			role == USB_ROLE_NONE ? "No" :
+			role == USB_ROLE_HOST ? "A" : "B");
+	}
 
 	if (hsotg->role_sw && !hsotg->params.external_id_pin_ctl) {
 		gintsts = dwc2_readl(hsotg, GINTSTS);

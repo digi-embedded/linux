@@ -455,7 +455,6 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 				if (ret)
 					dev_err(hsotg->dev,
 						"exit partial_power_down failed\n");
-				call_gadget(hsotg, resume);
 			}
 
 			/* Exit gadget mode clock gating. */
@@ -463,6 +462,8 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 			    DWC2_POWER_DOWN_PARAM_NONE && hsotg->bus_suspended &&
 			    !hsotg->params.no_clock_gating)
 				dwc2_gadget_exit_clock_gating(hsotg, 0);
+
+			call_gadget(hsotg, resume);
 		} else {
 			/* Change to L0 state */
 			hsotg->lx_state = DWC2_L0;
