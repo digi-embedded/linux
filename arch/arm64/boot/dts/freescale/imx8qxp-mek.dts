@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2017~2018 NXP
+ * Copyright 2017-2020 NXP
  */
 
 /dts-v1/;
 
 #include "imx8qxp.dtsi"
+#include "imx8x-mek.dtsi"
 
 / {
 	model = "Freescale i.MX8QXP MEK";
@@ -68,19 +69,6 @@
 		reg = <0x71>;
 		reset-gpios = <&lsio_gpio1 1 GPIO_ACTIVE_LOW>;
 
-		i2c@0 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			reg = <0>;
-
-			max7322: gpio@68 {
-				compatible = "maxim,max7322";
-				reg = <0x68>;
-				gpio-controller;
-				#gpio-cells = <2>;
-			};
-		};
-
 		i2c@1 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -102,20 +90,6 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <3>;
-
-			pca9557_a: gpio@1a {
-				compatible = "nxp,pca9557";
-				reg = <0x1a>;
-				gpio-controller;
-				#gpio-cells = <2>;
-			};
-
-			pca9557_b: gpio@1d {
-				compatible = "nxp,pca9557";
-				reg = <0x1d>;
-				gpio-controller;
-				#gpio-cells = <2>;
-			};
 
 			light-sensor@44 {
 				pinctrl-names = "default";

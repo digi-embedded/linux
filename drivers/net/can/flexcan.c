@@ -26,6 +26,7 @@
 #include <linux/netdevice.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/of_gpio.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <linux/can/platform/flexcan.h>
@@ -371,6 +372,8 @@ struct flexcan_priv {
 
 	struct clk *clk_ipg;
 	struct clk *clk_per;
+	struct flexcan_platform_data *pdata;
+	int stby_gpio;
 	struct flexcan_devtype_data devtype_data;
 	struct regulator *reg_xceiver;
 	struct flexcan_stop_mode stm;
@@ -460,6 +463,10 @@ static const struct flexcan_devtype_data fsl_lx2160a_r1_devtype_data = {
 		FLEXCAN_QUIRK_SUPPORT_ECC |
 		FLEXCAN_QUIRK_SUPPPORT_RX_MAILBOX |
 		FLEXCAN_QUIRK_SUPPPORT_RX_MAILBOX_RTR,
+};
+
+static struct flexcan_devtype_data fsl_s32v234_devtype_data = {
+	.quirks = FLEXCAN_QUIRK_DISABLE_RXFG | FLEXCAN_QUIRK_DISABLE_MECR,
 };
 
 static const struct can_bittiming_const flexcan_bittiming_const = {
@@ -699,6 +706,9 @@ static void flexcan_clks_disable(const struct flexcan_priv *priv)
 
 static inline int flexcan_transceiver_enable(const struct flexcan_priv *priv)
 {
+	if (gpio_is_valid(priv->stby_gpio))
+		gpio_set_value_cansleep(priv->stby_gpio, 0);
+
 	if (!priv->reg_xceiver)
 		return 0;
 
@@ -2107,6 +2117,8 @@ static const struct of_device_id flexcan_of_match[] = {
 	{ .compatible = "fsl,vf610-flexcan", .data = &fsl_vf610_devtype_data, },
 	{ .compatible = "fsl,ls1021ar2-flexcan", .data = &fsl_ls1021a_r2_devtype_data, },
 	{ .compatible = "fsl,lx2160ar1-flexcan", .data = &fsl_lx2160a_r1_devtype_data, },
+	{ .compatible = "fsl,s32v234-flexcan",
+	  .data = &fsl_s32v234_devtype_data, },
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, flexcan_of_match);
@@ -2120,6 +2132,25 @@ static const struct platform_device_id flexcan_id_table[] = {
 	},
 };
 MODULE_DEVICE_TABLE(platform, flexcan_id_table);
+
+static int flexcan_gpio_init(struct device_node *np , struct net_device *dev)
+{
+	int ret;
+	struct flexcan_priv *priv = netdev_priv(dev);
+
+	if (!np)
+		return -EINVAL;
+
+	priv->stby_gpio = of_get_named_gpio(np, "stby-gpios", 0);
+	if (!gpio_is_valid(priv->stby_gpio))
+		return -ENODEV;
+
+	if( (ret = gpio_request(priv->stby_gpio, "can_stby")) == 0)
+		gpio_direction_output(priv->stby_gpio, 1);
+	else
+		netdev_err(dev, "Could not configure standby pin.\n");
+	return ret;
+}
 
 static int flexcan_probe(struct platform_device *pdev)
 {
@@ -2246,6 +2277,7 @@ static int flexcan_probe(struct platform_device *pdev)
 	priv->clk_per = clk_per;
 	priv->clk_src = clk_src;
 	priv->reg_xceiver = reg_xceiver;
+	flexcan_gpio_init(pdev->dev.of_node,dev);
 
 	if (priv->devtype_data.quirks & FLEXCAN_QUIRK_NR_IRQ_3) {
 		priv->irq_boff = platform_get_irq(pdev, 1);
@@ -2283,8 +2315,7 @@ static int flexcan_probe(struct platform_device *pdev)
 	err = flexcan_setup_stop_mode(pdev);
 	if (err < 0) {
 		if (err != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "setup stop mode failed\n");
-		goto failed_setup_stop_mode;
+			dev_warn(&pdev->dev, "setup stop mode failed\n");
 	}
 
 	of_can_transceiver(dev);
@@ -2292,8 +2323,6 @@ static int flexcan_probe(struct platform_device *pdev)
 
 	return 0;
 
- failed_setup_stop_mode:
-	unregister_flexcandev(dev);
  failed_register:
 	pm_runtime_put_noidle(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);

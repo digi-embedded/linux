@@ -8,6 +8,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
+#include <linux/pcs-lynx.h>
 #include "enetc_ierb.h"
 #include "enetc_pf.h"
 
@@ -327,6 +328,7 @@ static void enetc_set_loopback(struct net_device *ndev, bool en)
 		reg = (reg & ~ENETC_PM0_IFM_RLP) |
 		      (en ? ENETC_PM0_IFM_RLP : 0);
 		enetc_port_wr(hw, ENETC_PM0_IF_MODE, reg);
+		enetc_port_wr(hw, ENETC_PM1_IF_MODE, reg);
 	} else {
 		/* assume SGMII mode */
 		reg = enetc_port_rd(hw, ENETC_PM0_CMD_CFG);
@@ -547,11 +549,13 @@ static void enetc_mac_config(struct enetc_hw *hw, phy_interface_t phy_mode)
 		val &= ~(ENETC_PM0_IFM_EN_AUTO | ENETC_PM0_IFM_IFMODE_MASK);
 		val |= ENETC_PM0_IFM_IFMODE_GMII | ENETC_PM0_IFM_RG;
 		enetc_port_wr(hw, ENETC_PM0_IF_MODE, val);
+		enetc_port_wr(hw, ENETC_PM1_IF_MODE, val);
 	}
 
 	if (phy_mode == PHY_INTERFACE_MODE_USXGMII) {
 		val = ENETC_PM0_IFM_FULL_DPX | ENETC_PM0_IFM_IFMODE_XGMII;
 		enetc_port_wr(hw, ENETC_PM0_IF_MODE, val);
+		enetc_port_wr(hw, ENETC_PM1_IF_MODE, val);
 	}
 }
 
@@ -769,6 +773,7 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_setup_tc		= enetc_pf_setup_tc,
 	.ndo_bpf		= enetc_setup_bpf,
 	.ndo_xdp_xmit		= enetc_xdp_xmit,
+	.ndo_xsk_wakeup		= enetc_xsk_wakeup,
 };
 
 static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
@@ -790,10 +795,14 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 
 	ndev->hw_features = NETIF_F_SG | NETIF_F_RXCSUM |
 			    NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_HW_VLAN_CTAG_RX |
-			    NETIF_F_HW_VLAN_CTAG_FILTER | NETIF_F_LOOPBACK;
+			    NETIF_F_HW_VLAN_CTAG_FILTER | NETIF_F_LOOPBACK |
+			    NETIF_F_HW_CSUM | NETIF_F_TSO | NETIF_F_TSO6;
 	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG | NETIF_F_RXCSUM |
 			 NETIF_F_HW_VLAN_CTAG_TX |
-			 NETIF_F_HW_VLAN_CTAG_RX;
+			 NETIF_F_HW_VLAN_CTAG_RX |
+			 NETIF_F_HW_CSUM | NETIF_F_TSO | NETIF_F_TSO6;
+	ndev->vlan_features = NETIF_F_SG | NETIF_F_HW_CSUM |
+			      NETIF_F_TSO | NETIF_F_TSO6;
 
 	if (si->num_rss)
 		ndev->hw_features |= NETIF_F_RXHASH;
@@ -805,6 +814,9 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 		ndev->features |= NETIF_F_HW_TC;
 		ndev->hw_features |= NETIF_F_HW_TC;
 	}
+
+	if (enetc_tsn_is_enabled() && (si->hw_features & ENETC_SI_F_QBU))
+		priv->active_offloads |= ENETC_F_QBU;
 
 	/* pick up primary MAC address from SI */
 	enetc_get_primary_mac_addr(&si->hw, ndev->dev_addr);
@@ -851,7 +863,7 @@ static int enetc_imdio_create(struct enetc_pf *pf)
 {
 	struct device *dev = &pf->si->pdev->dev;
 	struct enetc_mdio_priv *mdio_priv;
-	struct lynx_pcs *pcs_lynx;
+	struct phylink_pcs *phylink_pcs;
 	struct mdio_device *pcs;
 	struct mii_bus *bus;
 	int err;
@@ -883,8 +895,8 @@ static int enetc_imdio_create(struct enetc_pf *pf)
 		goto unregister_mdiobus;
 	}
 
-	pcs_lynx = lynx_pcs_create(pcs);
-	if (!pcs_lynx) {
+	phylink_pcs = lynx_pcs_create(pcs);
+	if (!phylink_pcs) {
 		mdio_device_free(pcs);
 		err = -ENOMEM;
 		dev_err(dev, "cannot create lynx pcs (%d)\n", err);
@@ -892,7 +904,7 @@ static int enetc_imdio_create(struct enetc_pf *pf)
 	}
 
 	pf->imdio = bus;
-	pf->pcs = pcs_lynx;
+	pf->pcs = phylink_pcs;
 
 	return 0;
 
@@ -905,8 +917,11 @@ free_mdio_bus:
 
 static void enetc_imdio_remove(struct enetc_pf *pf)
 {
+	struct mdio_device *mdio_device;
+
 	if (pf->pcs) {
-		mdio_device_free(pf->pcs->mdio);
+		mdio_device = lynx_get_mdio_device(pf->pcs);
+		mdio_device_free(mdio_device);
 		lynx_pcs_destroy(pf->pcs);
 	}
 	if (pf->imdio) {
@@ -1005,7 +1020,7 @@ static void enetc_pl_mac_config(struct phylink_config *config,
 
 	priv = netdev_priv(pf->si->ndev);
 	if (pf->pcs)
-		phylink_set_pcs(priv->phylink, &pf->pcs->pcs);
+		phylink_set_pcs(priv->phylink, pf->pcs);
 }
 
 static void enetc_force_rgmii_mac(struct enetc_hw *hw, int speed, int duplex)
@@ -1034,6 +1049,7 @@ static void enetc_force_rgmii_mac(struct enetc_hw *hw, int speed, int duplex)
 		return;
 
 	enetc_port_wr(hw, ENETC_PM0_IF_MODE, val);
+	enetc_port_wr(hw, ENETC_PM1_IF_MODE, val);
 }
 
 static void enetc_pl_mac_link_up(struct phylink_config *config,
@@ -1346,6 +1362,8 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_reg_netdev;
 
+	enetc_tsn_pf_init(ndev, pdev);
+
 	return 0;
 
 err_reg_netdev:
@@ -1383,6 +1401,8 @@ static void enetc_pf_remove(struct pci_dev *pdev)
 
 	if (pf->num_vfs)
 		enetc_sriov_configure(pdev, 0);
+
+	enetc_tsn_pf_deinit(si->ndev);
 
 	unregister_netdev(si->ndev);
 

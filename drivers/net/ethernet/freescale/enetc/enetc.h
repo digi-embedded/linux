@@ -11,6 +11,9 @@
 #include <linux/if_vlan.h>
 #include <linux/phylink.h>
 #include <linux/dim.h>
+#ifdef CONFIG_ENETC_TSN
+#include <net/tsn.h>
+#endif
 
 #include "enetc_hw.h"
 
@@ -22,6 +25,7 @@ struct enetc_tx_swbd {
 	union {
 		struct sk_buff *skb;
 		struct xdp_frame *xdp_frame;
+		struct xdp_buff *xsk_buff;
 	};
 	dma_addr_t dma;
 	struct page *page;	/* valid only if is_xdp_tx */
@@ -34,6 +38,8 @@ struct enetc_tx_swbd {
 	u8 is_eof:1;
 	u8 is_xdp_tx:1;
 	u8 is_xdp_redirect:1;
+	u8 is_xsk:1;
+	u8 qbv_en:1;
 };
 
 #define ENETC_RX_MAXFRM_SIZE	ENETC_MAC_MAXFRM_SIZE
@@ -45,10 +51,11 @@ struct enetc_tx_swbd {
 	min(SKB_WITH_OVERHEAD(ENETC_RXB_TRUESIZE) - XDP_PACKET_HEADROOM, 0xffff)
 
 struct enetc_rx_swbd {
-	dma_addr_t dma;
+	struct xdp_buff *xsk_buff;
 	struct page *page;
-	u16 page_offset;
+	dma_addr_t dma;
 	enum dma_data_direction dir;
+	u16 page_offset;
 	u16 len;
 };
 
@@ -70,10 +77,12 @@ struct enetc_ring_stats {
 	unsigned int xdp_redirect_sg;
 	unsigned int recycles;
 	unsigned int recycle_failures;
+	unsigned int win_drop;
 };
 
 struct enetc_xdp_data {
 	struct xdp_rxq_info rxq;
+	struct xsk_buff_pool *xsk_pool;
 	struct bpf_prog *prog;
 	int xdp_tx_in_flight;
 };
@@ -81,6 +90,7 @@ struct enetc_xdp_data {
 #define ENETC_RX_RING_DEFAULT_SIZE	2048
 #define ENETC_TX_RING_DEFAULT_SIZE	2048
 #define ENETC_DEFAULT_TX_WORK		(ENETC_TX_RING_DEFAULT_SIZE / 2)
+#define ENETC_XSK_TX_BATCH		ENETC_DEFAULT_TX_WORK
 
 struct enetc_bdr {
 	struct device *dev; /* for DMA mapping */
@@ -113,6 +123,10 @@ struct enetc_bdr {
 	dma_addr_t bd_dma_base;
 	u8 tsd_enable; /* Time specific departure */
 	bool ext_en; /* enable h/w descriptor extensions */
+
+	/* DMA buffer for TSO headers */
+	char *tso_headers;
+	dma_addr_t tso_headers_dma;
 } ____cacheline_aligned_in_smp;
 
 static inline void enetc_bdr_idx_inc(struct enetc_bdr *bdr, int *i)
@@ -199,6 +213,28 @@ struct enetc_msg_swbd {
 	int size;
 };
 
+#ifdef CONFIG_ENETC_TSN
+/* Credit-Based Shaper parameters */
+struct cbs {
+	u8 tc;
+	bool enable;
+	u8 bw;
+	u32 hi_credit;
+	u32 lo_credit;
+	u32 idle_slope;
+	u32 send_slope;
+	u32 tc_max_sized_frame;
+	u32 max_interfrence_size;
+};
+
+struct enetc_cbs {
+	u32 port_transmit_rate;
+	u32 port_max_size_frame;
+	u8 tc_nums;
+	struct cbs cbs[0];
+};
+#endif
+
 #define ENETC_REV1	0x1
 enum enetc_errata {
 	ENETC_ERR_VLAN_ISOL	= BIT(0),
@@ -206,6 +242,7 @@ enum enetc_errata {
 };
 
 #define ENETC_SI_F_QBV BIT(0)
+#define ENETC_SI_F_QBU BIT(1)
 #define ENETC_SI_F_PSFP BIT(1)
 
 /* PCI IEP device data */
@@ -224,6 +261,9 @@ struct enetc_si {
 	int num_rss; /* number of RSS buckets */
 	unsigned short pad;
 	int hw_features;
+#ifdef CONFIG_ENETC_TSN
+	struct enetc_cbs *ecbs;
+#endif
 };
 
 #define ENETC_SI_ALIGN	32
@@ -298,10 +338,12 @@ enum enetc_active_offloads {
 	ENETC_F_RX_TSTAMP		= BIT(8),
 	ENETC_F_QBV			= BIT(9),
 	ENETC_F_QCI			= BIT(10),
+	ENETC_F_QBU			= BIT(11),
 };
 
 enum enetc_flags_bit {
 	ENETC_TX_ONESTEP_TSTAMP_IN_PROGRESS = 0,
+	ENETC_DOWN,
 };
 
 /* interrupt coalescing modes */
@@ -389,9 +431,10 @@ struct net_device_stats *enetc_get_stats(struct net_device *ndev);
 void enetc_set_features(struct net_device *ndev, netdev_features_t features);
 int enetc_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd);
 int enetc_setup_tc_mqprio(struct net_device *ndev, void *type_data);
-int enetc_setup_bpf(struct net_device *dev, struct netdev_bpf *xdp);
+int enetc_setup_bpf(struct net_device *ndev, struct netdev_bpf *bpf);
 int enetc_xdp_xmit(struct net_device *ndev, int num_frames,
 		   struct xdp_frame **frames, u32 flags);
+int enetc_xsk_wakeup(struct net_device *dev, u32 queue, u32 flags);
 
 /* ethtool */
 void enetc_set_ethtool_ops(struct net_device *ndev);
@@ -502,4 +545,16 @@ static inline int enetc_set_psfp(struct net_device *ndev, bool en)
 {
 	return 0;
 }
+#endif
+#ifdef CONFIG_ENETC_TSN
+void enetc_tsn_pf_init(struct net_device *netdev, struct pci_dev *pdev);
+void enetc_tsn_pf_deinit(struct net_device *netdev);
+#ifndef CONFIG_FSL_ENETC_QOS
+void enetc_pspeed_set(struct enetc_ndev_priv *priv, int speed);
+#undef enetc_sched_speed_set
+#define enetc_sched_speed_set(priv, speed) enetc_pspeed_set(priv, speed)
+#endif
+#else
+#define enetc_tsn_pf_init(netdev, pdev) (void)0
+#define enetc_tsn_pf_deinit(netdev) (void)0
 #endif

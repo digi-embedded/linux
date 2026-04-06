@@ -1,0 +1,131 @@
+/*
+ * Copyright 2022 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: AUO 10.1\" LVDS display";
+		};
+	};
+
+	/* Disable the HDMI bridge */
+	fragment@1 {
+		target = <&lt_bridge>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+	/* Disable MIPI DSI phy */
+	fragment@2 {
+		target = <&dphy>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+	
+	/* Disable MIPI DSI */
+	fragment@3 {
+		target = <&dsi>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Enable the LVDS bridge */
+	fragment@4 {
+		target = <&ldb>;
+		__overlay__ {
+			status = "okay";
+
+			lvds-channel@0 {
+				status = "okay";
+			};
+		};
+	};
+
+	/* Enable the LVDS phy */
+	fragment@5 {
+		target = <&ldb_phy>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable the LVDS backlight PWM */
+	fragment@6 {
+		target = <&tpm6>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+	
+	/* Enable the lvds_backlight */
+	fragment@7 {
+		target = <&lvds_backlight>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable lvds_panel */
+	fragment@8 {
+		target = <&lvds_panel>;
+		__overlay__ {
+			compatible = "panel-lvds";
+			status = "okay";
+			backlight = <&lvds_backlight>;
+			power-supply = <&reg_5v_board>;
+			data-mapping = "jeida-24";
+			de-high;
+			width-mm = <216>;
+			height-mm = <135>;
+
+			/* AUO G101EVN01.0 */
+			panel-timing {
+				clock-frequency = <68930000>;
+				hactive = <1280>;
+				vactive = <800>;
+				hfront-porch = <120>;
+				hback-porch = <2>;
+				hsync-len = <8>;
+				vback-porch = <10>;
+				vfront-porch = <2>;
+				vsync-len = <6>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+			};
+		};
+	};
+
+	/* Adjust ldcif clock */
+	fragment@9 {
+		target = <&lcdif>;
+		__overlay__ {
+			assigned-clock-rates = <498000000>, <68930000>, <400000000>, <133333333>;
+		};
+	};
+
+	/* Enable goodix_touch */
+	fragment@10 {
+		target = <&goodix_touch>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+};

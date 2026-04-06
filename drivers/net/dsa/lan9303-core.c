@@ -1141,12 +1141,14 @@ static void lan9303_port_disable(struct dsa_switch *ds, int port)
 }
 
 static int lan9303_port_bridge_join(struct dsa_switch *ds, int port,
-				    struct net_device *br)
+				    struct dsa_bridge bridge,
+				    bool *tx_fwd_offload,
+				    struct netlink_ext_ack *extack)
 {
 	struct lan9303 *chip = ds->priv;
 
 	dev_dbg(chip->dev, "%s(port %d)\n", __func__, port);
-	if (dsa_to_port(ds, 1)->bridge_dev == dsa_to_port(ds, 2)->bridge_dev) {
+	if (dsa_port_bridge_same(dsa_to_port(ds, 1), dsa_to_port(ds, 2))) {
 		lan9303_bridge_ports(chip);
 		chip->is_bridged = true;  /* unleash stp_state_set() */
 	}
@@ -1155,7 +1157,7 @@ static int lan9303_port_bridge_join(struct dsa_switch *ds, int port,
 }
 
 static void lan9303_port_bridge_leave(struct dsa_switch *ds, int port,
-				      struct net_device *br)
+				      struct dsa_bridge bridge)
 {
 	struct lan9303 *chip = ds->priv;
 
@@ -1218,7 +1220,8 @@ static void lan9303_port_fast_age(struct dsa_switch *ds, int port)
 }
 
 static int lan9303_port_fdb_add(struct dsa_switch *ds, int port,
-				const unsigned char *addr, u16 vid)
+				const unsigned char *addr, u16 vid,
+				struct dsa_db db)
 {
 	struct lan9303 *chip = ds->priv;
 
@@ -1228,8 +1231,8 @@ static int lan9303_port_fdb_add(struct dsa_switch *ds, int port,
 }
 
 static int lan9303_port_fdb_del(struct dsa_switch *ds, int port,
-				const unsigned char *addr, u16 vid)
-
+				const unsigned char *addr, u16 vid,
+				struct dsa_db db)
 {
 	struct lan9303 *chip = ds->priv;
 
@@ -1271,7 +1274,8 @@ static int lan9303_port_mdb_prepare(struct dsa_switch *ds, int port,
 }
 
 static int lan9303_port_mdb_add(struct dsa_switch *ds, int port,
-				const struct switchdev_obj_port_mdb *mdb)
+				const struct switchdev_obj_port_mdb *mdb,
+				struct dsa_db db)
 {
 	struct lan9303 *chip = ds->priv;
 	int err;
@@ -1286,7 +1290,8 @@ static int lan9303_port_mdb_add(struct dsa_switch *ds, int port,
 }
 
 static int lan9303_port_mdb_del(struct dsa_switch *ds, int port,
-				const struct switchdev_obj_port_mdb *mdb)
+				const struct switchdev_obj_port_mdb *mdb,
+				struct dsa_db db)
 {
 	struct lan9303 *chip = ds->priv;
 

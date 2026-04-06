@@ -45,6 +45,11 @@ properties:
     description: GPIO pin to enable RS485 bus termination.
     maxItems: 1
 
+  digi,rts-gpio:
+    description: use a standard GPIO (instead of RTS) to control transfer
+      direction. This configuration forbids enabling DMA on the UART.
+    $ref: /schemas/types.yaml#/definitions/uint32
+
 additionalProperties: true
 
 ...

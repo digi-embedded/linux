@@ -1,0 +1,56 @@
+/*
+ * Copyright 2020 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SBC: User LEDs";
+		};
+	};
+
+	/* Enable USER_LED1 and USER_LED2 as mca-led */
+	fragment@1 {
+		target = <&mca_led>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			led@1 {
+				reg = <1>;
+				label = "USER_LED0:orange";
+				io = <18>;
+				/* Configure led for blinking at boot */
+				linux,default-trigger = "timer";
+				led-pattern = <100>, <1000>;
+				retain-state-suspended;
+			};
+
+			led@2 {
+				reg = <2>;
+				label = "USER_LED1:green";
+				io = <10>;
+				/* Configure led for blinking at boot */
+				linux,default-trigger = "timer";
+				led-pattern = <5000>, <5000>;
+				retain-state-suspended;
+			};
+		};
+	};
+};

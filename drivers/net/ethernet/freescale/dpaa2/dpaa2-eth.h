@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
 /* Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2016-2020 NXP
+ * Copyright 2016-2022 NXP
  */
 
 #ifndef __DPAA2_ETH_H
@@ -52,6 +52,12 @@
  * in a single NAPI call
  */
 #define DPAA2_ETH_TXCONF_PER_NAPI	256
+
+/* Maximum number of Tx frames to be processed in a single NAPI
+ * call when AF_XDP is running. Bind it to DPAA2_ETH_TXCONF_PER_NAPI
+ * to maximize the throughput.
+ */
+#define DPAA2_ETH_TX_ZC_PER_NAPI	DPAA2_ETH_TXCONF_PER_NAPI
 
 /* Buffer qouta per channel. We want to keep in check number of ingress frames
  * in flight: for small sized frames, congestion group taildrop may kick in
@@ -109,6 +115,14 @@
 #define DPAA2_ETH_RX_BUF_ALIGN_REV1	256
 #define DPAA2_ETH_RX_BUF_ALIGN		64
 
+/* The firmware allows assigning multiple buffer pools to a single DPNI - maximum
+ * 8 DPBP objects. By default, only the first DPBP is used. Thus, when enabling
+ * AF_XDP we must accommodate up to 9 DPBPs object: the default and 8 other distinct
+ * buffer pools.
+ */
+#define DPAA2_ETH_DEFAULT_BP		0
+#define DPAA2_ETH_MAX_BPS		9
+
 /* We are accommodating a skb backpointer and some S/G info
  * in the frame's software annotation. The hardware
  * options are either 0 or 64, so we choose the latter.
@@ -122,6 +136,8 @@ enum dpaa2_eth_swa_type {
 	DPAA2_ETH_SWA_SINGLE,
 	DPAA2_ETH_SWA_SG,
 	DPAA2_ETH_SWA_XDP,
+	DPAA2_ETH_SWA_XSK,
+	DPAA2_ETH_SWA_SW_TSO,
 };
 
 /* Must keep this struct smaller than DPAA2_ETH_SWA_SIZE */
@@ -142,6 +158,15 @@ struct dpaa2_eth_swa {
 			int dma_size;
 			struct xdp_frame *xdpf;
 		} xdp;
+		struct {
+			struct xdp_buff *xdp_buff;
+		} xsk;
+		struct {
+			struct sk_buff *skb;
+			int num_sg;
+			int sgt_size;
+			int is_last_fd;
+		} tso;
 	};
 };
 
@@ -329,6 +354,9 @@ static inline struct dpaa2_faead *dpaa2_get_faead(void *buf_addr, bool swa)
 					 DPAA2_FAS_L3CE		| \
 					 DPAA2_FAS_L4CE)
 
+/* TCP indication in Frame Annotation Parse Results */
+#define DPAA2_FAF_HI_TCP_PRESENT	BIT(23)
+
 /* Time in milliseconds between link state updates */
 #define DPAA2_ETH_LINK_STATE_REFRESH	1000
 
@@ -344,7 +372,7 @@ static inline struct dpaa2_faead *dpaa2_get_faead(void *buf_addr, bool swa)
  * hardware becomes unresponsive, but not give up too easily if
  * the portal really is busy for valid reasons
  */
-#define DPAA2_ETH_SWP_BUSY_RETRIES	1000
+#define DPAA2_ETH_SWP_BUSY_RETRIES	10000
 
 /* Driver statistics, other than those in struct rtnl_link_stats64.
  * These are usually collected per-CPU and aggregated by ethtool.
@@ -354,6 +382,8 @@ struct dpaa2_eth_drv_stats {
 	__u64	tx_conf_bytes;
 	__u64	tx_sg_frames;
 	__u64	tx_sg_bytes;
+	__u64	tx_tso_frames;
+	__u64	tx_tso_bytes;
 	__u64	rx_sg_frames;
 	__u64	rx_sg_bytes;
 	/* Linear skbs sent as a S/G FD due to insufficient headroom */
@@ -384,7 +414,11 @@ struct dpaa2_eth_ch_stats {
 	__u64 xdp_redirect;
 	/* Must be last, does not show up in ethtool stats */
 	__u64 frames;
+	__u64 frames_per_cdan;
+	__u64 bytes_per_cdan;
 };
+
+#define DPAA2_ETH_CH_STATS	7
 
 /* Maximum number of queues associated with a DPNI */
 #define DPAA2_ETH_MAX_TCS		8
@@ -441,6 +475,11 @@ struct dpaa2_eth_ch_xdp {
 	unsigned int res;
 };
 
+struct dpaa2_eth_buf_pool {
+	struct fsl_mc_device *dpbp_dev;
+	int bpid;
+};
+
 struct dpaa2_eth_channel {
 	struct dpaa2_io_notification_ctx nctx;
 	struct fsl_mc_device *dpcon;
@@ -459,6 +498,11 @@ struct dpaa2_eth_channel {
 	/* Buffers to be recycled back in the buffer pool */
 	u64 recycled_bufs[DPAA2_ETH_BUFS_PER_CMD];
 	int recycled_bufs_cnt;
+
+	bool xsk_zc;
+	int xsk_frames_done;
+	struct xsk_buff_pool *xsk_pool;
+	struct dpaa2_eth_buf_pool *bp;
 };
 
 struct dpaa2_eth_dist_fields {
@@ -489,7 +533,14 @@ struct dpaa2_eth_trap_data {
 	struct dpaa2_eth_priv *priv;
 };
 
+#define DPAA2_ETH_SG_ENTRIES_MAX	(PAGE_SIZE / sizeof(struct scatterlist))
+
 #define DPAA2_ETH_DEFAULT_COPYBREAK	512
+
+#define DPAA2_ETH_ENQUEUE_MAX_FDS	256
+struct dpaa2_eth_fds {
+	struct dpaa2_fd array[DPAA2_ETH_ENQUEUE_MAX_FDS];
+};
 
 /* Driver private data */
 struct dpaa2_eth_priv {
@@ -516,6 +567,8 @@ struct dpaa2_eth_priv {
 	void (*dpaa2_set_onestep_params_cb)(struct dpaa2_eth_priv *priv,
 					    u32 offset, u8 udp);
 	struct fsl_mc_device *dpbp_dev;
+	struct dpaa2_eth_buf_pool *bp[DPAA2_ETH_MAX_BPS];
+	int num_bps;
 	u16 rx_buf_size;
 	u16 bpid;
 	struct iommu_domain *iommu_domain;
@@ -576,6 +629,8 @@ struct dpaa2_eth_priv {
 	struct devlink_port devlink_port;
 
 	u32 rx_copybreak;
+	bool ceetm_en;
+	struct dpaa2_eth_fds __percpu *fd;
 };
 
 struct dpaa2_eth_devlink_priv {
@@ -724,6 +779,11 @@ static inline bool dpaa2_eth_has_mac(struct dpaa2_eth_priv *priv)
 	return priv->mac ? true : false;
 }
 
+static inline int dpaa2_eth_ch_count(struct dpaa2_eth_priv *priv)
+{
+	return 1;
+}
+
 int dpaa2_eth_set_hash(struct net_device *net_dev, u64 flags);
 int dpaa2_eth_set_cls(struct net_device *net_dev, u64 key);
 int dpaa2_eth_cls_key_size(u64 key);
@@ -746,4 +806,46 @@ void dpaa2_eth_dl_traps_unregister(struct dpaa2_eth_priv *priv);
 
 struct dpaa2_eth_trap_item *dpaa2_eth_dl_get_trap(struct dpaa2_eth_priv *priv,
 						  struct dpaa2_fapr *fapr);
+
+void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
+		  struct dpaa2_eth_channel *ch,
+		  const struct dpaa2_fd *fd,
+		  struct dpaa2_eth_fq *fq);
+void dpaa2_eth_xdp_enqueue(struct dpaa2_eth_priv *priv,
+			   struct dpaa2_eth_channel *ch,
+			   struct dpaa2_fd *fd,
+			   void *buf_start, u16 queue_id);
+
+int dpaa2_eth_open(struct net_device *net_dev);
+int dpaa2_eth_stop(struct net_device *net_dev);
+
+struct dpaa2_eth_buf_pool *dpaa2_eth_allocate_dpbp(struct dpaa2_eth_priv *priv);
+void dpaa2_eth_free_dpbp(struct dpaa2_eth_priv *priv);
+
+void *dpaa2_iova_to_virt(struct iommu_domain *domain, dma_addr_t iova_addr);
+void dpaa2_eth_recycle_buf(struct dpaa2_eth_priv *priv,
+			   struct dpaa2_eth_channel *ch,
+			   dma_addr_t addr);
+
+struct sk_buff *dpaa2_eth_alloc_skb(struct dpaa2_eth_priv *priv,
+				    struct dpaa2_eth_channel *ch,
+				    const struct dpaa2_fd *fd, u32 fd_length,
+				    void *fd_vaddr);
+void dpaa2_eth_receive_skb(struct dpaa2_eth_priv *priv, struct dpaa2_eth_channel *ch,
+			   const struct dpaa2_fd *fd, void *vaddr,
+			   struct dpaa2_eth_fq *fq,
+			   struct rtnl_link_stats64 *percpu_stats,
+			   struct sk_buff *skb);
+
+int dpaa2_xsk_wakeup(struct net_device *dev, u32 qid, u32 flags);
+int dpaa2_xsk_setup_pool(struct net_device *dev, struct xsk_buff_pool *pool,
+			 u16 qid);
+
+void dpaa2_eth_free_tx_fd(struct dpaa2_eth_priv *priv,
+			  struct dpaa2_eth_channel *ch,
+			  struct dpaa2_eth_fq *fq,
+			  const struct dpaa2_fd *fd, bool in_napi);
+bool dpaa2_xsk_tx(struct dpaa2_eth_priv *priv,
+		  struct dpaa2_eth_channel *ch);
+
 #endif	/* __DPAA2_H */

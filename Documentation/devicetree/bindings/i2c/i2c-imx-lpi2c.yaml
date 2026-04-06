@@ -19,7 +19,9 @@ properties:
           - fsl,imx7ulp-lpi2c
           - fsl,imx8qm-lpi2c
       - items:
-          - const: fsl,imx8qxp-lpi2c
+          - enum:
+              - fsl,imx8qxp-lpi2c
+              - fsl,imx8ulp-lpi2c
           - const: fsl,imx7ulp-lpi2c
 
   reg:
@@ -42,6 +44,26 @@ properties:
   power-domains:
     maxItems: 1
 
+  digi,hold-time-ns:
+    description: Forces start, repeated start and stop i2c hold time
+
+  digi,buffer-time-us:
+    description: Sets the buffer time in microseconds. This is the bus free
+      time between stop and start conditions. Some peripherals may require
+      this time to operate properly.
+
+  scl-gpios:
+    description: specify the SCL pad GPIO related to SCL pin (required if
+      using a "gpio" pinctrl)
+
+  sda-gpios:
+    description: specify the SDA pad GPIO related to SDA pin (required if
+      using a "gpio" pinctrl)
+
+  pinctrl:
+    description: A pinctrl state named "gpio" may be defined to set pins as
+      GPIOs (for bit-banging recovery)
+
 required:
   - compatible
   - reg
@@ -61,4 +83,20 @@ examples:
         interrupt-parent = <&intc>;
         interrupts = <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>;
         clocks = <&clks IMX7ULP_CLK_LPI2C7>;
+    };
+  - |
+    &i2c0 {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        clocks = <&clk IMX8QXP_I2C0_CLK>,
+                <&clk IMX8QXP_I2C0_IPG_CLK>;
+        clock-names = "per", "ipg";
+        assigned-clock-rates = <48000000>;
+        clock-frequency = <1000000>;
+        pinctrl-names = "default", "gpio";
+        digi,hold-time-ns = <8000>;
+        pinctrl-0 = <&pinctrl_lpi2c0>;
+        pinctrl-1 = <&pinctrl_lpi2c0_gpio>;
+        scl-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
+        sda-gpios = <&gpio3 7 GPIO_ACTIVE_HIGH>;
     };

@@ -336,6 +336,17 @@ struct gpioline_info {
 	char consumer[GPIO_MAX_NAME_SIZE];
 };
 
+/**
+ * struct gpioline_debounce - GPIO line debounce
+ * @line_offset: the local offset on this GPIO device, fill this in when
+ * requesting the line information from the kernel
+ * @debounce_usec: debounce in uSeconds to set for this line
+ */
+struct gpioline_debounce {
+	__u32 line_offset;
+	__u32 debounce_usec;
+};
+
 /* Maximum number of requested handles */
 #define GPIOHANDLES_MAX 64
 
@@ -501,6 +512,7 @@ struct gpioevent_data {
  */
 #define GPIO_GET_CHIPINFO_IOCTL _IOR(0xB4, 0x01, struct gpiochip_info)
 #define GPIO_GET_LINEINFO_UNWATCH_IOCTL _IOWR(0xB4, 0x0C, __u32)
+#define GPIO_SET_DEBOUNCE_IOCTL _IOW(0xB4, 0xA0, struct gpioline_debounce)
 
 /*
  * v2 ioctl()s

@@ -1,0 +1,45 @@
+/*
+ * Copyright 2023 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/interrupt-controller/irq.h>
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: MikroE Gyro Click board";
+		};
+	};
+
+	/* MikroE Gyro (gyro-click) */
+	fragment@1 {
+		target = <&lpi2c3>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			gyroscope@68 {
+				compatible = "st,l3g4200d-gyro";
+				reg = <0x68>;
+				vdd-supply = <&buck4>;
+				vddio-supply = <&buck4>;
+				interrupt-parent = <&gpio2>;
+				interrupts = <11 IRQ_TYPE_EDGE_RISING>;
+			};
+		};
+	};
+};

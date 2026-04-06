@@ -5,6 +5,7 @@
  */
 
 #include <dt-bindings/clock/imx8mq-clock.h>
+#include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/err.h>
 #include <linux/io.h>
@@ -13,6 +14,8 @@
 #include <linux/types.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
+#include <soc/imx/soc.h>
 
 #include "clk.h"
 
@@ -25,7 +28,7 @@ static u32 share_count_sai6;
 static u32 share_count_dcss;
 static u32 share_count_nand;
 
-static const char * const pll_ref_sels[] = { "osc_25m", "osc_27m", "dummy", "dummy", };
+static const char * const pll_ref_sels[] = { "osc_25m", "osc_27m", "phy_27m", "dummy", };
 static const char * const arm_pll_bypass_sels[] = {"arm_pll", "arm_pll_ref_sel", };
 static const char * const gpu_pll_bypass_sels[] = {"gpu_pll", "gpu_pll_ref_sel", };
 static const char * const vpu_pll_bypass_sels[] = {"vpu_pll", "vpu_pll_ref_sel", };
@@ -281,6 +284,34 @@ static const char * const pllout_monitor_sels[] = {"osc_25m", "osc_27m", "dummy"
 static struct clk_hw_onecell_data *clk_hw_data;
 static struct clk_hw **hws;
 
+static int imx_clk_init_on(struct device_node *np,
+				  struct clk_hw * const clks[])
+{
+	u32 *array;
+	int i, ret, elems;
+
+	elems = of_property_count_u32_elems(np, "init-on-array");
+	if (elems < 0)
+		return elems;
+	array = kzalloc(elems * sizeof(elems), GFP_KERNEL);
+	if (!array)
+		return -ENOMEM;
+
+	ret = of_property_read_u32_array(np, "init-on-array", array, elems);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < elems; i++) {
+		ret = clk_prepare_enable(clks[array[i]]->clk);
+		if (ret)
+			pr_err("clk_prepare_enable failed %d\n", array[i]);
+	}
+
+	kfree(array);
+
+	return 0;
+}
+
 static int imx8mq_clocks_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -303,6 +334,7 @@ static int imx8mq_clocks_probe(struct platform_device *pdev)
 	hws[IMX8MQ_CLK_EXT2] = imx_obtain_fixed_clk_hw(np, "clk_ext2");
 	hws[IMX8MQ_CLK_EXT3] = imx_obtain_fixed_clk_hw(np, "clk_ext3");
 	hws[IMX8MQ_CLK_EXT4] = imx_obtain_fixed_clk_hw(np, "clk_ext4");
+	hws[IMX8MQ_CLK_PHY_27MHZ] = imx_clk_hw_fixed("phy_27m", 27000000);
 
 	np = of_find_compatible_node(NULL, NULL, "fsl,imx8mq-anatop");
 	base = devm_of_iomap(dev, np, 0, NULL);
@@ -343,6 +375,13 @@ static int imx8mq_clocks_probe(struct platform_device *pdev)
 	hws[IMX8MQ_AUDIO_PLL1_BYPASS] = imx_clk_hw_mux("audio_pll1_bypass", base + 0x0, 14, 1, audio_pll1_bypass_sels, ARRAY_SIZE(audio_pll1_bypass_sels));
 	hws[IMX8MQ_AUDIO_PLL2_BYPASS] = imx_clk_hw_mux("audio_pll2_bypass", base + 0x8, 14, 1, audio_pll2_bypass_sels, ARRAY_SIZE(audio_pll2_bypass_sels));
 	hws[IMX8MQ_VIDEO_PLL1_BYPASS] = imx_clk_hw_mux("video_pll1_bypass", base + 0x10, 14, 1, video_pll1_bypass_sels, ARRAY_SIZE(video_pll1_bypass_sels));
+
+	/* unbypass all the plls */
+	clk_set_parent(hws[IMX8MQ_GPU_PLL_BYPASS]->clk, hws[IMX8MQ_GPU_PLL]->clk);
+	clk_set_parent(hws[IMX8MQ_VPU_PLL_BYPASS]->clk, hws[IMX8MQ_VPU_PLL]->clk);
+	clk_set_parent(hws[IMX8MQ_AUDIO_PLL1_BYPASS]->clk, hws[IMX8MQ_AUDIO_PLL1]->clk);
+	clk_set_parent(hws[IMX8MQ_AUDIO_PLL2_BYPASS]->clk, hws[IMX8MQ_AUDIO_PLL2]->clk);
+	clk_set_parent(hws[IMX8MQ_VIDEO_PLL1_BYPASS]->clk, hws[IMX8MQ_VIDEO_PLL1]->clk);
 
 	/* PLL OUT GATE */
 	hws[IMX8MQ_ARM_PLL_OUT] = imx_clk_hw_gate("arm_pll_out", "arm_pll_bypass", base + 0x28, 21);
@@ -560,7 +599,7 @@ static int imx8mq_clocks_probe(struct platform_device *pdev)
 	hws[IMX8MQ_CLK_SAI5_IPG] = imx_clk_hw_gate2_shared2("sai5_ipg_clk", "ipg_audio_root", base + 0x4370, 0, &share_count_sai5);
 	hws[IMX8MQ_CLK_SAI6_ROOT] = imx_clk_hw_gate2_shared2("sai6_root_clk", "sai6", base + 0x4380, 0, &share_count_sai6);
 	hws[IMX8MQ_CLK_SAI6_IPG] = imx_clk_hw_gate2_shared2("sai6_ipg_clk", "ipg_audio_root", base + 0x4380, 0, &share_count_sai6);
-	hws[IMX8MQ_CLK_SNVS_ROOT] = imx_clk_hw_gate4("snvs_root_clk", "ipg_root", base + 0x4470, 0);
+	hws[IMX8MQ_CLK_SNVS_ROOT] = imx_clk_hw_gate2_flags("snvs_root_clk", "ipg_root", base + 0x4470, 0, CLK_IS_CRITICAL);
 	hws[IMX8MQ_CLK_UART1_ROOT] = imx_clk_hw_gate4("uart1_root_clk", "uart1", base + 0x4490, 0);
 	hws[IMX8MQ_CLK_UART2_ROOT] = imx_clk_hw_gate4("uart2_root_clk", "uart2", base + 0x44a0, 0);
 	hws[IMX8MQ_CLK_UART3_ROOT] = imx_clk_hw_gate4("uart3_root_clk", "uart3", base + 0x44b0, 0);
@@ -605,6 +644,16 @@ static int imx8mq_clocks_probe(struct platform_device *pdev)
 		goto unregister_hws;
 	}
 
+	/* enable all the clocks just for bringup */
+	imx_clk_init_on(np, hws);
+
+	clk_set_parent(hws[IMX8MQ_CLK_CSI1_CORE]->clk, hws[IMX8MQ_SYS1_PLL_266M]->clk);
+	clk_set_parent(hws[IMX8MQ_CLK_CSI1_PHY_REF]->clk, hws[IMX8MQ_SYS2_PLL_1000M]->clk);
+	clk_set_parent(hws[IMX8MQ_CLK_CSI1_ESC]->clk, hws[IMX8MQ_SYS1_PLL_800M]->clk);
+	clk_set_parent(hws[IMX8MQ_CLK_CSI2_CORE]->clk, hws[IMX8MQ_SYS1_PLL_266M]->clk);
+	clk_set_parent(hws[IMX8MQ_CLK_CSI2_PHY_REF]->clk, hws[IMX8MQ_SYS2_PLL_1000M]->clk);
+	clk_set_parent(hws[IMX8MQ_CLK_CSI2_ESC]->clk, hws[IMX8MQ_SYS1_PLL_800M]->clk);
+
 	imx_register_uart_clocks(4);
 
 	return 0;
@@ -635,6 +684,8 @@ static struct platform_driver imx8mq_clk_driver = {
 	},
 };
 module_platform_driver(imx8mq_clk_driver);
+module_param(mcore_booted, bool, S_IRUGO);
+MODULE_PARM_DESC(mcore_booted, "See Cortex-M core is booted or not");
 
 MODULE_AUTHOR("Abel Vesa <abel.vesa@nxp.com>");
 MODULE_DESCRIPTION("NXP i.MX8MQ clock driver");

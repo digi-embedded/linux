@@ -22,7 +22,9 @@ properties:
           - fsl,imx7ulp-lpuart
           - fsl,imx8qm-lpuart
       - items:
-          - const: fsl,imx8qxp-lpuart
+          - enum:
+              - fsl,imx8qxp-lpuart
+              - fsl,imx8ulp-lpuart
           - const: fsl,imx7ulp-lpuart
 
   reg:
@@ -77,4 +79,13 @@ examples:
         clock-names = "ipg";
         dmas = <&edma0 0 2>, <&edma0 0 3>;
         dma-names = "rx","tx";
+    };
+  - |
+    &lpuart3 {
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_lpuart3>,
+                    <&pinctrl_flexcan3_lpuart3_gpios>;
+        pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_LOW>;
+        linux,rs485-enabled-at-boot-time;
+        digi,rts-gpio = <&gpio3 24 GPIO_ACTIVE_HIGH>;
     };

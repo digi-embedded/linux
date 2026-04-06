@@ -387,6 +387,14 @@ config GPIO_MB86S7X
 	help
 	  Say yes here to support the GPIO controller in Fujitsu MB86S70 SoCs.
 
+config GPIO_MCA
+	tristate "Digi ConnectCore SOMs Micro Controller Assist GPIO support"
+	select MFD_MCA
+	select GPIOLIB_IRQCHIP
+	help
+	  If you say yes here you will get support for the GPIOs in the
+	  Micro Controller Assist of Digi ConnectCore system-on-modules.
+
 config GPIO_MENZ127
 	tristate "MEN 16Z127 GPIO support"
 	depends on MCB
@@ -439,12 +447,25 @@ config GPIO_MXC
 	select GPIO_GENERIC
 	select GENERIC_IRQ_CHIP
 
+config GPIO_SCU
+	def_bool y
+	depends on IMX_SCU
+	help
+	  Say Y here to enable the imx8 gpio over SCFW MISC API
+
 config GPIO_MXS
 	bool "Freescale MXS GPIO support" if COMPILE_TEST
 	depends on ARCH_MXS || COMPILE_TEST
 	default y if ARCH_MXS
 	select GPIO_GENERIC
 	select GENERIC_IRQ_CHIP
+
+config GPIO_MXC_PAD_WAKEUP
+	def_bool y
+	depends on IMX_SCU
+	select GPIO_MXC
+	help
+	  Say Y here to enable the imx8 gpio pad wakeup
 
 config GPIO_OCTEON
 	tristate "Cavium OCTEON GPIO"
@@ -664,7 +685,7 @@ config GPIO_UNIPHIER
 
 config GPIO_VF610
 	def_bool y
-	depends on ARCH_MXC && SOC_VF610
+	depends on ARCH_MXC
 	select GPIOLIB_IRQCHIP
 	help
 	  Say yes here to support Vybrid vf610 GPIOs.
@@ -678,6 +699,12 @@ config GPIO_VISCONTI
 	select IRQ_DOMAIN_HIERARCHY
 	help
 	  Say yes here to support GPIO on Tohisba Visconti.
+
+config GPIO_IMX_RPMSG
+	tristate "NXP i.MX7ULP RPMSG GPIO support"
+	depends on ARCH_MXC && RPMSG && GPIOLIB
+	help
+	  This driver support i.MX7ULP RPMSG virtual GPIOs.
 
 config GPIO_VR41XX
 	tristate "NEC VR4100 series General-purpose I/O Uint support"
@@ -1107,6 +1134,13 @@ config GPIO_ADP5520
 	  This option enables support for on-chip GPIO found
 	  on Analog Devices ADP5520 PMICs.
 
+config GPIO_ADP5585
+	tristate "GPIO Support for ADP5585"
+	depends on MFD_ADP5585
+	help
+	  This option enables support for on-chip GPIO found
+	  on Analog Devices ADP5585.
+
 config GPIO_ALTERA_A10SR
 	tristate "Altera Arria10 System Resource GPIO"
 	depends on MFD_ALTERA_A10SR
@@ -1205,6 +1239,17 @@ config GPIO_DA9055
 	  be controller by this driver.
 
 	  If driver is built as a module it will be called gpio-da9055.
+
+config GPIO_DA9063
+	tristate "Dialog Semiconductor DA9063 GPIO"
+	depends on MFD_DA9063
+	help
+	  Say yes here to enable the GPIO driver for the DA9063 chip.
+
+	  The Dialog DA9063 PMIC chip has 16 GPIO pins that can be
+	  be controller by this driver.
+
+	  If driver is built as a module it will be called gpio-da9063.
 
 config GPIO_DLN2
 	tristate "Diolan DLN2 GPIO support"

@@ -19,6 +19,9 @@ properties:
       - const: fsl,imx21-i2c
       - const: fsl,vf610-i2c
       - items:
+          - const: fsl,vf610-i2c
+          - const: fsl,ls1021a-vf610-i2c
+      - items:
           - const: fsl,imx35-i2c
           - const: fsl,imx1-i2c
       - items:
@@ -74,6 +77,39 @@ properties:
 
   scl-gpios:
     maxItems: 1
+
+  digi,atecc508a-workaround:
+    description: ATECC508A cryptochip produces an sporadic unexpected
+      behavior on the i2c bus when sharing the bus with other peripherals at
+      a bus speed lower than 300KHz.
+
+      This property enables a workaround suggested by the chip manufacturer
+      (Microchip):
+
+        1- Wake the cryptochip device before communication with the other
+          devices on the system bus.
+
+        2- Upon completion of communication with the other device a cryptochip
+          Sleep command should be issued. (This is to put the device into a
+          known state if it did actually wake up).
+
+  digi,atecc508a-address:
+    description: ATECC508A bus slave address (7 bits). If not present,
+      the default ATECC508A slave address 0x60 is used.
+
+  digi,atecc508a-awake-delay-uS:
+    description: Delay in micro seconds since awake command until communication
+      with other devices. If not present, no delay is done.
+
+  digi,atecc508a-sleep-delay-uS:
+    description: Delay in micro seconds since awake command until sleep
+      command. This delay is used to assure the cryptochip is awake when the
+      sleep command is sent. If not present, no delay is done.
+
+  digi,buffer-time-us:
+    description: Sets the buffer time in microseconds. This is the bus free
+      time between stop and start conditions. Some peripherals may require
+      this time to operate properly.
 
 required:
   - compatible

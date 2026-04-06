@@ -119,3 +119,19 @@ examples:
             };
         };
     };
+  - |
+    partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <2>;
+
+        /* a 4 GiB partition */
+        partition@0 {
+            label = "filesystem";
+            reg = <0x00000000 0x1 0x00000000>;
+            encrypted;
+            encryption-keyblob-size = <80>;
+            encryption-keyblob-offset = <0x40000>;
+            encryption-keyblob-part = <1>;
+        };
+    };

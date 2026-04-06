@@ -69,6 +69,56 @@ static const unsigned int pca9450_dvs_buck_ramp_table[] = {
 	25000, 12500, 6250, 3125
 };
 
+static int pca9450_ldo_suspend_do_enable(struct regulator_dev *rdev, bool en)
+{
+	struct regmap *rmap = rdev_get_regmap(rdev);
+	int id = rdev->desc->id - PCA9450_LDO1;
+	unsigned int ldoctrl[5] = {PCA9450_REG_LDO1CTRL, PCA9450_REG_LDO2CTRL,
+				   PCA9450_REG_LDO3CTRL, PCA9450_REG_LDO4CTRL,
+				   PCA9450_REG_LDO5CTRL_L};
+
+	dev_dbg(rdev_get_dev(rdev), "LDO[%d] suspend state=%s\n", id + 1, en ? "on" : "off");
+
+	return regmap_update_bits(rmap, ldoctrl[id], LDO1_EN_MASK,
+				  en ? LDO_ENMODE_ONREQ  :
+				  LDO_ENMODE_ONREQ_STBYREQ);
+}
+
+static int pca9450_ldo_suspend_enable(struct regulator_dev *rdev)
+{
+	return pca9450_ldo_suspend_do_enable(rdev, true);
+}
+
+static int pca9450_ldo_suspend_disable(struct regulator_dev *rdev)
+{
+	return pca9450_ldo_suspend_do_enable(rdev, false);
+}
+
+static int pca9450_buck_suspend_do_enable(struct regulator_dev *rdev, bool en)
+{
+	struct regmap *rmap = rdev_get_regmap(rdev);
+	int id = rdev->desc->id;
+	unsigned int buckctrl[6] = {PCA9450_REG_BUCK1CTRL, PCA9450_REG_BUCK2CTRL,
+				    PCA9450_REG_BUCK3CTRL, PCA9450_REG_BUCK4CTRL,
+				    PCA9450_REG_BUCK5CTRL, PCA9450_REG_BUCK6CTRL};
+
+	dev_dbg(rdev_get_dev(rdev), "Buck[%d] suspend state=%s\n", id + 1, en ? "on" : "off");
+
+	return regmap_update_bits(rmap, buckctrl[id], BUCK1_ENMODE_MASK,
+				  en ? BUCK_ENMODE_ONREQ :
+				  BUCK_ENMODE_ONREQ_STBYREQ);
+}
+
+static int pca9450_buck_suspend_enable(struct regulator_dev *rdev)
+{
+	return pca9450_buck_suspend_do_enable(rdev, true);
+}
+
+static int pca9450_buck_suspend_disable(struct regulator_dev *rdev)
+{
+	return pca9450_buck_suspend_do_enable(rdev, false);
+}
+
 static const struct regulator_ops pca9450_dvs_buck_regulator_ops = {
 	.enable = regulator_enable_regmap,
 	.disable = regulator_disable_regmap,
@@ -78,6 +128,8 @@ static const struct regulator_ops pca9450_dvs_buck_regulator_ops = {
 	.get_voltage_sel = regulator_get_voltage_sel_regmap,
 	.set_voltage_time_sel = regulator_set_voltage_time_sel,
 	.set_ramp_delay	= regulator_set_ramp_delay_regmap,
+	.set_suspend_enable = pca9450_buck_suspend_enable,
+	.set_suspend_disable = pca9450_buck_suspend_disable,
 };
 
 static const struct regulator_ops pca9450_buck_regulator_ops = {
@@ -88,6 +140,8 @@ static const struct regulator_ops pca9450_buck_regulator_ops = {
 	.set_voltage_sel = regulator_set_voltage_sel_regmap,
 	.get_voltage_sel = regulator_get_voltage_sel_regmap,
 	.set_voltage_time_sel = regulator_set_voltage_time_sel,
+	.set_suspend_enable = pca9450_buck_suspend_enable,
+	.set_suspend_disable = pca9450_buck_suspend_disable,
 };
 
 static const struct regulator_ops pca9450_ldo_regulator_ops = {
@@ -97,6 +151,8 @@ static const struct regulator_ops pca9450_ldo_regulator_ops = {
 	.list_voltage = regulator_list_voltage_linear_range,
 	.set_voltage_sel = regulator_set_voltage_sel_regmap,
 	.get_voltage_sel = regulator_get_voltage_sel_regmap,
+	.set_suspend_enable = pca9450_ldo_suspend_enable,
+	.set_suspend_disable = pca9450_ldo_suspend_disable,
 };
 
 /*
@@ -232,6 +288,7 @@ static const struct pca9450_regulator_desc pca9450a_regulators[] = {
 			.ramp_mask = BUCK1_RAMP_MASK,
 			.ramp_delay_table = pca9450_dvs_buck_ramp_table,
 			.n_ramp_values = ARRAY_SIZE(pca9450_dvs_buck_ramp_table),
+			.enable_val = BUCK_ENMODE_ONREQ,
 			.owner = THIS_MODULE,
 			.of_parse_cb = pca9450_set_dvs_levels,
 		},
@@ -286,6 +343,7 @@ static const struct pca9450_regulator_desc pca9450a_regulators[] = {
 			.vsel_mask = BUCK3OUT_DVS0_MASK,
 			.enable_reg = PCA9450_REG_BUCK3CTRL,
 			.enable_mask = BUCK3_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
 			.ramp_reg = PCA9450_REG_BUCK3CTRL,
 			.ramp_mask = BUCK3_RAMP_MASK,
 			.ramp_delay_table = pca9450_dvs_buck_ramp_table,
@@ -315,6 +373,7 @@ static const struct pca9450_regulator_desc pca9450a_regulators[] = {
 			.vsel_mask = BUCK4OUT_MASK,
 			.enable_reg = PCA9450_REG_BUCK4CTRL,
 			.enable_mask = BUCK4_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
 			.owner = THIS_MODULE,
 		},
 	},
@@ -333,6 +392,7 @@ static const struct pca9450_regulator_desc pca9450a_regulators[] = {
 			.vsel_mask = BUCK5OUT_MASK,
 			.enable_reg = PCA9450_REG_BUCK5CTRL,
 			.enable_mask = BUCK5_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
 			.owner = THIS_MODULE,
 		},
 	},
@@ -351,6 +411,7 @@ static const struct pca9450_regulator_desc pca9450a_regulators[] = {
 			.vsel_mask = BUCK6OUT_MASK,
 			.enable_reg = PCA9450_REG_BUCK6CTRL,
 			.enable_mask = BUCK6_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
 			.owner = THIS_MODULE,
 		},
 	},
@@ -466,6 +527,7 @@ static const struct pca9450_regulator_desc pca9450bc_regulators[] = {
 			.vsel_mask = BUCK1OUT_DVS0_MASK,
 			.enable_reg = PCA9450_REG_BUCK1CTRL,
 			.enable_mask = BUCK1_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
 			.ramp_reg = PCA9450_REG_BUCK1CTRL,
 			.ramp_mask = BUCK1_RAMP_MASK,
 			.ramp_delay_table = pca9450_dvs_buck_ramp_table,
@@ -524,6 +586,7 @@ static const struct pca9450_regulator_desc pca9450bc_regulators[] = {
 			.vsel_mask = BUCK4OUT_MASK,
 			.enable_reg = PCA9450_REG_BUCK4CTRL,
 			.enable_mask = BUCK4_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
 			.owner = THIS_MODULE,
 		},
 	},
@@ -542,6 +605,7 @@ static const struct pca9450_regulator_desc pca9450bc_regulators[] = {
 			.vsel_mask = BUCK5OUT_MASK,
 			.enable_reg = PCA9450_REG_BUCK5CTRL,
 			.enable_mask = BUCK5_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
 			.owner = THIS_MODULE,
 		},
 	},
@@ -560,6 +624,215 @@ static const struct pca9450_regulator_desc pca9450bc_regulators[] = {
 			.vsel_mask = BUCK6OUT_MASK,
 			.enable_reg = PCA9450_REG_BUCK6CTRL,
 			.enable_mask = BUCK6_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
+			.owner = THIS_MODULE,
+		},
+	},
+	{
+		.desc = {
+			.name = "ldo1",
+			.of_match = of_match_ptr("LDO1"),
+			.regulators_node = of_match_ptr("regulators"),
+			.id = PCA9450_LDO1,
+			.ops = &pca9450_ldo_regulator_ops,
+			.type = REGULATOR_VOLTAGE,
+			.n_voltages = PCA9450_LDO1_VOLTAGE_NUM,
+			.linear_ranges = pca9450_ldo1_volts,
+			.n_linear_ranges = ARRAY_SIZE(pca9450_ldo1_volts),
+			.vsel_reg = PCA9450_REG_LDO1CTRL,
+			.vsel_mask = LDO1OUT_MASK,
+			.enable_reg = PCA9450_REG_LDO1CTRL,
+			.enable_mask = LDO1_EN_MASK,
+			.owner = THIS_MODULE,
+		},
+	},
+	{
+		.desc = {
+			.name = "ldo2",
+			.of_match = of_match_ptr("LDO2"),
+			.regulators_node = of_match_ptr("regulators"),
+			.id = PCA9450_LDO2,
+			.ops = &pca9450_ldo_regulator_ops,
+			.type = REGULATOR_VOLTAGE,
+			.n_voltages = PCA9450_LDO2_VOLTAGE_NUM,
+			.linear_ranges = pca9450_ldo2_volts,
+			.n_linear_ranges = ARRAY_SIZE(pca9450_ldo2_volts),
+			.vsel_reg = PCA9450_REG_LDO2CTRL,
+			.vsel_mask = LDO2OUT_MASK,
+			.enable_reg = PCA9450_REG_LDO2CTRL,
+			.enable_mask = LDO2_EN_MASK,
+			.owner = THIS_MODULE,
+		},
+	},
+	{
+		.desc = {
+			.name = "ldo3",
+			.of_match = of_match_ptr("LDO3"),
+			.regulators_node = of_match_ptr("regulators"),
+			.id = PCA9450_LDO3,
+			.ops = &pca9450_ldo_regulator_ops,
+			.type = REGULATOR_VOLTAGE,
+			.n_voltages = PCA9450_LDO3_VOLTAGE_NUM,
+			.linear_ranges = pca9450_ldo34_volts,
+			.n_linear_ranges = ARRAY_SIZE(pca9450_ldo34_volts),
+			.vsel_reg = PCA9450_REG_LDO3CTRL,
+			.vsel_mask = LDO3OUT_MASK,
+			.enable_reg = PCA9450_REG_LDO3CTRL,
+			.enable_mask = LDO3_EN_MASK,
+			.owner = THIS_MODULE,
+		},
+	},
+	{
+		.desc = {
+			.name = "ldo4",
+			.of_match = of_match_ptr("LDO4"),
+			.regulators_node = of_match_ptr("regulators"),
+			.id = PCA9450_LDO4,
+			.ops = &pca9450_ldo_regulator_ops,
+			.type = REGULATOR_VOLTAGE,
+			.n_voltages = PCA9450_LDO4_VOLTAGE_NUM,
+			.linear_ranges = pca9450_ldo34_volts,
+			.n_linear_ranges = ARRAY_SIZE(pca9450_ldo34_volts),
+			.vsel_reg = PCA9450_REG_LDO4CTRL,
+			.vsel_mask = LDO4OUT_MASK,
+			.enable_reg = PCA9450_REG_LDO4CTRL,
+			.enable_mask = LDO4_EN_MASK,
+			.owner = THIS_MODULE,
+		},
+	},
+	{
+		.desc = {
+			.name = "ldo5",
+			.of_match = of_match_ptr("LDO5"),
+			.regulators_node = of_match_ptr("regulators"),
+			.id = PCA9450_LDO5,
+			.ops = &pca9450_ldo_regulator_ops,
+			.type = REGULATOR_VOLTAGE,
+			.n_voltages = PCA9450_LDO5_VOLTAGE_NUM,
+			.linear_ranges = pca9450_ldo5_volts,
+			.n_linear_ranges = ARRAY_SIZE(pca9450_ldo5_volts),
+			.vsel_reg = PCA9450_REG_LDO5CTRL_H,
+			.vsel_mask = LDO5HOUT_MASK,
+			.enable_reg = PCA9450_REG_LDO5CTRL_H,
+			.enable_mask = LDO5H_EN_MASK,
+			.owner = THIS_MODULE,
+		},
+	},
+};
+
+static const struct pca9450_regulator_desc pca9451a_regulators[] = {
+	{
+		.desc = {
+			.name = "buck1",
+			.of_match = of_match_ptr("BUCK1"),
+			.regulators_node = of_match_ptr("regulators"),
+			.id = PCA9450_BUCK1,
+			.ops = &pca9450_dvs_buck_regulator_ops,
+			.type = REGULATOR_VOLTAGE,
+			.n_voltages = PCA9450_BUCK1_VOLTAGE_NUM,
+			.linear_ranges = pca9450_dvs_buck_volts,
+			.n_linear_ranges = ARRAY_SIZE(pca9450_dvs_buck_volts),
+			.vsel_reg = PCA9450_REG_BUCK1OUT_DVS0,
+			.vsel_mask = BUCK1OUT_DVS0_MASK,
+			.enable_reg = PCA9450_REG_BUCK1CTRL,
+			.enable_mask = BUCK1_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
+			.ramp_mask = BUCK1_RAMP_MASK,
+			.ramp_delay_table = pca9450_dvs_buck_ramp_table,
+			.n_ramp_values = ARRAY_SIZE(pca9450_dvs_buck_ramp_table),
+			.owner = THIS_MODULE,
+			.of_parse_cb = pca9450_set_dvs_levels,
+		},
+		.dvs = {
+			.run_reg = PCA9450_REG_BUCK1OUT_DVS0,
+			.run_mask = BUCK1OUT_DVS0_MASK,
+			.standby_reg = PCA9450_REG_BUCK1OUT_DVS1,
+			.standby_mask = BUCK1OUT_DVS1_MASK,
+		},
+	},
+	{
+		.desc = {
+			.name = "buck2",
+			.of_match = of_match_ptr("BUCK2"),
+			.regulators_node = of_match_ptr("regulators"),
+			.id = PCA9450_BUCK2,
+			.ops = &pca9450_dvs_buck_regulator_ops,
+			.type = REGULATOR_VOLTAGE,
+			.n_voltages = PCA9450_BUCK2_VOLTAGE_NUM,
+			.linear_ranges = pca9450_dvs_buck_volts,
+			.n_linear_ranges = ARRAY_SIZE(pca9450_dvs_buck_volts),
+			.vsel_reg = PCA9450_REG_BUCK2OUT_DVS0,
+			.vsel_mask = BUCK2OUT_DVS0_MASK,
+			.enable_reg = PCA9450_REG_BUCK2CTRL,
+			.enable_mask = BUCK2_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ_STBYREQ,
+			.ramp_mask = BUCK2_RAMP_MASK,
+			.ramp_delay_table = pca9450_dvs_buck_ramp_table,
+			.n_ramp_values = ARRAY_SIZE(pca9450_dvs_buck_ramp_table),
+			.owner = THIS_MODULE,
+			.of_parse_cb = pca9450_set_dvs_levels,
+		},
+		.dvs = {
+			.run_reg = PCA9450_REG_BUCK2OUT_DVS0,
+			.run_mask = BUCK2OUT_DVS0_MASK,
+			.standby_reg = PCA9450_REG_BUCK2OUT_DVS1,
+			.standby_mask = BUCK2OUT_DVS1_MASK,
+		},
+	},
+	{
+		.desc = {
+			.name = "buck4",
+			.of_match = of_match_ptr("BUCK4"),
+			.regulators_node = of_match_ptr("regulators"),
+			.id = PCA9450_BUCK4,
+			.ops = &pca9450_buck_regulator_ops,
+			.type = REGULATOR_VOLTAGE,
+			.n_voltages = PCA9450_BUCK4_VOLTAGE_NUM,
+			.linear_ranges = pca9450_buck_volts,
+			.n_linear_ranges = ARRAY_SIZE(pca9450_buck_volts),
+			.vsel_reg = PCA9450_REG_BUCK4OUT,
+			.vsel_mask = BUCK4OUT_MASK,
+			.enable_reg = PCA9450_REG_BUCK4CTRL,
+			.enable_mask = BUCK4_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
+			.owner = THIS_MODULE,
+		},
+	},
+	{
+		.desc = {
+			.name = "buck5",
+			.of_match = of_match_ptr("BUCK5"),
+			.regulators_node = of_match_ptr("regulators"),
+			.id = PCA9450_BUCK5,
+			.ops = &pca9450_buck_regulator_ops,
+			.type = REGULATOR_VOLTAGE,
+			.n_voltages = PCA9450_BUCK5_VOLTAGE_NUM,
+			.linear_ranges = pca9450_buck_volts,
+			.n_linear_ranges = ARRAY_SIZE(pca9450_buck_volts),
+			.vsel_reg = PCA9450_REG_BUCK5OUT,
+			.vsel_mask = BUCK5OUT_MASK,
+			.enable_reg = PCA9450_REG_BUCK5CTRL,
+			.enable_mask = BUCK5_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
+			.owner = THIS_MODULE,
+		},
+	},
+	{
+		.desc = {
+			.name = "buck6",
+			.of_match = of_match_ptr("BUCK6"),
+			.regulators_node = of_match_ptr("regulators"),
+			.id = PCA9450_BUCK6,
+			.ops = &pca9450_buck_regulator_ops,
+			.type = REGULATOR_VOLTAGE,
+			.n_voltages = PCA9450_BUCK6_VOLTAGE_NUM,
+			.linear_ranges = pca9450_buck_volts,
+			.n_linear_ranges = ARRAY_SIZE(pca9450_buck_volts),
+			.vsel_reg = PCA9450_REG_BUCK6OUT,
+			.vsel_mask = BUCK6OUT_MASK,
+			.enable_reg = PCA9450_REG_BUCK6CTRL,
+			.enable_mask = BUCK6_ENMODE_MASK,
+			.enable_val = BUCK_ENMODE_ONREQ,
 			.owner = THIS_MODULE,
 		},
 	},
@@ -702,12 +975,15 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 	struct regulator_config config = { };
 	struct pca9450 *pca9450;
 	unsigned int device_id, i;
+	unsigned int irq_flags = IRQF_TRIGGER_FALLING | IRQF_ONESHOT;
 	int ret;
 
 	if (!i2c->irq) {
 		dev_err(&i2c->dev, "No IRQ configured?\n");
 		return -EINVAL;
 	}
+
+	of_property_read_u32(i2c->dev.of_node, "interrupt-flags", &irq_flags);
 
 	pca9450 = devm_kzalloc(&i2c->dev, sizeof(struct pca9450), GFP_KERNEL);
 	if (!pca9450)
@@ -721,6 +997,10 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 	case PCA9450_TYPE_PCA9450BC:
 		regulator_desc = pca9450bc_regulators;
 		pca9450->rcnt = ARRAY_SIZE(pca9450bc_regulators);
+		break;
+	case PCA9450_TYPE_PCA9451A:
+		regulator_desc = pca9451a_regulators;
+		pca9450->rcnt = ARRAY_SIZE(pca9451a_regulators);
 		break;
 	default:
 		dev_err(&i2c->dev, "Unknown device type");
@@ -748,7 +1028,8 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 
 	/* Check your board and dts for match the right pmic */
 	if (((device_id >> 4) != 0x1 && type == PCA9450_TYPE_PCA9450A) ||
-	    ((device_id >> 4) != 0x3 && type == PCA9450_TYPE_PCA9450BC)) {
+	    ((device_id >> 4) != 0x3 && type == PCA9450_TYPE_PCA9450BC) ||
+	    ((device_id >> 4) != 0x9 && type == PCA9450_TYPE_PCA9451A)) {
 		dev_err(&i2c->dev, "Device id(%x) mismatched\n",
 			device_id >> 4);
 		return -EINVAL;
@@ -777,7 +1058,7 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 
 	ret = devm_request_threaded_irq(pca9450->dev, pca9450->irq, NULL,
 					pca9450_irq_handler,
-					(IRQF_TRIGGER_FALLING | IRQF_ONESHOT),
+					irq_flags,
 					"pca9450-irq", pca9450);
 	if (ret != 0) {
 		dev_err(pca9450->dev, "Failed to request IRQ: %d\n",
@@ -822,8 +1103,10 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 		return PTR_ERR(pca9450->sd_vsel_gpio);
 	}
 
-	dev_info(&i2c->dev, "%s probed.\n",
-		type == PCA9450_TYPE_PCA9450A ? "pca9450a" : "pca9450bc");
+	dev_info(&i2c->dev, "%s probed (irq-flags %x)\n",
+		type == PCA9450_TYPE_PCA9450A ? "pca9450a" :
+		(type == PCA9450_TYPE_PCA9451A ? "pca9451a" : "pca9450bc"),
+		irq_flags);
 
 	return 0;
 }
@@ -840,6 +1123,10 @@ static const struct of_device_id pca9450_of_match[] = {
 	{
 		.compatible = "nxp,pca9450c",
 		.data = (void *)PCA9450_TYPE_PCA9450BC,
+	},
+	{
+		.compatible = "nxp,pca9451a",
+		.data = (void *)PCA9450_TYPE_PCA9451A,
 	},
 	{ }
 };

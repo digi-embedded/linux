@@ -152,6 +152,7 @@ void dwc3_set_prtcap(struct dwc3 *dwc, u32 mode, bool ignore_susphy)
 static void __dwc3_set_mode(struct work_struct *work)
 {
 	struct dwc3 *dwc = work_to_dwc(work);
+	struct dwc3_platform_data *dwc3_pdata;
 	unsigned long flags;
 	int ret;
 	u32 reg;
@@ -263,6 +264,10 @@ static void __dwc3_set_mode(struct work_struct *work)
 	default:
 		break;
 	}
+
+	dwc3_pdata = (struct dwc3_platform_data *)dev_get_platdata(dwc->dev);
+	if (dwc3_pdata && dwc3_pdata->set_role_post)
+		dwc3_pdata->set_role_post(dwc, dwc->desired_dr_role);
 
 out:
 	pm_runtime_mark_last_busy(dwc->dev);
@@ -770,6 +775,8 @@ static void dwc3_core_exit(struct dwc3 *dwc)
 
 	clk_bulk_disable_unprepare(dwc->num_clks, dwc->clks);
 	reset_control_assert(dwc->reset);
+
+	dwc->core_inited = false;
 }
 
 static bool dwc3_core_is_valid(struct dwc3 *dwc)
@@ -964,6 +971,79 @@ static void dwc3_set_incr_burst_type(struct dwc3 *dwc)
 	dwc3_writel(dwc->regs, DWC3_GSBUSCFG0, cfg);
 }
 
+static void dwc3_set_power_down_clk_scale(struct dwc3 *dwc)
+{
+	struct device		*dev = dwc->dev;
+	struct device_node	*node = dev->of_node;
+	struct clk		*suspend_clk;
+	u32 			reg, scale;
+
+	if (dwc->num_clks == 0)
+		return;
+
+	/*
+	 * The power down scale field specifies how many suspend_clk
+	 * periods fit into a 16KHz clock period. When performing
+	 * the division, round up the remainder.
+	 */
+	suspend_clk = of_clk_get_by_name(node, "suspend");
+	if (IS_ERR(suspend_clk))
+		return;
+
+	scale = DIV_ROUND_UP(clk_get_rate(suspend_clk), 16384);
+	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
+	reg &= ~(DWC3_GCTL_PWRDNSCALE_MASK);
+	reg |= DWC3_GCTL_PWRDNSCALE(scale);
+	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
+}
+
+#ifdef CONFIG_OF
+struct dwc3_cache_type {
+	u8 transfer_type_datard;
+	u8 transfer_type_descrd;
+	u8 transfer_type_datawr;
+	u8 transfer_type_descwr;
+};
+
+static const struct dwc3_cache_type ls1088a_dwc3_cache_type = {
+	.transfer_type_datard = 2,
+	.transfer_type_descrd = 2,
+	.transfer_type_datawr = 2,
+	.transfer_type_descwr = 2,
+};
+
+/**
+ * dwc3_set_cache_type - Configure cache type registers
+ * @dwc: Pointer to our controller context structure
+ */
+static void dwc3_set_cache_type(struct dwc3 *dwc)
+{
+	u32 tmp, reg;
+	const struct dwc3_cache_type *cache_type =
+		device_get_match_data(dwc->dev);
+
+	if (cache_type) {
+		reg = dwc3_readl(dwc->regs,  DWC3_GSBUSCFG0);
+		tmp = reg;
+
+		reg &= ~DWC3_GSBUSCFG0_DATARD(~0);
+		reg |= DWC3_GSBUSCFG0_DATARD(cache_type->transfer_type_datard);
+
+		reg &= ~DWC3_GSBUSCFG0_DESCRD(~0);
+		reg |= DWC3_GSBUSCFG0_DESCRD(cache_type->transfer_type_descrd);
+
+		reg &= ~DWC3_GSBUSCFG0_DATAWR(~0);
+		reg |= DWC3_GSBUSCFG0_DATAWR(cache_type->transfer_type_datawr);
+
+		reg &= ~DWC3_GSBUSCFG0_DESCWR(~0);
+		reg |= DWC3_GSBUSCFG0_DESCWR(cache_type->transfer_type_descwr);
+
+		if (tmp != reg)
+			dwc3_writel(dwc->regs, DWC3_GSBUSCFG0, reg);
+	}
+}
+#endif
+
 /**
  * dwc3_core_init - Low-level initialization of DWC3 Core
  * @dwc: Pointer to our controller context structure
@@ -983,6 +1063,8 @@ static int dwc3_core_init(struct dwc3 *dwc)
 	 * out which kernel version a bug was found.
 	 */
 	dwc3_writel(dwc->regs, DWC3_GUID, LINUX_VERSION_CODE);
+
+	dwc3_set_power_down_clk_scale(dwc);
 
 	ret = dwc3_phy_setup(dwc);
 	if (ret)
@@ -1034,6 +1116,10 @@ static int dwc3_core_init(struct dwc3 *dwc)
 	dwc3_frame_length_adjustment(dwc);
 
 	dwc3_set_incr_burst_type(dwc);
+
+#ifdef CONFIG_OF
+	dwc3_set_cache_type(dwc);
+#endif
 
 	usb_phy_set_suspend(dwc->usb2_phy, 0);
 	usb_phy_set_suspend(dwc->usb3_phy, 0);
@@ -1258,6 +1344,7 @@ static int dwc3_core_get_phy(struct dwc3 *dwc)
 
 static int dwc3_core_init_mode(struct dwc3 *dwc)
 {
+	struct dwc3_platform_data *dwc3_pdata;
 	struct device *dev = dwc->dev;
 	int ret;
 
@@ -1296,6 +1383,10 @@ static int dwc3_core_init_mode(struct dwc3 *dwc)
 		dev_err(dev, "Unsupported mode of operation %d\n", dwc->dr_mode);
 		return -EINVAL;
 	}
+
+	dwc3_pdata = (struct dwc3_platform_data *)dev_get_platdata(dwc->dev);
+	if (dwc3_pdata && dwc3_pdata->set_role_post)
+		dwc3_pdata->set_role_post(dwc, dwc->current_dr_role);
 
 	return 0;
 }
@@ -1355,6 +1446,17 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 	dwc->maximum_speed = usb_get_maximum_speed(dev);
 	dwc->max_ssp_rate = usb_get_maximum_ssp_rate(dev);
 	dwc->dr_mode = usb_get_dr_mode(dev);
+	if (dwc->dr_mode == USB_DR_MODE_OTG) {
+		dwc->otg_caps.otg_rev = 0x0300;
+		dwc->otg_caps.hnp_support = true;
+		dwc->otg_caps.srp_support = true;
+		dwc->otg_caps.adp_support = true;
+
+		/* Update otg capabilities by DT properties */
+		of_usb_update_otg_caps(dev->of_node,
+				       &dwc->otg_caps);
+	}
+
 	dwc->hsphy_mode = of_usb_get_phy_mode(dev->of_node);
 
 	dwc->sysdev_is_parent = device_property_read_bool(dev,
@@ -1447,6 +1549,9 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 
 	dwc->dis_split_quirk = device_property_read_bool(dev,
 				"snps,dis-split-quirk");
+
+	dwc->host_vbus_glitches = device_property_read_bool(dev,
+				"snps,host-vbus-glitches");
 
 	dwc->lpm_nyet_threshold = lpm_nyet_threshold;
 	dwc->tx_de_emphasis = tx_de_emphasis;
@@ -1837,6 +1942,11 @@ static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 	}
 
 	switch (dwc->current_dr_role) {
+	case DWC3_GCTL_PRTCAP_NONE:
+		if (pm_runtime_suspended(dwc->dev))
+			break;
+		dwc3_core_exit(dwc);
+		break;
 	case DWC3_GCTL_PRTCAP_DEVICE:
 		if (pm_runtime_suspended(dwc->dev))
 			break;
@@ -1896,7 +2006,24 @@ static int dwc3_resume_common(struct dwc3 *dwc, pm_message_t msg)
 	u32		reg;
 
 	switch (dwc->current_dr_role) {
+	case DWC3_GCTL_PRTCAP_NONE:
+		if (dwc->core_inited)
+			break;
+
+		ret = dwc3_core_init_for_resume(dwc);
+		if (ret)
+			return ret;
+		break;
 	case DWC3_GCTL_PRTCAP_DEVICE:
+		/*
+		 * system resume may come after runtime resume
+		 * e.g. rpm suspend -> pm suspend -> wakeup
+		 * -> rpm resume -> system resume, so if already
+		 *  runtime resumed, system resume should skip it.
+		 */
+		if (dwc->core_inited)
+			break;
+
 		ret = dwc3_core_init_for_resume(dwc);
 		if (ret)
 			return ret;
@@ -1985,8 +2112,6 @@ static int dwc3_runtime_suspend(struct device *dev)
 	if (ret)
 		return ret;
 
-	device_init_wakeup(dev, true);
-
 	return 0;
 }
 
@@ -1994,8 +2119,6 @@ static int dwc3_runtime_resume(struct device *dev)
 {
 	struct dwc3     *dwc = dev_get_drvdata(dev);
 	int		ret;
-
-	device_init_wakeup(dev, false);
 
 	ret = dwc3_resume_common(dwc, PMSG_AUTO_RESUME);
 	if (ret)
@@ -2106,12 +2229,16 @@ static const struct dev_pm_ops dwc3_dev_pm_ops = {
 
 #ifdef CONFIG_OF
 static const struct of_device_id of_dwc3_match[] = {
-	{
-		.compatible = "snps,dwc3"
-	},
-	{
-		.compatible = "synopsys,dwc3"
-	},
+	{ .compatible = "fsl,ls1012a-dwc3", .data = &ls1088a_dwc3_cache_type, },
+	{ .compatible = "fsl,ls1021a-dwc3", .data = &ls1088a_dwc3_cache_type, },
+	{ .compatible = "fsl,ls1028a-dwc3", .data = &ls1088a_dwc3_cache_type, },
+	{ .compatible = "fsl,ls1043a-dwc3", .data = &ls1088a_dwc3_cache_type, },
+	{ .compatible = "fsl,ls1046a-dwc3", .data = &ls1088a_dwc3_cache_type, },
+	{ .compatible = "fsl,ls1088a-dwc3", .data = &ls1088a_dwc3_cache_type, },
+	{ .compatible = "fsl,ls2088a-dwc3", .data = &ls1088a_dwc3_cache_type, },
+	{ .compatible = "fsl,lx2160a-dwc3", .data = &ls1088a_dwc3_cache_type, },
+	{ .compatible = "snps,dwc3" },
+	{ .compatible = "synopsys,dwc3"	},
 	{ },
 };
 MODULE_DEVICE_TABLE(of, of_dwc3_match);

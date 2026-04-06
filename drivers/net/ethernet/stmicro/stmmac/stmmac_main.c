@@ -132,6 +132,8 @@ static irqreturn_t stmmac_msi_intr_tx(int irq, void *data);
 static irqreturn_t stmmac_msi_intr_rx(int irq, void *data);
 static void stmmac_tx_timer_arm(struct stmmac_priv *priv, u32 queue);
 static void stmmac_flush_tx_descriptors(struct stmmac_priv *priv, int queue);
+static void stmmac_set_dma_operation_mode(struct stmmac_priv *priv, u32 txmode,
+					  u32 rxmode, u32 chan);
 
 #ifdef CONFIG_DEBUG_FS
 static const struct net_device_ops stmmac_netdev_ops;
@@ -2503,6 +2505,21 @@ static bool stmmac_xdp_xmit_zc(struct stmmac_priv *priv, u32 queue, u32 budget)
 	return !!budget && work_done;
 }
 
+static void stmmac_bump_dma_threshold(struct stmmac_priv *priv, u32 chan)
+{
+	if (unlikely(priv->xstats.threshold != SF_DMA_MODE) && tc <= 256) {
+		tc += 64;
+
+		if (priv->plat->force_thresh_dma_mode)
+			stmmac_set_dma_operation_mode(priv, tc, tc, chan);
+		else
+			stmmac_set_dma_operation_mode(priv, tc, SF_DMA_MODE,
+						      chan);
+
+		priv->xstats.threshold = tc;
+	}
+}
+
 /**
  * stmmac_tx_clean - to manage the transmission completion
  * @priv: driver private structure
@@ -2568,6 +2585,8 @@ static int stmmac_tx_clean(struct stmmac_priv *priv, int budget, u32 queue)
 			/* ... verify the status error condition */
 			if (unlikely(status & tx_err)) {
 				priv->dev->stats.tx_errors++;
+				if (unlikely(status & tx_err_bump_tc))
+					stmmac_bump_dma_threshold(priv, queue);
 			} else {
 				priv->dev->stats.tx_packets++;
 				priv->xstats.tx_pkt_n++;
@@ -2818,21 +2837,7 @@ static void stmmac_dma_interrupt(struct stmmac_priv *priv)
 	for (chan = 0; chan < tx_channel_count; chan++) {
 		if (unlikely(status[chan] & tx_hard_error_bump_tc)) {
 			/* Try to bump up the dma threshold on this failure */
-			if (unlikely(priv->xstats.threshold != SF_DMA_MODE) &&
-			    (tc <= 256)) {
-				tc += 64;
-				if (priv->plat->force_thresh_dma_mode)
-					stmmac_set_dma_operation_mode(priv,
-								      tc,
-								      tc,
-								      chan);
-				else
-					stmmac_set_dma_operation_mode(priv,
-								    tc,
-								    SF_DMA_MODE,
-								    chan);
-				priv->xstats.threshold = tc;
-			}
+			stmmac_bump_dma_threshold(priv, chan);
 		} else if (unlikely(status[chan] == tx_hard_error)) {
 			stmmac_tx_err(priv, chan);
 		}
@@ -3797,6 +3802,7 @@ static int stmmac_open(struct net_device *dev)
 	phylink_start(priv->phylink);
 	/* We may have called phylink_speed_down before */
 	phylink_speed_up(priv->phylink);
+	priv->is_phy_started = true;
 
 	ret = stmmac_request_irq(dev);
 	if (ret)
@@ -3805,6 +3811,7 @@ static int stmmac_open(struct net_device *dev)
 	stmmac_enable_all_queues(priv);
 	netif_tx_start_all_queues(priv->dev);
 	stmmac_enable_all_dma_irq(priv);
+	phylink_set_mac_pm(priv->phylink);
 
 	return 0;
 
@@ -3854,6 +3861,7 @@ static int stmmac_release(struct net_device *dev)
 	/* Stop and disconnect the PHY */
 	phylink_stop(priv->phylink);
 	phylink_disconnect_phy(priv->phylink);
+	priv->is_phy_started = false;
 
 	stmmac_disable_all_queues(priv);
 
@@ -5781,21 +5789,7 @@ static irqreturn_t stmmac_msi_intr_tx(int irq, void *data)
 
 	if (unlikely(status & tx_hard_error_bump_tc)) {
 		/* Try to bump up the dma threshold on this failure */
-		if (unlikely(priv->xstats.threshold != SF_DMA_MODE) &&
-		    tc <= 256) {
-			tc += 64;
-			if (priv->plat->force_thresh_dma_mode)
-				stmmac_set_dma_operation_mode(priv,
-							      tc,
-							      tc,
-							      chan);
-			else
-				stmmac_set_dma_operation_mode(priv,
-							      tc,
-							      SF_DMA_MODE,
-							      chan);
-			priv->xstats.threshold = tc;
-		}
+		stmmac_bump_dma_threshold(priv, chan);
 	} else if (unlikely(status == tx_hard_error)) {
 		stmmac_tx_err(priv, chan);
 	}
@@ -6308,7 +6302,15 @@ static int stmmac_vlan_rx_kill_vid(struct net_device *ndev, __be16 proto, u16 vi
 	clear_bit(vid, priv->active_vlans);
 
 	if (priv->hw->num_vlan) {
-		ret = stmmac_del_hw_vlan_rx_fltr(priv, ndev, priv->hw, proto, vid);
+		if (priv->is_phy_started == false) {
+			stmmac_init_phy(ndev);
+			phylink_start(priv->phylink);
+			ret = stmmac_del_hw_vlan_rx_fltr(priv, ndev, priv->hw, proto, vid);
+			phylink_stop(priv->phylink);
+			phylink_disconnect_phy(priv->phylink);
+		} else {
+			ret = stmmac_del_hw_vlan_rx_fltr(priv, ndev, priv->hw, proto, vid);
+		}
 		if (ret)
 			goto del_vlan_error;
 	}
@@ -7425,6 +7427,8 @@ static void stmmac_reset_queues_param(struct stmmac_priv *priv)
 		tx_q->mss = 0;
 
 		netdev_tx_reset_queue(netdev_get_tx_queue(priv->dev, queue));
+
+		stmmac_clear_tx_descriptors(priv, queue);
 	}
 }
 
@@ -7457,7 +7461,7 @@ int stmmac_resume(struct device *dev)
 	} else {
 		pinctrl_pm_select_default_state(priv->device);
 		/* reset the phy so that it's ready */
-		if (priv->mii)
+		if (priv->mii && priv->mdio_rst_after_resume)
 			stmmac_mdio_reset(priv->mii);
 	}
 
@@ -7485,7 +7489,6 @@ int stmmac_resume(struct device *dev)
 	stmmac_reset_queues_param(priv);
 
 	stmmac_free_tx_skbufs(priv);
-	stmmac_clear_descriptors(priv);
 
 	ret = stmmac_hw_setup(ndev, false);
 	if (ret < 0) {

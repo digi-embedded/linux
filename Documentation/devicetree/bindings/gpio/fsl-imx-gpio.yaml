@@ -68,6 +68,22 @@ properties:
   power-domains:
     maxItems: 1
 
+  pad-wakeup-num:
+    description: Number of pads configured in the port as wake-up sources.
+
+  pad-wakeup:
+    description: List of pads configurations on the port. Every pad configuration
+      consists of:
+        pad: Pad identifier
+        type: Wake-up type:
+              0 = Off
+              1 = Clear flag
+              4 = Low level
+              5 = Falling edge
+              6 = Rising edge
+              7 = High level
+        line: GPIO line numer in the port.
+
 patternProperties:
   "^(hog-[0-9]+|.+-hog(-[0-9]+)?)$":
     type: object
@@ -106,6 +122,14 @@ examples:
         #gpio-cells = <2>;
         interrupt-controller;
         #interrupt-cells = <2>;
+    };
+  - |
+    &gpio4 {
+        ...
+        /* Configure GPIO4_20 and GPIO4_21 for Falling Edge wakeup */
+        pad-wakeup-num = <2>;
+        pad-wakeup = <IMX8QXP_USDHC1_VSELECT 5 20>,
+                    <IMX8QXP_USDHC1_WP 5 21>;
     };
 
 ...

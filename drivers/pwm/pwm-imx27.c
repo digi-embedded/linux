@@ -21,6 +21,7 @@
 #include <linux/platform_device.h>
 #include <linux/pwm.h>
 #include <linux/slab.h>
+#include <linux/spinlock.h>
 
 #define MX3_PWMCR			0x00    /* PWM Control Register */
 #define MX3_PWMSR			0x04    /* PWM Status Register */
@@ -83,6 +84,7 @@
 struct pwm_imx27_chip {
 	struct clk	*clk_ipg;
 	struct clk	*clk_per;
+	struct clk	*clk_32k;
 	void __iomem	*mmio_base;
 	struct pwm_chip	chip;
 
@@ -92,6 +94,7 @@ struct pwm_imx27_chip {
 	 * value to return in that case.
 	 */
 	unsigned int duty_cycle;
+	spinlock_t lock;
 };
 
 #define to_pwm_imx27_chip(chip)	container_of(chip, struct pwm_imx27_chip, chip)
@@ -100,23 +103,36 @@ static int pwm_imx27_clk_prepare_enable(struct pwm_imx27_chip *imx)
 {
 	int ret;
 
-	ret = clk_prepare_enable(imx->clk_ipg);
-	if (ret)
-		return ret;
-
-	ret = clk_prepare_enable(imx->clk_per);
-	if (ret) {
-		clk_disable_unprepare(imx->clk_ipg);
-		return ret;
+	if (imx->clk_32k) {
+		ret = clk_prepare_enable(imx->clk_32k);
+		if (ret)
+			goto err1;
 	}
 
+	ret = clk_prepare_enable(imx->clk_ipg);
+	if (ret)
+		goto err2;
+
+	ret = clk_prepare_enable(imx->clk_per);
+	if (ret)
+		goto err3;
+
 	return 0;
+err3:
+	clk_disable_unprepare(imx->clk_ipg);
+err2:
+	if (imx->clk_32k)
+		clk_disable_unprepare(imx->clk_32k);
+err1:
+	return ret;
 }
 
 static void pwm_imx27_clk_disable_unprepare(struct pwm_imx27_chip *imx)
 {
 	clk_disable_unprepare(imx->clk_per);
 	clk_disable_unprepare(imx->clk_ipg);
+	if (imx->clk_32k)
+		clk_disable_unprepare(imx->clk_32k);
 }
 
 static void pwm_imx27_get_state(struct pwm_chip *chip,
@@ -202,10 +218,10 @@ static void pwm_imx27_wait_fifo_slot(struct pwm_chip *chip,
 
 	sr = readl(imx->mmio_base + MX3_PWMSR);
 	fifoav = FIELD_GET(MX3_PWMSR_FIFOAV, sr);
-	if (fifoav == MX3_PWMSR_FIFOAV_4WORDS) {
+	if (fifoav >= MX3_PWMSR_FIFOAV_3WORDS) {
 		period_ms = DIV_ROUND_UP_ULL(pwm_get_period(pwm),
 					 NSEC_PER_MSEC);
-		msleep(period_ms);
+		msleep(period_ms * (fifoav - 2));
 
 		sr = readl(imx->mmio_base + MX3_PWMSR);
 		if (fifoav == FIELD_GET(MX3_PWMSR_FIFOAV, sr))
@@ -218,13 +234,15 @@ static int pwm_imx27_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 {
 	unsigned long period_cycles, duty_cycles, prescale, period_us, tmp;
 	struct pwm_imx27_chip *imx = to_pwm_imx27_chip(chip);
+	void __iomem *reg_sar = imx->mmio_base + MX3_PWMSAR;
+	__force u32 sar_last, sar_current;
 	struct pwm_state cstate;
 	unsigned long long c;
 	unsigned long long clkrate;
 	unsigned long flags;
 	int val;
 	int ret;
-	u32 cr;
+	u32 cr, timeout = 1000;
 
 	pwm_get_state(pwm, &cstate);
 
@@ -417,6 +435,15 @@ static int pwm_imx27_probe(struct platform_device *pdev)
 		return dev_err_probe(&pdev->dev, PTR_ERR(imx->clk_per),
 				     "failed to get peripheral clock\n");
 
+	imx->clk_32k = devm_clk_get_optional(&pdev->dev, "32k");
+	if (IS_ERR(imx->clk_32k)) {
+		dev_err(&pdev->dev, "getting 32k clock failed with %ld\n",
+				PTR_ERR(imx->clk_32k));
+		return PTR_ERR(imx->clk_32k);
+	}
+
+	spin_lock_init(&imx->lock);
+	imx->duty_cycle = 0;
 	imx->chip.ops = &pwm_imx27_ops;
 	imx->chip.dev = &pdev->dev;
 	imx->chip.npwm = 1;

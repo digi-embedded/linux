@@ -12,7 +12,8 @@
 #include <linux/usb.h>
 #include <linux/usb/hcd.h>
 
-#include "../host/xhci-plat.h"
+#include "../host/xhci.h"
+
 #include "core.h"
 
 static void dwc3_xhci_plat_start(struct usb_hcd *hcd)
@@ -67,6 +68,7 @@ int dwc3_host_init(struct dwc3 *dwc)
 {
 	struct property_entry	props[5];
 	struct platform_device	*xhci;
+	struct dwc3_platform_data *dwc3_pdata;
 	int			ret, irq;
 	struct resource		*res;
 	struct platform_device	*dwc3_pdev = to_platform_device(dwc->dev);

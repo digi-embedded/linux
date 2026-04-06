@@ -138,8 +138,7 @@ static int bd718xx_i2c_probe(struct i2c_client *i2c,
 	int cells;
 
 	if (!i2c->irq) {
-		dev_err(&i2c->dev, "No IRQ configured\n");
-		return -EINVAL;
+		dev_info(&i2c->dev, "No IRQ configured\n");
 	}
 	chip_type = (unsigned int)(uintptr_t)
 		    of_device_get_match_data(&i2c->dev);
@@ -163,30 +162,37 @@ static int bd718xx_i2c_probe(struct i2c_client *i2c,
 		return PTR_ERR(regmap);
 	}
 
-	ret = devm_regmap_add_irq_chip(&i2c->dev, regmap, i2c->irq,
-				       IRQF_ONESHOT, 0, &bd718xx_irq_chip,
-				       &irq_data);
-	if (ret) {
-		dev_err(&i2c->dev, "Failed to add irq_chip\n");
-		return ret;
+	if (i2c->irq) {
+		ret = devm_regmap_add_irq_chip(&i2c->dev, regmap, i2c->irq,
+					IRQF_ONESHOT, 0, &bd718xx_irq_chip,
+					&irq_data);
+		if (ret) {
+			dev_err(&i2c->dev, "Failed to add irq_chip\n");
+			return ret;
+		}
+
+		ret = bd718xx_init_press_duration(regmap, &i2c->dev);
+		if (ret)
+			return ret;
+
+		ret = regmap_irq_get_virq(irq_data, BD718XX_INT_PWRBTN_S);
+
+		if (ret < 0) {
+			dev_err(&i2c->dev, "Failed to get the IRQ\n");
+			return ret;
+		}
+
+		button.irq = ret;
+
+		ret = devm_mfd_add_devices(&i2c->dev, PLATFORM_DEVID_AUTO,
+					mfd, cells, NULL, 0,
+					regmap_irq_get_domain(irq_data));
+	} else {
+		ret = devm_mfd_add_devices(&i2c->dev, PLATFORM_DEVID_AUTO,
+					mfd, cells, NULL, 0,
+					NULL);
 	}
 
-	ret = bd718xx_init_press_duration(regmap, &i2c->dev);
-	if (ret)
-		return ret;
-
-	ret = regmap_irq_get_virq(irq_data, BD718XX_INT_PWRBTN_S);
-
-	if (ret < 0) {
-		dev_err(&i2c->dev, "Failed to get the IRQ\n");
-		return ret;
-	}
-
-	button.irq = ret;
-
-	ret = devm_mfd_add_devices(&i2c->dev, PLATFORM_DEVID_AUTO,
-				   mfd, cells, NULL, 0,
-				   regmap_irq_get_domain(irq_data));
 	if (ret)
 		dev_err(&i2c->dev, "Failed to create subdevices\n");
 

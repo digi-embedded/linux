@@ -1,0 +1,62 @@
+/*
+ * Copyright 2014 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/* ConnectCore 6 SBC (common) */
+#include "imx6qdl-ccimx6sbc.dtsi"
+
+/ {
+	model = "Digi International ConnectCore 6 Single Board Computer.";
+	compatible = "digi,ccimx6sbc", "digi,ccimx6", "fsl,imx6dl";
+	digi,machine,name = "ccimx6sbc";
+
+	aliases {
+		mxcfb0 = &mxcfb1;
+		mxcfb1 = &mxcfb2;
+	};
+};
+
+&ldb {
+	lvds-channel@0 {
+		crtc = "ipu1-di0";
+		primary;
+	};
+
+	lvds-channel@1 {
+		crtc = "ipu1-di1";
+	};
+};
+
+&mipi_dsi {
+	dev_id = <0>;
+	disp_id = <0>;
+};
+
+&i2c3 {
+	ov5640_mipi: ov5640_mipi@3c {
+		ipu_id = <0>;
+		csi_id = <1>;
+	};
+};
+
+&mipi_csi {
+	ipu_id = <0>;
+	csi_id = <1>;
+};
+
+&v4l2_cap_0 {
+	ipu_id = <0>;
+	csi_id = <1>;
+};
+
+&v4l2_cap_1 {
+	ipu_id = <0>;
+	csi_id = <0>;
+};

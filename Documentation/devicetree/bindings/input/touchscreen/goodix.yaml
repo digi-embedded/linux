@@ -55,6 +55,24 @@ properties:
   touchscreen-size-y: true
   touchscreen-swapped-x-y: true
 
+  reload-fw-on-resume:
+    description: Reload the touch controller configuration when resuming
+      from suspend. This is required to allow powering off the device during
+      low power modes.
+
+  skip-firmware-request:
+    description: Do not load the touch config through the kernel firmware
+      framework. Use the on chip configuration.
+
+  extends-desktop:
+    description: used when the touch controller is on the secondary display
+      of an extended desktop setup. In this case, the property is the phandle
+      of the primary display. The driver will then parse the width of the
+      display and add it as an offset to the X axis.
+
+  vin-supply:
+    description: Regulator that powers the touch controller.
+
 additionalProperties: false
 
 required:

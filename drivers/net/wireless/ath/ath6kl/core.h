@@ -136,6 +136,26 @@ enum ath6kl_fw_capability {
 	 */
 	ATH6KL_FW_CAPABILITY_HEART_BEAT_POLL,
 
+	/*
+	 * Firmware supports mac address based ACL with
+	 * white/black list
+	 */
+	ATH6KL_FW_CAPABILITY_MAC_ACL,
+
+	/*
+	 * Firmware with capability regdomain-v2 can support
+	 * set regdomain immediately. The firmware without this
+	 * capability need start scan for new regdomain take effect
+	 */
+	ATH6KL_FW_CAPABILITY_REGDOMAIN_V2,
+
+	/*
+	 * Firmware capable to send more than 255 byte in IE
+	 * (assoc req ie, assoc resp ie, beacon ie) present in
+	 * connect event.
+	 */
+	ATH6KL_FW_CAPABILITY_LARGE_CONNECT_IE,
+
 	/* WMI_SET_TX_SELECT_RATES_CMDID uses 64 bit size rate table */
 	ATH6KL_FW_CAPABILITY_64BIT_RATES,
 
@@ -697,6 +717,8 @@ struct ath6kl {
 
 	enum ath6kl_state state;
 	unsigned int testmode;
+	unsigned int softmac_enable;
+	unsigned short reg_domain;
 
 	struct ath6kl_bmi bmi;
 	const struct ath6kl_hif_ops *hif_ops;
@@ -938,8 +960,8 @@ int ath6kl_control_tx(void *devt, struct sk_buff *skb,
 void ath6kl_connect_event(struct ath6kl_vif *vif, u16 channel,
 			  u8 *bssid, u16 listen_int,
 			  u16 beacon_int, enum network_type net_type,
-			  u8 beacon_ie_len, u8 assoc_req_len,
-			  u8 assoc_resp_len, u8 *assoc_info);
+			  u16 beacon_ie_len, u16 assoc_req_len,
+			  u16 assoc_resp_len, u8 *assoc_info);
 void ath6kl_connect_ap_mode_bss(struct ath6kl_vif *vif, u16 channel);
 void ath6kl_connect_ap_mode_sta(struct ath6kl_vif *vif, u16 aid, u8 *mac_addr,
 				u8 keymgmt, u8 ucipher, u8 auth,
@@ -989,4 +1011,6 @@ void ath6kl_recovery_init(struct ath6kl *ar);
 void ath6kl_recovery_cleanup(struct ath6kl *ar);
 void ath6kl_recovery_suspend(struct ath6kl *ar);
 void ath6kl_recovery_resume(struct ath6kl *ar);
+
+void ath6kl_mangle_mac_address(struct ath6kl *ar, u8 locally_administered_bit);
 #endif /* CORE_H */

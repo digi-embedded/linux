@@ -2263,6 +2263,18 @@ static long gpio_ioctl_unlocked(struct file *file, unsigned int cmd, unsigned lo
 		return linereq_create(gdev, ip);
 	case GPIO_GET_LINEINFO_UNWATCH_IOCTL:
 		return lineinfo_unwatch(cdev, ip);
+	case GPIO_SET_DEBOUNCE_IOCTL:
+		struct gpioline_debounce linedebounce;
+		struct gpio_desc *desc;
+
+		if (copy_from_user(&linedebounce, ip, sizeof(linedebounce)))
+			return -EFAULT;
+		if (linedebounce.line_offset >= gdev->ngpio)
+			return -EINVAL;
+
+		desc = &gdev->descs[linedebounce.line_offset];
+
+		return gpiod_set_debounce(desc, linedebounce.debounce_usec);
 	default:
 		return -EINVAL;
 	}

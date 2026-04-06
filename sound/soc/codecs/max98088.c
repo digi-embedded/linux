@@ -14,6 +14,7 @@
 #include <linux/i2c.h>
 #include <linux/regmap.h>
 #include <linux/clk.h>
+#include <linux/regulator/consumer.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
@@ -38,6 +39,8 @@ struct max98088_cdata {
 
 struct max98088_priv {
 	struct regmap *regmap;
+	struct regulator *vcc;
+	struct regulator *dvdd;
 	enum max98088_type devtype;
 	struct max98088_pdata *pdata;
 	struct clk *mclk;
@@ -508,6 +511,8 @@ static const struct snd_kcontrol_new max98088_snd_controls[] = {
 
        SOC_SINGLE("THD Limiter Threshold", M98088_REG_46_THDLMT_CFG, 4, 15, 0),
        SOC_SINGLE("THD Limiter Time", M98088_REG_46_THDLMT_CFG, 0, 7, 0),
+
+       SOC_SINGLE("REC Output Mode", M98088_REG_2A_MIC_REC_CNTL, 7, 1, 0),
 };
 
 /* Left speaker mixer switch */
@@ -1116,14 +1121,18 @@ static int max98088_dai_set_sysclk(struct snd_soc_dai *dai,
 
        /* Setup clocks for slave mode, and using the PLL
         * PSCLK = 0x01 (when master clk is 10MHz to 20MHz)
-        *         0x02 (when master clk is 20MHz to 30MHz)..
+        *         0x02 (when master clk is 20MHz to 40MHz)..
+	*         0x04 (when master clk is 40MHz to 60MHz)..
         */
        if ((freq >= 10000000) && (freq < 20000000)) {
                snd_soc_component_write(component, M98088_REG_10_SYS_CLK, 0x10);
                max98088->mclk_prescaler = 1;
-       } else if ((freq >= 20000000) && (freq < 30000000)) {
+       } else if ((freq >= 20000000) && (freq < 40000000)) {
                snd_soc_component_write(component, M98088_REG_10_SYS_CLK, 0x20);
                max98088->mclk_prescaler = 2;
+	} else if ((freq >= 40000000) && (freq < 60000000)) {
+		snd_soc_component_write(component, M98088_REG_10_SYS_CLK, 0x30);
+		max98088->mclk_prescaler = 4;
        } else {
                dev_err(component->dev, "Invalid master clock frequency\n");
                return -EINVAL;
@@ -1136,7 +1145,8 @@ static int max98088_dai_set_sysclk(struct snd_soc_dai *dai,
                        M98088_SHDNRUN, M98088_SHDNRUN);
        }
 
-       dev_dbg(dai->dev, "Clock source is %d at %uHz\n", clk_id, freq);
+	dev_dbg(dai->dev, "Clock source is %d, freq=%uHz, prescaler:%u\n",
+		clk_id, freq, max98088->mclk_prescaler);
 
        max98088->sysclk = freq;
        return 0;
@@ -1745,6 +1755,69 @@ static const struct snd_soc_component_driver soc_component_dev_max98088 = {
 	.non_legacy_dai_naming	= 1,
 };
 
+#ifdef CONFIG_PM
+static int max98088_i2c_suspend(struct device *dev)
+{
+	struct max98088_priv *max98088 = dev_get_drvdata(dev);
+	int ret;
+
+	if (max98088->vcc) {
+		ret = regulator_disable(max98088->vcc);
+		if (ret) {
+			dev_err(dev, "Failed to disable vcc (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	if (max98088->dvdd) {
+		ret = regulator_disable(max98088->dvdd);
+		if (ret) {
+			dev_err(dev, "Failed to disable dvdd (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	regcache_mark_dirty(max98088->regmap);
+	regcache_cache_only(max98088->regmap, true);
+
+	return 0;
+}
+
+static int max98088_i2c_resume(struct device *dev)
+{
+	struct max98088_priv *max98088 = dev_get_drvdata(dev);
+	int ret;
+
+	if (max98088->dvdd) {
+		ret = regulator_enable(max98088->dvdd);
+		if (ret) {
+			dev_err(dev, "Failed to enable dvdd (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	if (max98088->vcc) {
+		ret = regulator_enable(max98088->vcc);
+		if (ret) {
+			dev_err(dev, "Failed to enable vcc (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	regcache_cache_only(max98088->regmap, false);
+	ret = regcache_sync(max98088->regmap);
+	if (ret) {
+		dev_err(dev, "Failed to sync cache (%d)\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(max98088_pm_ops, max98088_i2c_suspend,
+			 max98088_i2c_resume);
+#endif
+
 static int max98088_i2c_probe(struct i2c_client *i2c,
 			      const struct i2c_device_id *id)
 {
@@ -1755,6 +1828,42 @@ static int max98088_i2c_probe(struct i2c_client *i2c,
 			       GFP_KERNEL);
        if (max98088 == NULL)
                return -ENOMEM;
+
+	max98088->vcc = devm_regulator_get_optional(&i2c->dev, "vcc");
+	if (IS_ERR(max98088->vcc)) {
+		if (PTR_ERR(max98088->vcc) == -EPROBE_DEFER) {
+			return -EPROBE_DEFER;
+		}
+
+		max98088->vcc = NULL;
+		dev_dbg(&i2c->dev, "No vcc codec regulator\n");
+	}
+
+	if (max98088->vcc) {
+		ret = regulator_enable(max98088->vcc);
+		if (ret) {
+			dev_err(&i2c->dev, "Failed to enable vcc regulator\n");
+			goto free_mem;
+		}
+	}
+
+	max98088->dvdd = devm_regulator_get_optional(&i2c->dev, "dvdd");
+	if (IS_ERR(max98088->dvdd)) {
+		if (PTR_ERR(max98088->dvdd) == -EPROBE_DEFER) {
+			return -EPROBE_DEFER;
+		}
+
+		max98088->dvdd = NULL;
+		dev_dbg(&i2c->dev, "No dvdd codec regulator\n");
+	}
+
+	if (max98088->dvdd) {
+		ret = regulator_enable(max98088->dvdd);
+		if (ret) {
+			dev_err(&i2c->dev, "Failed to enable dvdd regulator\n");
+			goto free_mem;
+		}
+	}
 
        max98088->regmap = devm_regmap_init_i2c(i2c, &max98088_regmap);
        if (IS_ERR(max98088->regmap))
@@ -1772,6 +1881,11 @@ static int max98088_i2c_probe(struct i2c_client *i2c,
 
        ret = devm_snd_soc_register_component(&i2c->dev,
                        &soc_component_dev_max98088, &max98088_dai[0], 2);
+       return ret;
+
+free_mem:
+	kfree(max98088);
+
        return ret;
 }
 
@@ -1794,6 +1908,9 @@ MODULE_DEVICE_TABLE(of, max98088_of_match);
 static struct i2c_driver max98088_i2c_driver = {
 	.driver = {
 		.name = "max98088",
+#ifdef CONFIG_PM
+		.pm = &max98088_pm_ops,
+#endif
 		.of_match_table = of_match_ptr(max98088_of_match),
 	},
 	.probe  = max98088_i2c_probe,

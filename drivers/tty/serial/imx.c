@@ -23,14 +23,19 @@
 #include <linux/ktime.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/rational.h>
+#include <linux/reset.h>
 #include <linux/slab.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
 #include <linux/dma-mapping.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 #include <asm/irq.h>
+#include <linux/busfreq-imx.h>
+#include <linux/pm_qos.h>
 #include <linux/platform_data/dma-imx.h>
 
 #include "serial_mctrl_gpio.h"
@@ -174,6 +179,7 @@
 #define DRIVER_NAME "IMX-uart"
 
 #define UART_NR 8
+#define IMX_MODULE_MAX_CLK_RATE	80000000
 
 /* i.MX21 type uart runs on all i.mx except i.MX1 and i.MX6q */
 enum imx_uart_type {
@@ -238,6 +244,8 @@ struct imx_port {
 	enum imx_tx_state	tx_state;
 	struct hrtimer		trigger_start_tx;
 	struct hrtimer		trigger_stop_tx;
+
+	struct pm_qos_request   pm_qos_req;
 };
 
 struct imx_port_ucrs {
@@ -477,6 +485,9 @@ static void imx_uart_stop_tx(struct uart_port *port)
 			hrtimer_try_to_cancel(&sport->trigger_start_tx);
 
 			ucr2 = imx_uart_readl(sport, UCR2);
+			/* Delay after send */
+			if (port->rs485.delay_rts_after_send)
+				mdelay(port->rs485.delay_rts_after_send);
 			if (port->rs485.flags & SER_RS485_RTS_AFTER_SEND)
 				imx_uart_rts_active(sport, &ucr2);
 			else
@@ -753,6 +764,9 @@ static void imx_uart_start_tx(struct uart_port *port)
 				ucr4 |= UCR4_TCEN;
 				imx_uart_writel(sport, ucr4, UCR4);
 			}
+			/* Delay before send */
+			if (port->rs485.delay_rts_before_send)
+				mdelay(port->rs485.delay_rts_before_send);
 
 			sport->tx_state = SEND;
 		}
@@ -1324,6 +1338,9 @@ static void imx_uart_dma_exit(struct imx_port *sport)
 		dma_release_channel(sport->dma_chan_tx);
 		sport->dma_chan_tx = NULL;
 	}
+
+	cpu_latency_qos_remove_request(&sport->pm_qos_req);
+	release_bus_freq(BUS_FREQ_HIGH);
 }
 
 static int imx_uart_dma_init(struct imx_port *sport)
@@ -1331,6 +1348,10 @@ static int imx_uart_dma_init(struct imx_port *sport)
 	struct dma_slave_config slave_config = {};
 	struct device *dev = sport->port.dev;
 	int ret;
+
+	/* request high bus for DMA mode */
+	request_bus_freq(BUS_FREQ_HIGH);
+	cpu_latency_qos_add_request(&sport->pm_qos_req, 0);
 
 	/* Prepare for RX : */
 	sport->dma_chan_rx = dma_request_slave_channel(dev, "rx");
@@ -1345,6 +1366,8 @@ static int imx_uart_dma_init(struct imx_port *sport)
 	slave_config.src_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
 	/* one byte less than the watermark level to enable the aging timer */
 	slave_config.src_maxburst = RXTL_DMA - 1;
+	slave_config.peripheral_config = NULL;
+	slave_config.peripheral_size = 0;
 	ret = dmaengine_slave_config(sport->dma_chan_rx, &slave_config);
 	if (ret) {
 		dev_err(dev, "error in RX dma configuration.\n");
@@ -1371,6 +1394,8 @@ static int imx_uart_dma_init(struct imx_port *sport)
 	slave_config.dst_addr = sport->port.mapbase + URTX0;
 	slave_config.dst_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
 	slave_config.dst_maxburst = TXTL_DMA;
+	slave_config.peripheral_config = NULL;
+	slave_config.peripheral_size = 0;
 	ret = dmaengine_slave_config(sport->dma_chan_tx, &slave_config);
 	if (ret) {
 		dev_err(dev, "error in TX dma configuration.");
@@ -1389,9 +1414,9 @@ static void imx_uart_enable_dma(struct imx_port *sport)
 
 	imx_uart_setup_ufcr(sport, TXTL_DMA, RXTL_DMA);
 
-	/* set UCR1 */
+	/* set UCR1 except TXDMAEN which would be enabled in imx_uart_dma_tx */
 	ucr1 = imx_uart_readl(sport, UCR1);
-	ucr1 |= UCR1_RXDMAEN | UCR1_TXDMAEN | UCR1_ATDMAEN;
+	ucr1 |= UCR1_RXDMAEN | UCR1_ATDMAEN;
 	imx_uart_writel(sport, ucr1, UCR1);
 
 	sport->dma_is_enabled = 1;
@@ -1417,10 +1442,18 @@ static void imx_uart_disable_dma(struct imx_port *sport)
 static int imx_uart_startup(struct uart_port *port)
 {
 	struct imx_port *sport = (struct imx_port *)port;
+	struct tty_port *tty_port = &sport->port.state->port;
 	int retval, i;
 	unsigned long flags;
 	int dma_is_inited = 0;
 	u32 ucr1, ucr2, ucr3, ucr4;
+
+	/* some modem may need reset */
+	if (!tty_port_suspended(tty_port)) {
+		retval = device_reset(sport->port.dev);
+		if (retval && retval != -ENOENT)
+			return retval;
+	}
 
 	retval = clk_prepare_enable(sport->clk_per);
 	if (retval)
@@ -1513,8 +1546,9 @@ static int imx_uart_startup(struct uart_port *port)
 	imx_uart_enable_ms(&sport->port);
 
 	if (dma_is_inited) {
-		imx_uart_enable_dma(sport);
+		/* Note: enable dma request after transfer start! */
 		imx_uart_start_rx_dma(sport);
+		imx_uart_enable_dma(sport);
 	} else {
 		ucr1 = imx_uart_readl(sport, UCR1);
 		ucr1 |= UCR1_RRDYEN;
@@ -2242,6 +2276,8 @@ static int imx_uart_probe(struct platform_device *pdev)
 	u32 ucr1, ucr2, uts;
 	struct resource *res;
 	int txirq, rxirq, rtsirq;
+	struct serial_rs485 *rs485conf;
+	u32 rs485_delay[2];
 
 	sport = devm_kzalloc(&pdev->dev, sizeof(*sport), GFP_KERNEL);
 	if (!sport)
@@ -2278,6 +2314,65 @@ static int imx_uart_probe(struct platform_device *pdev)
 	} else {
 		sport->rx_period_length = RX_DMA_PERIOD_LEN;
 		sport->rx_periods = RX_DMA_PERIODS;
+	}
+
+	/* RS-485 properties */
+	rs485conf = &sport->port.rs485;
+	rs485conf->flags = 0;
+
+	if (of_property_read_u32_array(np, "rs485-rts-delay",
+				       rs485_delay, 2) == 0) {
+		rs485conf->delay_rts_before_send = rs485_delay[0];
+		rs485conf->delay_rts_after_send = rs485_delay[1];
+	} else {
+		rs485conf->delay_rts_before_send = 0;
+		rs485conf->delay_rts_after_send = 0;
+	}
+
+	if (of_property_read_bool(np, "rs485-rx-during-tx"))
+		rs485conf->flags |= SER_RS485_RX_DURING_TX;
+
+	if (of_property_read_bool(np, "linux,rs485-enabled-at-boot-time"))
+		rs485conf->flags |= SER_RS485_ENABLED;
+
+	/*
+	 * UART1 on CC6UL SOM with hardware version (HV) < 4 have crossed RX/TX
+	 * lines going to the Bluetooth chip. To make the Bluetooth chip work
+	 * UART1 (index 0) needs:
+	 *  - force DTE mode
+	 *  - not use HW flow control
+	 *  - use dte-no-flow pinctrl
+	 */
+	if (of_machine_is_compatible("digi,ccimx6ul") &&
+	    sport->port.line == 0) {
+		struct device_node *rn;
+		const char *hwid_hv;
+		unsigned int hv = 0;
+		struct pinctrl_state *pins_dte_noflow;
+		struct pinctrl *pinctrl;
+
+		rn = of_find_node_by_path("/");
+		if (!of_property_read_string(rn, "digi,hwid,hv", &hwid_hv)) {
+			if (kstrtoul(hwid_hv, 0, (unsigned long *)&hv))
+				dev_warn(&pdev->dev,
+					 "Invalid 'digi,hwid,hv'\n");
+			if (hv > 0 && hv < 4) {
+				dev_info(&pdev->dev,
+					 "Forcing DTE mode and no hw-flow on CC6UL with HV=%d",
+					 hv);
+				sport->dte_mode = 1;
+				sport->have_rtscts = 0;
+				pinctrl = devm_pinctrl_get(&pdev->dev);
+				pins_dte_noflow = pinctrl_lookup_state(pinctrl,
+							"dte_noflow");
+				if (IS_ERR(pins_dte_noflow))
+					dev_warn(&pdev->dev,
+						 "could not get 'dte_noflow' pinctrl required for UART1\n");
+				else
+					pinctrl_select_state(pinctrl,
+							     pins_dte_noflow);
+			}
+		}
 	}
 
 	if (sport->port.line >= ARRAY_SIZE(imx_uart_ports)) {
@@ -2328,6 +2423,14 @@ static int imx_uart_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	sport->port.uartclk = clk_get_rate(sport->clk_per);
+	if (sport->port.uartclk > IMX_MODULE_MAX_CLK_RATE) {
+		ret = clk_set_rate(sport->clk_per, IMX_MODULE_MAX_CLK_RATE);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "clk_set_rate() failed\n");
+			return ret;
+		}
+	}
 	sport->port.uartclk = clk_get_rate(sport->clk_per);
 
 	/* For register access, we only need to enable the ipg clock. */
@@ -2550,10 +2653,12 @@ static void imx_uart_enable_wakeup(struct imx_port *sport, bool on)
 
 	if (sport->have_rtscts) {
 		u32 ucr1 = imx_uart_readl(sport, UCR1);
-		if (on)
+		if (on) {
+			imx_uart_writel(sport, USR1_RTSD, USR1);
 			ucr1 |= UCR1_RTSDEN;
-		else
+		} else {
 			ucr1 &= ~UCR1_RTSDEN;
+		}
 		imx_uart_writel(sport, ucr1, UCR1);
 	}
 }

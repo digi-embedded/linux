@@ -162,12 +162,11 @@
 
 #define FXOS8700_DEVICE_ID          0xC7
 #define FXOS8700_PRE_DEVICE_ID      0xC4
-#define FXOS8700_DATA_BUF_SIZE      3
 
 struct fxos8700_data {
 	struct regmap *regmap;
 	struct iio_trigger *trig;
-	__be16 buf[FXOS8700_DATA_BUF_SIZE] ____cacheline_aligned;
+	__be16 buf ____cacheline_aligned;
 };
 
 /* Regmap info */
@@ -441,10 +440,8 @@ static int fxos8700_get_data(struct fxos8700_data *data, int chan_type,
 	ret = regmap_bulk_read(data->regmap, base, data->buf,
 			       sizeof(data->buf));
 	if (ret)
-		return ret;
+		return -EIO;
 
-	/* Convert axis to buffer index */
-	reg = axis - IIO_MOD_X;
 
 	/*
 	 * Convert to native endianness. The accel data and magn data

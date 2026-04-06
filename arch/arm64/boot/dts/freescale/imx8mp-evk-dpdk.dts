@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright 2021 NXP
+ */
+
+#include "imx8mp-evk.dts"
+
+&ethphy1 {
+	/delete-property/ reset-gpios;
+	/delete-property/ reset-assert-us;
+	/delete-property/ reset-deassert-us;
+};
+
+&fec {
+	compatible = "fsl,imx8mm-fec-uio";
+};

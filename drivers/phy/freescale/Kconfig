@@ -1,9 +1,28 @@
 # SPDX-License-Identifier: GPL-2.0-only
+config PHY_FSL_IMX8MP_LVDS
+	tristate "Freescale i.MX8MP LVDS PHY"
+	depends on OF && HAS_IOMEM
+	select GENERIC_PHY
+	select REGMAP
+	help
+	  Enable this to add support for the LVDS PHY as found
+	  on NXP's i.MX8MP SoC.
+
 config PHY_FSL_IMX8MQ_USB
 	tristate "Freescale i.MX8M USB3 PHY"
 	depends on OF && HAS_IOMEM
 	select GENERIC_PHY
 	default ARCH_MXC && ARM64
+
+config PHY_FSL_IMX93_MIPI_DPHY
+	tristate "Freescale i.MX93 MIPI DPHY"
+	depends on OF && HAS_IOMEM
+	select GENERIC_PHY
+	select GENERIC_PHY_MIPI_DPHY
+	select REGMAP_MMIO
+	help
+	  Enable this to add support for the Synopsys DW MIPI DPHY as found
+	  on NXP's i.MX93 SoC.
 
 config PHY_MIXEL_MIPI_DPHY
 	tristate "Mixel MIPI DSI PHY support"
@@ -14,3 +33,29 @@ config PHY_MIXEL_MIPI_DPHY
 	help
 	  Enable this to add support for the Mixel DSI PHY as found
 	  on NXP's i.MX8 family of SOCs.
+
+config PHY_SAMSUNG_HDMI_PHY
+	tristate "Samsung HDMI PHY support"
+	depends on OF && HAS_IOMEM
+	select GENERIC_PHY
+	help
+	  Enable this to add support for the Samsung HDMI PHY in iMX8MP.
+
+config PHY_FSL_IMX_PCIE
+	tristate "Freescale i.MX PCIE PHY"
+	depends on OF && HAS_IOMEM
+	select GENERIC_PHY
+	default ARCH_MXC
+	help
+	  Enable this to add support for the PCIE PHY as found on i.MX
+	  family of SOCs.
+
+config PHY_FSL_LYNX_28G
+	tristate "Freescale Layerscape Lynx 28G SerDes PHY support"
+	depends on OF
+	select GENERIC_PHY
+	help
+	  Enable this to add support for the Lynx SerDes 28G PHY as
+	  found on NXP's Layerscape platforms such as LX2160A.
+	  Used to change the protocol running on SerDes lanes at runtime.
+	  Only useful for a restricted set of Ethernet protocols.

@@ -46,9 +46,9 @@
 #define rmb()		dsb(ld)
 #define wmb()		dsb(st)
 
-#define dma_mb()	dmb(osh)
-#define dma_rmb()	dmb(oshld)
-#define dma_wmb()	dmb(oshst)
+#define dma_mb()	dmb(sy)
+#define dma_rmb()	dmb(ld)
+#define dma_wmb()	dmb(st)
 
 
 #define tsb_csync()								\

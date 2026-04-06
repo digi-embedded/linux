@@ -1183,6 +1183,16 @@ config RTC_DRV_M48T59
 	  This driver can also be built as a module, if so, the module
 	  will be called "rtc-m48t59".
 
+config RTC_DRV_MCA
+	tristate "Digi ConnectCore SOMs Micro Controller Assist RTC"
+	select MFD_MCA
+	help
+	  If you say Y here you will get support for the RTC in the
+	  Micro Controller Assist of Digi ConnectCore system-on-modules.
+
+	  This driver can also be built as a module, if so, the module
+	  will be called "rtc-mca".
+
 config RTC_DRV_MSM6242
 	tristate "Oki MSM6242"
 	depends on HAS_IOMEM
@@ -1773,6 +1783,18 @@ config RTC_DRV_SNVS
 	   This driver can also be built as a module, if so, the module
 	   will be called "rtc-snvs".
 
+config RTC_DRV_BBNSM
+	tristate "NXP BBNSM RTC support"
+	select REGMAP_MMIO
+	depends on ARCH_MXC || COMPILE_TEST
+	depends on HAS_IOMEM
+	depends on OF
+	help
+	   If you say yes here you get support for the NXP BBNSM RTC module.
+
+	   This driver can also be built as a module, if so, the module
+	   will be called "rtc-bbnsm".
+
 config RTC_DRV_IMX_SC
 	depends on IMX_SCU
 	depends on HAVE_ARM_SMCCC
@@ -1780,6 +1802,13 @@ config RTC_DRV_IMX_SC
 	help
 	   If you say yes here you get support for the NXP i.MX System
 	   Controller RTC module.
+
+config RTC_DRV_IMX_RPMSG
+	tristate "NXP RPMSG RTC support"
+	depends on OF
+	help
+	   If you say yes here you get support for the NXP RPMSG
+	   RTC module.
 
 config RTC_DRV_ST_LPC
 	tristate "STMicroelectronics LPC RTC"

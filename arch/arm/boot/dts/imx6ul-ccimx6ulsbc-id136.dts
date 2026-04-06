@@ -1,0 +1,18 @@
+/*
+ * Copyright 2017 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/*
+ * The ConnectCore 6UL SBC Pro board ID=136 is exactly the same as board ID=135.
+ * The only difference in hardware is this board assembles a SOM variant 0x04
+ * which has 1 GiB of DDR3 memory, but this is automatically filled in by U-Boot
+ * at run time.
+ */
+#include "imx6ul-ccimx6ulsbc-id135.dts"

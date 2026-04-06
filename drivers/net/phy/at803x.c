@@ -195,6 +195,7 @@ struct at803x_priv {
 	struct regulator_dev *vddh_rdev;
 	struct regulator *vddio;
 	u64 stats[ARRAY_SIZE(at803x_hw_stats)];
+	bool is_suspended:1;
 };
 
 struct at803x_context {
@@ -205,6 +206,8 @@ struct at803x_context {
 	u16 smart_speed;
 	u16 led_control;
 };
+
+static int at803x_config_init(struct phy_device *phydev);
 
 static int at803x_debug_reg_write(struct phy_device *phydev, u16 reg, u16 data)
 {
@@ -430,6 +433,7 @@ static int at803x_suspend(struct phy_device *phydev)
 {
 	int value;
 	int wol_enabled;
+	struct at803x_priv *priv = phydev->priv;
 
 	value = phy_read(phydev, AT803X_INTR_ENABLE);
 	wol_enabled = value & AT803X_INTR_ENABLE_WOL;
@@ -440,12 +444,18 @@ static int at803x_suspend(struct phy_device *phydev)
 		value = BMCR_PDOWN;
 
 	phy_modify(phydev, MII_BMCR, 0, value);
+	priv->is_suspended = true;
 
 	return 0;
 }
 
 static int at803x_resume(struct phy_device *phydev)
 {
+	struct at803x_priv *priv = phydev->priv;
+
+	if(priv->is_suspended)
+		return at803x_config_init(phydev);
+
 	return phy_modify(phydev, MII_BMCR, BMCR_PDOWN | BMCR_ISOLATE, 0);
 }
 
@@ -766,6 +776,7 @@ static int at8031_pll_config(struct phy_device *phydev)
 static int at803x_config_init(struct phy_device *phydev)
 {
 	int ret;
+	struct at803x_priv *priv = phydev->priv;
 
 	if (phydev->drv->phy_id == ATH8031_PHY_ID) {
 		/* Some bootloaders leave the fiber page selected.
@@ -811,6 +822,28 @@ static int at803x_config_init(struct phy_device *phydev)
 	ret = at803x_clk_out_config(phydev);
 	if (ret < 0)
 		return ret;
+
+	if (phydev->drv->phy_id == ATH8031_PHY_ID) {
+		ret = at8031_pll_config(phydev);
+		if (ret < 0)
+			return ret;
+	}
+
+	priv->is_suspended = false;
+
+	/* The Atheros 803x PHY will go to hibernate mode after
+	 * 10 seconds if no activity on the link.
+	 * When in hibernation, it will not provide any clock to the MAC.
+	 *
+	 * This caused issue when trying to bring up the interface when
+	 * no cable was connected: MAC driver would timeout, and the PHY
+	 * power domain would stay on. It is also possible that this caused
+	 * issues with EEE capable remote PHY.
+	 *
+	 * Disabling this feature during initialization to avoid potential
+	 * side effect
+	 */
+	at803x_debug_reg_mask(phydev, 0xB, BIT(15), 0);
 
 	/* Ar803x extended next page bit is enabled by default. Cisco
 	 * multigig switches read this bit and attempt to negotiate 10Gbps

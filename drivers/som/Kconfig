@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0-only
+menu "SoM drivers"
+
+config SOM_CONNECTCORE
+       bool "ConnectCore SoM"
+       default n
+       help
+         Say yes for ConnectCore embedded SoMs.
+
+endmenu
+

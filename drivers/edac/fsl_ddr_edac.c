@@ -6,7 +6,7 @@
  * split out from mpc85xx_edac EDAC driver.
  *
  * Parts Copyrighted (c) 2013 by Freescale Semiconductor, Inc.
- *
+ * Parts Copyrighted (c) 2022 NXP
  * Author: Dave Jiang <djiang@mvista.com>
  *
  * 2006-2007 (c) MontaVista Software, Inc. This file is licensed under

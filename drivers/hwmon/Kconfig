@@ -527,6 +527,15 @@ config SENSORS_DA9055
 	  This driver can also be built as a module. If so, the module
 	  will be called da9055-hwmon.
 
+config SENSORS_DA9063
+	tristate "Dialog Semiconductor DA9063"
+	depends on MFD_DA9063
+	help
+	  If you say yes here you get support for the hardware
+	  monitoring features of the DA9063 Power Management IC.
+       
+	  This driver can also be built as a module.
+
 config SENSORS_I5K_AMB
 	tristate "FB-DIMM AMB temperature sensor on Intel 5000 series chipsets"
 	depends on PCI
@@ -952,6 +961,16 @@ config SENSORS_LTQ_CPUTEMP
 	  If you say yes here you get support for the temperature
 	  sensor inside your CPU.
 
+config SENSORS_FP9931
+	tristate "Fitipower FP9931 panel temperature thermistor"
+	depends on MFD_FP9931
+	help
+	  If you say yes here you get support for FP9931 PMIC temperature
+	  sensor.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called fp9931_hwmon.
+
 config SENSORS_MAX1111
 	tristate "Maxim MAX1111 Serial 8-bit ADC chip and compatibles"
 	depends on SPI_MASTER
@@ -1005,6 +1024,15 @@ config SENSORS_MAX1668
 
 	  This driver can also be built as a module. If so, the module
 	  will be called max1668.
+
+config SENSORS_MAX17135
+	tristate "Maxim MAX17135 EPD temperature sensor"
+	depends on I2C
+	help
+	  If you say yes here you get support for MAX17135 PMIC sensor.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called max17135_sensor.
 
 config SENSORS_MAX197
 	tristate "Maxim MAX197 and compatibles"
@@ -1832,7 +1860,7 @@ config SENSORS_ADS7871
 
 config SENSORS_AMC6821
 	tristate "Texas Instruments AMC6821"
-	depends on I2C 
+	depends on I2C
 	help
 	  If you say yes here you get support for the Texas Instruments
 	  AMC6821 hardware monitoring chips.
@@ -2181,6 +2209,13 @@ config SENSORS_INTEL_M10_BMC_HWMON
 	  This BMC Chip is used on Intel FPGA PCIe Acceleration Cards (PAC). Its
 	  sensors monitor various telemetry data of different components on the
 	  card, e.g. board temperature, FPGA core temperature/voltage/current.
+
+config SERIES_DIODE_RESISTANCE_PARAM
+	int "Adjust Series Diode Resistance"
+	default 3
+	help
+	  This is to adjust Series Diode resistance while reading
+	  remote temperature
 
 if ACPI
 

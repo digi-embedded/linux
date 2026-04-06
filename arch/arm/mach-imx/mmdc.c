@@ -59,6 +59,7 @@
 #define to_mmdc_pmu(p) container_of(p, struct mmdc_pmu, pmu)
 
 static int ddr_type;
+static int lpddr2_2ch_mode;
 
 struct fsl_mmdc_devtype_data {
 	unsigned int flags;
@@ -103,7 +104,7 @@ struct mmdc_pmu {
 	struct device *dev;
 	struct perf_event *mmdc_events[MMDC_NUM_COUNTERS];
 	struct hlist_node node;
-	struct fsl_mmdc_devtype_data *devtype_data;
+	const struct fsl_mmdc_devtype_data *devtype_data;
 	struct clk *mmdc_ipg_clk;
 };
 
@@ -589,6 +590,11 @@ static int imx_mmdc_probe(struct platform_device *pdev)
 int imx_mmdc_get_ddr_type(void)
 {
 	return ddr_type;
+}
+
+int imx_mmdc_get_lpddr2_2ch_mode(void)
+{
+	return lpddr2_2ch_mode;
 }
 
 static struct platform_driver imx_mmdc_driver = {

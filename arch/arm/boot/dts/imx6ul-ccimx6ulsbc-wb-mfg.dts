@@ -1,0 +1,154 @@
+/*
+ * Copyright 2016 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+/* i.MX6 UltraLite CPU */
+#include "imx6ul.dtsi"
+/* ConnectCore 6UL (wireless/bluetooth variant) */
+#include "imx6ul-ccimx6ul-wb.dtsi"
+/* ConnectCore 6UL SBC */
+#include "imx6ul-ccimx6ulsbc.dtsi"
+
+/* ENET1 */
+&fec1 {
+	status = "okay";
+};
+
+/* ENET2 */
+&fec2 {
+	status = "okay";
+};
+
+/* CAN1 */
+&can1 {
+	status = "okay";
+};
+
+/* CAN2 */
+&can2 {
+	status = "okay";
+};
+
+/*
+ * The max98089 sound codec uses the same I2C address than the fusion touch
+ * controller, so when unconmmenting this node you need to also comment the
+ * max98089 node.
+ */
+//&fusion_touch {
+//	status = "okay";
+//};
+
+/* Parallel LCD */
+&lcdif {
+	pinctrl-0 = <&pinctrl_lcdif_dat0_17
+		     &pinctrl_lcdif_clken
+		     &pinctrl_lcdif_hvsync>;
+	lcd-supply = <&ldo4_ext>;       /* BU90T82 LVDS bridge power */
+	display = <&hsd101pfw2>;
+	status = "okay";
+};
+
+/* LCD backlight (PWM5) */
+&lcd_backlight {
+	status = "okay";
+};
+
+/* Audio chip */
+&max98089 {
+	status = "okay";
+};
+
+&mca_ioexp {
+	status = "okay";
+	restore-config-on-resume;
+};
+
+&pwm5 {
+	status = "okay";
+};
+
+&sai2 {
+	status = "okay";
+};
+
+&sound_max98089 {
+	status = "okay";
+};
+
+/* UART3 */
+&uart3 {
+	/* RTS/CTS lines multiplexed with CAN1 */
+	// pinctrl-0 = <&pinctrl_uart3_4wires>;
+	// uart-has-rtscts;
+	status = "okay";
+};
+
+/* UART5 (Console) */
+&uart5 {
+	status = "okay";
+};
+
+&usbotg1 {
+	status = "okay";
+};
+
+&usbotg2 {
+	status = "okay";
+};
+
+/* USDHC2 (eMMC, conflicts with microSD) */
+&usdhc2 {
+	pinctrl-assert-gpios = <&gpio5 1 GPIO_ACTIVE_HIGH>;
+	non-removable;
+	/*
+	 * Comment these two lines for 4-bit data bus or leave uncommented
+	 * for 8-bit data bus
+	 */
+	//pinctrl-0 = <&pinctrl_usdhc2_8databits>;
+	//bus-width = <8>;
+
+	status = "okay";
+};
+
+/* Configure all unused pins as GPIO */
+&iomuxc {
+	pinctrl-0 = <&pinctrl_hog>;
+	imx6ul-ccimx6ul {
+		pinctrl_hog: hoggrp {
+			fsl,pins = <
+				/* GPIOs BANK 1 */
+				MX6UL_PAD_GPIO1_IO02__GPIO1_IO02	0xf030
+				MX6UL_PAD_GPIO1_IO03__GPIO1_IO03	0xf030
+				MX6UL_PAD_GPIO1_IO05__GPIO1_IO05	0xf030
+				MX6UL_PAD_UART2_TX_DATA__GPIO1_IO20	0xf030
+				MX6UL_PAD_UART2_RX_DATA__GPIO1_IO21	0xf030
+				/* GPIOs BANK 3 */
+				MX6UL_PAD_LCD_RESET__GPIO3_IO04		0xf030
+				MX6UL_PAD_LCD_DATA20__GPIO3_IO25	0x3030
+				MX6UL_PAD_LCD_DATA21__GPIO3_IO26	0x3030
+				MX6UL_PAD_LCD_DATA22__GPIO3_IO27	0x3030
+				MX6UL_PAD_LCD_DATA23__GPIO3_IO28	0x3030
+				/* GPIOs BANK 4 */
+				MX6UL_PAD_NAND_CE1_B__GPIO4_IO14	0xf030
+				MX6UL_PAD_CSI_MCLK__GPIO4_IO17		0xf030
+				MX6UL_PAD_CSI_PIXCLK__GPIO4_IO18	0xf030
+				MX6UL_PAD_CSI_DATA04__GPIO4_IO25	0xf030
+				MX6UL_PAD_CSI_DATA05__GPIO4_IO26	0xf030
+				MX6UL_PAD_CSI_DATA06__GPIO4_IO27	0xf030
+				MX6UL_PAD_CSI_DATA07__GPIO4_IO28	0xf030
+				/* GPIOs BANK 5 */
+				MX6UL_PAD_SNVS_TAMPER5__GPIO5_IO05	0xf030
+			>;
+		};
+	};
+};

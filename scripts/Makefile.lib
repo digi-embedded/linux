@@ -47,9 +47,11 @@ endif
 # Expand $(foo-objs) $(foo-y) etc. by replacing their individuals
 suffix-search = $(strip $(foreach s, $3, $($(1:%$(strip $2)=%$s))))
 # List composite targets that are constructed by combining other targets
-multi-search = $(sort $(foreach m, $1, $(if $(call suffix-search, $m, $2, $3 -), $m)))
+multi-search = $(sort $(foreach m, $1, $(if $(call suffix-search, $m, $2, $3 -), \
+	$m $(call multi-search, $(filter-out $m, $(call suffix-search, $m, $2, $3)), $2, $3))))
 # List primitive targets that are compiled from source files
-real-search = $(foreach m, $1, $(if $(call suffix-search, $m, $2, $3 -), $(call suffix-search, $m, $2, $3), $m))
+real-search = $(foreach m, $1, $(if $(call suffix-search, $m, $2, $3 -), \
+	$(filter $m, $(call suffix-search, $m, $2, $3)) $(call real-search, $(filter-out $m, $(call suffix-search, $m, $2, $3)), $2, $3), $m))
 
 # If $(foo-objs), $(foo-y), $(foo-m), or $(foo-) exists, foo.o is a composite object
 multi-obj-y := $(call multi-search, $(obj-y), .o, -objs -y)

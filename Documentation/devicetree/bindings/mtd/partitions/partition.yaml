@@ -41,6 +41,28 @@ properties:
       immune to paired-pages corruptions
     type: boolean
 
+  encrypted:
+    description: This parameter flags a partition as encrypted. All accesses
+      to and from this partition will be encrypted/decrypted.
+    type: boolean
+
+  encryption-keyblob-size:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Size in bytes of the encryption key blob defined above. The
+      size of the key blob is the size of the key itself plus 48 bytes of blob
+      overhead. The maximum key size is 64 bytes so the maximum key blob size
+      is 112 bytes.
+
+  encryption-keyblob-part:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Partition number where the CAAM encrypted crypto key is
+      stored. Defauls to 1.
+
+  encryption-keyblob-offset:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: Offset in the encryption-keyblob-part where the CAAM
+      encrypted crypto key is stored.
+
 required:
   - reg
 

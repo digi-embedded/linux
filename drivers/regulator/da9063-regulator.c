@@ -79,6 +79,7 @@ struct da9063_regulator_info {
 	struct reg_field suspend;
 	struct reg_field sleep;
 	struct reg_field suspend_sleep;
+	struct reg_field suspend_keep_on;
 	unsigned int suspend_vsel_reg;
 
 	/* DA9063 event detection bit */
@@ -102,6 +103,8 @@ struct da9063_regulator_info {
 	.sleep = BFIELD(DA9063_REG_V##regl_name##_A, DA9063_LDO_SL), \
 	.suspend = BFIELD(DA9063_REG_##regl_name##_CONT, DA9063_LDO_CONF), \
 	.suspend_sleep = BFIELD(DA9063_REG_V##regl_name##_B, DA9063_LDO_SL), \
+	.suspend_keep_on = BFIELD(DA9063_REG_##regl_name##_CONT,\
+			DA9063_LDO_CONF), \
 	.suspend_vsel_reg = DA9063_REG_V##regl_name##_B
 
 /* Macros for voltage DC/DC converters (BUCKs) */
@@ -127,6 +130,8 @@ struct da9063_regulator_info {
 	.sleep = BFIELD(DA9063_REG_V##regl_name##_A, DA9063_BUCK_SL), \
 	.suspend = BFIELD(DA9063_REG_##regl_name##_CONT, DA9063_BUCK_CONF), \
 	.suspend_sleep = BFIELD(DA9063_REG_V##regl_name##_B, DA9063_BUCK_SL), \
+	.suspend_keep_on = BFIELD(DA9063_REG_##regl_name##_CONT,\
+			DA9063_BUCK_CONF), \
 	.suspend_vsel_reg = DA9063_REG_V##regl_name##_B, \
 	.mode = BFIELD(DA9063_REG_##regl_name##_CFG, DA9063_BUCK_MODE_MASK)
 
@@ -148,6 +153,7 @@ struct da9063_regulator {
 	struct regmap_field			*suspend;
 	struct regmap_field			*sleep;
 	struct regmap_field			*suspend_sleep;
+	struct regmap_field			*suspend_keep_on;
 };
 
 /* Encapsulates all information for the regulators driver */
@@ -358,6 +364,17 @@ static int da9063_set_suspend_voltage(struct regulator_dev *rdev, int uV)
 static int da9063_suspend_enable(struct regulator_dev *rdev)
 {
 	struct da9063_regulator *regl = rdev_get_drvdata(rdev);
+	int ret;
+
+	ret = regmap_update_bits(regl->hw->regmap, DA9063_REG_CONTROL_C ,
+			DA9063_OTPREAD_EN, 0);
+	if (ret)
+		return ret;
+
+	/* do not disable on standby */
+	ret = regmap_field_write(regl->suspend_keep_on, 1);
+	if (ret)
+		return ret;
 
 	return regmap_field_write(regl->suspend, 1);
 }
@@ -931,6 +948,13 @@ static int da9063_regulator_probe(struct platform_device *pdev)
 				da9063->regmap, regl->info->suspend_sleep);
 			if (IS_ERR(regl->suspend_sleep))
 				return PTR_ERR(regl->suspend_sleep);
+		}
+
+		if (regl->info->suspend_keep_on.reg) {
+			regl->suspend_keep_on = devm_regmap_field_alloc(&pdev->dev,
+					da9063->regmap, regl->info->suspend_keep_on);
+			if (IS_ERR(regl->suspend_keep_on))
+				return PTR_ERR(regl->suspend_keep_on);
 		}
 
 		/* Register regulator */

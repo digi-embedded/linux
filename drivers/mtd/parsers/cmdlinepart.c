@@ -9,7 +9,7 @@
  *
  * mtdparts=<mtddef>[;<mtddef]
  * <mtddef>  := <mtd-id>:<partdef>[,<partdef>]
- * <partdef> := <size>[@<offset>][<name>][ro][lk][slc]
+ * <partdef> := <size>[@<offset>][<name>][ro][lk][slc][enc]
  * <mtd-id>  := unique name used in mapping driver/device (mtd->name)
  * <size>    := standard linux memsize OR "-" to denote all remaining space
  *              size is automatically truncated at end of device
@@ -156,6 +156,12 @@ static struct mtd_partition * newpart(char *s,
 	/* if slc is found use emulated SLC mode on this partition*/
 	if (!strncmp(s, "slc", 3)) {
 		add_flags |= MTD_SLC_ON_MLC_EMULATION;
+		s += 3;
+	}
+
+	if (strncmp(s, "enc", 3) == 0) {
+		/* Mask the nonencrypted bitmask */
+		mask_flags |= MTD_NONENCRYPTED;
 		s += 3;
 	}
 
