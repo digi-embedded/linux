@@ -124,7 +124,6 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_pcie_reg>;
 		regulator-name = "PCIe_VCC";
-		regulator-always-on;
 		startup-delay-us = <100000>;
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
