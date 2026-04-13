@@ -313,6 +313,7 @@ static int mtdcrypt_op(struct mtd_crypt_info *crypt_info,
 	struct scatterlist *sgl;
 	int rc, rest, i, tmp_len;
 	int nents = 0;
+	int allocated = 0;
 	gfp_t gfp_mask = GFP_KERNEL | GFP_NOIO | GFP_DMA;
 	u_char *mp_entry = NULL;
 
@@ -346,6 +347,7 @@ static int mtdcrypt_op(struct mtd_crypt_info *crypt_info,
 			goto mempool_out;
 		}
 		sg_set_buf(sgl, mp_entry, tmp_len);
+		allocated++;
 	}
 	rc = sg_copy_from_buffer(sg_tbl.sgl, nents, (void *)buf, len);
 	if (rc != len) {
@@ -378,8 +380,8 @@ static int mtdcrypt_op(struct mtd_crypt_info *crypt_info,
 	rc = 0;
 
 mempool_out:
-	for_each_sg(sg_tbl.sgl, sgl, nents, i)
-		mempool_free(mp_entry, crypt_info->mem_pool);
+	for_each_sg(sg_tbl.sgl, sgl, allocated, i)
+		mempool_free(sg_virt(sgl), crypt_info->mem_pool);
 sgtbl_out:
 	sg_free_table(&sg_tbl);
 out:
