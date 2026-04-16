@@ -603,13 +603,17 @@ void strtohex(char *in, unsigned long *out, int len)
 
 static int adjust_offset_skipping_bad_blocks(struct mtd_info *mtd, int offset)
 {
-	if (mtd_block_isbad(mtd, offset)) {
-		const int new_offset = offset + mtd->erasesize;
+	int ret;
 
-		return adjust_offset_skipping_bad_blocks(mtd, new_offset);
+	while (1) {
+		ret = mtd_block_isbad(mtd, offset);
+		if (ret < 0)
+			return ret;
+		if (!ret)
+			return offset;
+
+		offset += mtd->erasesize;
 	}
-
-	return offset;
 }
 
 static int mtdcrypt_get_key_from_part(int keyblob_part, int keyblob_size,
