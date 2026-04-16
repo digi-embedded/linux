@@ -620,7 +620,8 @@ static int mtdcrypt_get_key_from_part(int keyblob_part, int keyblob_size,
 				      int keyblob_offset, char *keyblob_str)
 {
 	struct mtd_info *mtd_part;
-	size_t retlen;
+	size_t retlen = 0;
+	int ret;
 
 	if (keyblob_size > MAX_KEYBLOB_BYTES) {
 		pr_err("mtdcrypt: Missing valid key blob size\n");
@@ -628,19 +629,32 @@ static int mtdcrypt_get_key_from_part(int keyblob_part, int keyblob_size,
 	}
 
 	mtd_part = get_mtd_device(NULL, keyblob_part);
-	keyblob_offset = adjust_offset_skipping_bad_blocks(mtd_part,
-							   keyblob_offset);
-	if (mtd_read(mtd_part, keyblob_offset, keyblob_size,
-		     &retlen, keyblob_str)) {
-		pr_err("mtdcrypt: Failed to read keyblob from media\n");
-		return -EINVAL;
+	if (IS_ERR(mtd_part)) {
+		pr_err("mtdcrypt: Failed to get keyblob partition %d: %ld\n",
+		       keyblob_part, PTR_ERR(mtd_part));
+		return PTR_ERR(mtd_part);
 	}
 
-	if (retlen != keyblob_size) {
-		pr_err("mtdcrypt: Failed to read keyblob from media\n");
-		return -EINVAL;
+	keyblob_offset =
+		adjust_offset_skipping_bad_blocks(mtd_part, keyblob_offset);
+	if (keyblob_offset < 0) {
+		pr_err("mtdcrypt: Failed to get keyblob offset: %d\n",
+		       keyblob_offset);
+		ret = keyblob_offset;
+		goto out;
 	}
-	return 0;
+
+	ret = mtd_read(mtd_part, keyblob_offset, keyblob_size, &retlen,
+		       keyblob_str);
+	if (ret || retlen != keyblob_size) {
+		pr_err("mtdcrypt: Failed to read keyblob from media\n");
+		ret = -EINVAL;
+	}
+
+out:
+	put_mtd_device(mtd_part);
+
+	return ret;
 }
 
 static int mtdcrypt_set_key(struct mtd_info *mtd)
