@@ -782,7 +782,7 @@ out_err1:
  */
 int mtdcrypt_init_crypt_info(struct mtd_info *mtd)
 {
-	char *full_alg_name;
+	char *full_alg_name = NULL;
 	int rc = -EINVAL;
 	int i;
 
@@ -807,7 +807,8 @@ int mtdcrypt_init_crypt_info(struct mtd_info *mtd)
 			PAGE_SIZE);
 	if (!mtd->crypt_info->mem_pool) {
 		pr_err("mtdcrypt: Error allocating memory pool\n");
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto err_unlock;
 	}
 
 	mtd->crypt_info->block_size = mtd->writesize >> mtd->subpage_sft;
@@ -823,34 +824,41 @@ int mtdcrypt_init_crypt_info(struct mtd_info *mtd)
 
 #if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
 	mtd->crypt_info->jr_dev = caam_jr_alloc();
+	if (IS_ERR(mtd->crypt_info->jr_dev)) {
+		pr_err("Job Ring device allocation failed\n");
+		rc = PTR_ERR(mtd->crypt_info->jr_dev);
+		goto err_free_mempool;
+	}
 #endif
 	mtd->crypt_info->key = kzalloc(MAX_KEY_BYTES, GFP_KERNEL | GFP_DMA);
+	if (!mtd->crypt_info->key) {
+		rc = -ENOMEM;
+		goto err_free_jr;
+	}
 	rc = mtdcrypt_set_key(mtd);
 	if (rc) {
 		pr_err("mtdcrypt: Unable to set crypto key.\n");
 		rc = -EINVAL;
-		goto out_unlock;
+		goto err_free_key;
 	}
 
-#if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
-	caam_jr_free(mtd->crypt_info->jr_dev);
-#endif
 	mtdcrypt_compute_root_iv(mtd->crypt_info);
 	if (mtd->crypt_info->skcipher) {
 		rc = 0;
-		goto out_unlock;
+		goto out;
 	}
 	rc = mtdcrypt_api_algify_cipher_name(&full_alg_name,
 					mtd->crypt_info->cipher, "cbc");
 	if (rc)
-		goto out_unlock;
+		goto err_free_key;
+
 	mtd->crypt_info->skcipher = crypto_alloc_skcipher(full_alg_name, 0, 0);
 	if (IS_ERR(mtd->crypt_info->skcipher)) {
 		rc = PTR_ERR(mtd->crypt_info->skcipher);
 		mtd->crypt_info->skcipher = NULL;
 		pr_err("mtdcrypt: Error initializing cipher [%s]\n",
 				full_alg_name);
-		goto out_free;
+		goto err_free_alg_name;
 	}
 
 	crypto_skcipher_set_flags(mtd->crypt_info->skcipher,
@@ -860,7 +868,7 @@ int mtdcrypt_init_crypt_info(struct mtd_info *mtd)
 	if (rc) {
 		pr_err("mtdcrypt: Error setting key; rc = [%d]\n", rc);
 		rc = -EINVAL;
-		goto out_free;
+		goto err_free_skcipher;
 	}
 	mtd->crypt_info->flags |=  (KEY_SET | STRUCT_INITIALIZED);
 	rc = 0;
@@ -869,10 +877,41 @@ int mtdcrypt_init_crypt_info(struct mtd_info *mtd)
 		mtd->crypt_info->cipher, (int)strlen(mtd->crypt_info->cipher),
 		mtd->crypt_info->key_size << 3);
 
-out_free:
+out:
 	kfree(full_alg_name);
-out_unlock:
+#if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
+	caam_jr_free(mtd->crypt_info->jr_dev);
+	mtd->crypt_info->jr_dev = NULL;
+#endif
 	mutex_unlock(&mtd->crypt_info->cs_tfm_mutex);
+	return rc;
+
+err_free_skcipher:
+	crypto_free_skcipher(mtd->crypt_info->skcipher);
+	mtd->crypt_info->skcipher = NULL;
+err_free_alg_name:
+	kfree(full_alg_name);
+err_free_key:
+	ahash_request_free(mtd->crypt_info->hash_req);
+	mtd->crypt_info->hash_req = NULL;
+	crypto_free_ahash(mtd->crypt_info->hash_tfm);
+	mtd->crypt_info->hash_tfm = NULL;
+	kfree(mtd->crypt_info->key);
+	mtd->crypt_info->key = NULL;
+err_free_jr:
+#if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
+	caam_jr_free(mtd->crypt_info->jr_dev);
+	mtd->crypt_info->jr_dev = NULL;
+#endif
+err_free_mempool:
+	mempool_destroy(mtd->crypt_info->mem_pool);
+	mtd->crypt_info->mem_pool = NULL;
+err_unlock:
+	mutex_unlock(&mtd->crypt_info->cs_tfm_mutex);
+	mutex_destroy(&mtd->crypt_info->cs_tfm_mutex);
+	mutex_destroy(&mtd->crypt_info->cs_hash_tfm_mutex);
+	kfree(mtd->crypt_info);
+	mtd->crypt_info = NULL;
 	return rc;
 }
 EXPORT_SYMBOL_GPL(mtdcrypt_init_crypt_info);
@@ -886,10 +925,21 @@ EXPORT_SYMBOL_GPL(mtdcrypt_init_crypt_info);
  */
 void mtdcrypt_destroy_crypt_info(struct mtd_info *mtd)
 {
-	mutex_destroy(&mtd->crypt_info->cs_tfm_mutex);
-	mutex_destroy(&mtd->crypt_info->cs_hash_tfm_mutex);
-	kfree(mtd->crypt_info->key);
-	mempool_destroy(mtd->crypt_info->mem_pool);
-	kfree(mtd->crypt_info);
+	struct mtd_crypt_info *ci = mtd->crypt_info;
+
+	if (!ci)
+		return;
+
+	ahash_request_free(ci->hash_req);
+	crypto_free_ahash(ci->hash_tfm);
+	crypto_free_skcipher(ci->skcipher);
+	kfree(ci->key);
+	mempool_destroy(ci->mem_pool);
+
+	mutex_destroy(&ci->cs_tfm_mutex);
+	mutex_destroy(&ci->cs_hash_tfm_mutex);
+
+	kfree(ci);
+	mtd->crypt_info = NULL;
 }
 EXPORT_SYMBOL_GPL(mtdcrypt_destroy_crypt_info);

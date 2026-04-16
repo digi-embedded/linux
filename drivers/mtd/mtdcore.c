@@ -735,6 +735,26 @@ int add_mtd_device(struct mtd_info *mtd)
 		error = 0;
 	}
 
+	if (!(mtd->flags & MTD_NONENCRYPTED)) {
+		/*
+		 * mtdcrypt_init_crypt_info() may fetch the keyblob from a
+		 * different MTD partition through get_mtd_device(), which also
+		 * takes mtd_table_mutex. Drop the lock temporarily to avoid
+		 * deadlocking on the nested lookup, then revalidate state after
+		 * reacquiring it.
+		 */
+		mutex_unlock(&mtd_table_mutex);
+		error = mtdcrypt_init_crypt_info(mtd);
+		mutex_lock(&mtd_table_mutex);
+		if (error) {
+			pr_err("mtdcrypt: initialization error\n");
+			goto fail_locked;
+		}
+		if (idr_find(&mtd_idr, mtd->index) != mtd) {
+			error = -ENODEV;
+			goto fail_crypt;
+		}
+	}
 	/* Caller should have set dev.parent to match the
 	 * physical device, if appropriate.
 	 */
@@ -779,16 +799,6 @@ int add_mtd_device(struct mtd_info *mtd)
 		}
 	}
 
-	if (!(mtd->flags & MTD_NONENCRYPTED)) {
-		if (mtdcrypt_init_crypt_info(mtd) < 0) {
-			device_destroy(&mtd_class, MTD_DEVT(i) + 1);
-			device_unregister(&mtd->dev);
-			idr_remove(&mtd_idr, i);
-			pr_err("mtdcrypt: initialization error\n");
-			return 1;
-		}
-	}
-
 	/* We _know_ we aren't being removed, because
 	   our caller is still holding us here. So none
 	   of this try_ nonsense, and no bitching about it
@@ -801,6 +811,9 @@ fail_nvmem_add:
 fail_added:
 	of_node_put(mtd_get_of_node(mtd));
 	idr_remove(&mtd_idr, i);
+fail_crypt:
+	if (!(mtd->flags & MTD_NONENCRYPTED))
+		mtdcrypt_destroy_crypt_info(mtd);
 fail_locked:
 	mutex_unlock(&mtd_table_mutex);
 	return error;
