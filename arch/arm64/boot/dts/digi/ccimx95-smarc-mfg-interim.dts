@@ -351,19 +351,6 @@
 	status = "okay";
 };
 
-/*
- * LPUART5 is connected to:
- * - Bluetooth chip on wireless variants
- * - XBee on the DVK
- * Only one interface can work at a time.
- * The Bluetooth overlay has precedence over XBee.
- */
-&lpuart5 {
-	status = "disabled";
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart5>, <&pinctrl_xbee_gpios>;
-};
-
 /* LPUART7 routed to RS485 transceiver */
 &lpuart7 {
 	pinctrl-names = "default";

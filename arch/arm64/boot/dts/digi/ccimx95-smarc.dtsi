@@ -117,11 +117,6 @@
 	pinctrl-0 = <&pinctrl_uart3>;
 };
 
-&lpuart5 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart5>;
-};
-
 &lpuart7 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart7>;
@@ -491,19 +486,6 @@
 		fsl,pins = <
 			IMX95_PAD_GPIO_IO15__LPUART3_RX			0x31e
 			IMX95_PAD_GPIO_IO14__LPUART3_TX			0x31e
-		>;
-	};
-
-	/*
-	 * These are the pads to the SMARC connector, which are
-	 * different than the pads that route UART5 to the Bluetooh chip.
-	 */
-	pinctrl_uart5: uart5grp {
-		fsl,pins = <
-			IMX95_PAD_GPIO_IO01__LPUART5_RX			0x31e
-			IMX95_PAD_GPIO_IO00__LPUART5_TX			0x31e
-			IMX95_PAD_GPIO_IO02__LPUART5_CTS_B		0x31e
-			IMX95_PAD_GPIO_IO03__LPUART5_RTS_B		0x31e
 		>;
 	};
 
