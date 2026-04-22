@@ -418,9 +418,9 @@ static void kick_trng(struct device *dev, int ent_delay)
 	 * use RTSDCTL[SAMP_SIZE] as an indicator.
 	 */
 	if ((rtsdctl & RTSDCTL_SAMP_SIZE_MASK) != RTSDCTL_SAMP_SIZE_VAL) {
-		wr_reg32(&r4tst->rtscmisc, 33);		/* long run test=33, retry=0 */
-		wr_reg32(&r4tst->rtpkrrng, 0x42C);
-		wr_reg32(&r4tst->rtpkrmax, 0x1438);
+		wr_reg32(&r4tst->rtscmisc, (2 << 16) | 32);
+		wr_reg32(&r4tst->rtpkrrng, 570);
+		wr_reg32(&r4tst->rtpkrmax, 1600);
 		wr_reg32(&r4tst->rtscml, (122 << 16) | 317);
 		wr_reg32(&r4tst->rtscrl[0], (80 << 16) | 107);
 		wr_reg32(&r4tst->rtscrl[1], (57 << 16) | 62);
@@ -428,13 +428,6 @@ static void kick_trng(struct device *dev, int ent_delay)
 		wr_reg32(&r4tst->rtscrl[3], (27 << 16) | 26);
 		wr_reg32(&r4tst->rtscrl[4], (19 << 16) | 18);
 		wr_reg32(&r4tst->rtscrl[5], (18 << 16) | 17);
-		wr_reg32(&r4tst->rsvd1[0], ((598-426) << 16) | 598);	/* Monobit test */
-		wr_reg32(&r4tst->rsvd1[1], ((188-74) << 16) | 188);     /* run 1 test */
-		wr_reg32(&r4tst->rsvd1[2], ((105-28) << 16) | 105);
-		wr_reg32(&r4tst->rsvd1[3], ((63-7) << 16) | 63);
-		wr_reg32(&r4tst->rsvd1[4], ((40-0) << 16) | 40);
-		wr_reg32(&r4tst->rsvd1[5], ((26+1) << 16) | 26);
-		wr_reg32(&r4tst->rsvd1[6], ((26+1) << 16) | 26);	/* run 6+ test */
 	}
 
 	/*
@@ -736,7 +729,7 @@ static int caam_ctrl_rng_init(struct device *dev)
 					 "Entropy delay = %u\n",
 					 ent_delay);
 				kick_trng(dev, ent_delay);
-				ent_delay *= 2;
+				ent_delay += 400;
 			}
 			/*
 			 * if instantiate_rng(...) fails, the loop will rerun
