@@ -619,6 +619,11 @@ static int bcm_setup(struct hci_uart *hu)
 	else
 		speed = 0;
 
+	if (speed == 0 && of_machine_is_compatible("digi,ccmp2")) {
+		speed = 3000000;
+		bt_dev_info(hu->hdev, "Set operational baudrate at %d", speed);
+	}
+
 	if (speed) {
 		err = bcm_set_baudrate(hu, speed);
 		if (!err)
