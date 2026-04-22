@@ -213,8 +213,8 @@
 	ptn5110: tcpc@53 {
 		compatible = "nxp,ptn5110";
 		reg = <0x53>;
-		interrupt-parent = <&gpio2>;
-		interrupts = <7 IRQ_TYPE_LEVEL_LOW>;
+		interrupt-parent = <&mca_gpio>;
+		interrupts = <15 IRQ_TYPE_LEVEL_LOW>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ptn5110>;
 
@@ -398,8 +398,6 @@
 
 	pinctrl_ptn5110: ptn5110grp {
 		fsl,pins = <
-			/* PTN5110 irq line (ALERT_N) line */
-			IMX95_PAD_GPIO_IO07__GPIO2_IO_BIT7		0x31e
 			/* PTN5110 debug irq (DBG_ACC) line */
 			IMX95_PAD_ENET1_MDC__GPIO4_IO_BIT0		0x31e
 		>;
