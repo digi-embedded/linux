@@ -306,7 +306,7 @@ out:
  */
 static int mtdcrypt_op(struct mtd_crypt_info *crypt_info,
 			const u_char *buf, u_char *dstbuf, int len,
-			unsigned long block_offset, int op)
+			loff_t block_offset, int op)
 {
 	char iv[MAX_IV_BYTES];
 	struct sg_table sg_tbl;
@@ -365,8 +365,8 @@ static int mtdcrypt_op(struct mtd_crypt_info *crypt_info,
 	rc = mtdcrypt_scatterlist(crypt_info, sg_tbl.sgl, sg_tbl.sgl,
 			len, iv, op);
 	if (rc < 0) {
-		pr_err("mtdcrypt: Error attempting to crypt page with block_offset = [%ld]; rc = [%d]\n",
-				block_offset, rc);
+		pr_err("mtdcrypt: Error attempting to crypt page with block_offset = [%#llx]; rc = [%d]\n",
+				(unsigned long long)block_offset, rc);
 		goto mempool_out;
 	}
 
