@@ -86,46 +86,15 @@ static void dump_hex(unsigned char *buf, int len)
  * generate the MD5 sum of the contents of src.
  */
 static int mtdcrypt_calculate_md5(char *dst, struct mtd_crypt_info *crypt_info,
-		char *src, int len)
+				  char *src, int len)
 {
-	struct scatterlist sg;
-	struct crypto_ahash *tfm = crypt_info->hash_tfm;
-	struct ahash_request *req = crypt_info->hash_req;
-	int rc = 0;
+	int rc = crypto_shash_tfm_digest(crypt_info->hash_tfm, src, len, dst);
 
-	mutex_lock(&crypt_info->cs_hash_tfm_mutex);
-	sg_init_one(&sg, (u8 *)src, len);
-	if (!tfm) {
-		tfm = crypto_alloc_ahash("md5", 0, CRYPTO_ALG_ASYNC);
-		if (IS_ERR(tfm)) {
-			rc = PTR_ERR(tfm);
-			pr_err("mtdcrypt: Error attempting to allocate crypto context; rc = [%d]\n",
-					rc);
-			goto out;
-		}
-		req = ahash_request_alloc(tfm, GFP_ATOMIC);
-		if (!req) {
-			crypto_free_ahash(tfm);
-
-			pr_err("mtdcrypt: Error attempting to allocate ahash req\n");
-			rc = -ENOMEM;
-			goto out;
-		}
-		ahash_request_set_callback(req, 0, NULL, NULL);
-
-		crypt_info->hash_tfm = tfm;
-		crypt_info->hash_req = req;
+	if (rc) {
+		pr_err("mtdcrypt: Error computing crypto hash; rc = [%d]\n",
+		       rc);
 	}
 
-	ahash_request_set_crypt(req, &sg, dst, len);
-	if (crypto_ahash_digest(req)) {
-		pr_err("mtdcrypt: Error computing crypto hash");
-		rc = -1;
-		goto out;
-	}
-
-out:
-	mutex_unlock(&crypt_info->cs_hash_tfm_mutex);
 	return rc;
 }
 
@@ -817,7 +786,6 @@ int mtdcrypt_init_crypt_info(struct mtd_info *mtd)
 	}
 
 	mutex_init(&mtd->crypt_info->cs_tfm_mutex);
-	mutex_init(&mtd->crypt_info->cs_hash_tfm_mutex);
 
 	mutex_lock(&mtd->crypt_info->cs_tfm_mutex);
 
@@ -839,6 +807,14 @@ int mtdcrypt_init_crypt_info(struct mtd_info *mtd)
 			mtd->crypt_info->block_shift);
 	strcpy(mtd->crypt_info->cipher, DEFAULT_CIPHER);
 	mtd->crypt_info->key_size = DEFAULT_KEY_BYTES;
+	mtd->crypt_info->hash_tfm = crypto_alloc_shash("md5", 0, 0);
+	if (IS_ERR(mtd->crypt_info->hash_tfm)) {
+		rc = PTR_ERR(mtd->crypt_info->hash_tfm);
+		mtd->crypt_info->hash_tfm = NULL;
+		pr_err("mtdcrypt: Error attempting to allocate crypto context; rc = [%d]\n",
+		       rc);
+		goto err_free_mempool;
+	}
 
 #if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
 	mtd->crypt_info->jr_dev = caam_jr_alloc();
@@ -910,9 +886,7 @@ err_free_skcipher:
 err_free_alg_name:
 	kfree(full_alg_name);
 err_free_key:
-	ahash_request_free(mtd->crypt_info->hash_req);
-	mtd->crypt_info->hash_req = NULL;
-	crypto_free_ahash(mtd->crypt_info->hash_tfm);
+	crypto_free_shash(mtd->crypt_info->hash_tfm);
 	mtd->crypt_info->hash_tfm = NULL;
 	kfree(mtd->crypt_info->key);
 	mtd->crypt_info->key = NULL;
@@ -927,7 +901,6 @@ err_free_mempool:
 err_unlock:
 	mutex_unlock(&mtd->crypt_info->cs_tfm_mutex);
 	mutex_destroy(&mtd->crypt_info->cs_tfm_mutex);
-	mutex_destroy(&mtd->crypt_info->cs_hash_tfm_mutex);
 	kfree(mtd->crypt_info);
 	mtd->crypt_info = NULL;
 	return rc;
@@ -948,14 +921,12 @@ void mtdcrypt_destroy_crypt_info(struct mtd_info *mtd)
 	if (!ci)
 		return;
 
-	ahash_request_free(ci->hash_req);
-	crypto_free_ahash(ci->hash_tfm);
+	crypto_free_shash(ci->hash_tfm);
 	crypto_free_skcipher(ci->skcipher);
 	kfree(ci->key);
 	mempool_destroy(ci->mem_pool);
 
 	mutex_destroy(&ci->cs_tfm_mutex);
-	mutex_destroy(&ci->cs_hash_tfm_mutex);
 
 	kfree(ci);
 	mtd->crypt_info = NULL;
