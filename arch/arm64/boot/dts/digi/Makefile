@@ -82,6 +82,7 @@ ccimx93-dtbs := 	ccimx93-dvk.dtb \
 			$(ccimx9_som_overlays)
 
 ccimx95_dvk_overlays := ccimx95-dvk_expi-os08a20-cam.dtbo \
+			ccimx95-dvk_gpio-watchdog.dtbo \
 			ccimx95-dvk_lvds0-g101evn010.dtbo \
 			ccimx95-dvk_lvds1-g101evn010.dtbo \
 			ccimx95-dvk_pcam5c.dtbo
