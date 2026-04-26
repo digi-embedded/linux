@@ -86,6 +86,38 @@
 			compatible = "digi,mca-rtc";
 		};
 
+		wdt {
+			compatible = "digi,mca-wdt";
+			digi,full-reset;
+		};
+
+		gpio_wdt: gpio-wdt {
+			compatible = "digi,mca-gpio-wdt";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+
+			gpio_wdt0: gpio-wdt@210 {
+				reg = <0x210>;
+				status = "disabled";
+			};
+
+			gpio_wdt1: gpio-wdt@220 {
+				reg = <0x220>;
+				status = "disabled";
+			};
+
+			gpio_wdt2: gpio-wdt@230 {
+				reg = <0x230>;
+				status = "disabled";
+			};
+
+			gpio_wdt3: gpio-wdt@240 {
+				reg = <0x240>;
+				status = "disabled";
+			};
+		};
+
 		pwrkey {
 			compatible = "digi,mca-smarc-pwrkey";
 			digi,key-power;
