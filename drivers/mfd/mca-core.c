@@ -434,6 +434,18 @@ static const struct mfd_cell mca_stm32u031_devs[] = {
 		.of_compatible  = "digi,mca-rtc",
 	},
 	{
+		.name           = MCA_DRVNAME_WATCHDOG,
+		.num_resources	= ARRAY_SIZE(mca_watchdog_resources),
+		.resources	= mca_watchdog_resources,
+		.of_compatible  = "digi,mca-wdt",
+	},
+	{
+		.name           = MCA_DRVNAME_GPIO_WATCHDOG,
+		.num_resources	= ARRAY_SIZE(mca_watchdog_resources),
+		.resources	= mca_watchdog_resources,
+		.of_compatible  = "digi,mca-gpio-wdt",
+	},
+	{
 		.name           = MCA_DRVNAME_GPIO,
 		.num_resources	= 4, /* STM32U031: four GPIO banks */
 		.resources	= mca_gpios_resources,
@@ -1197,7 +1209,7 @@ struct mca_func_since mca_func_fwver[MCA_DEV_MAX][MCA_FUNC_MAX] = {
 		{MCA_FUNC_VREF, 	MCA_MAKE_FW_VER(255, 255)},
 		{MCA_FUNC_LAST_WAKEUP, 	MCA_MAKE_FW_VER(0,  0)},
 		{MCA_FUNC_NVRAM, 	MCA_MAKE_FW_VER(0,  0)},
-		{MCA_FUNC_REBOOT_SAFE, 	MCA_MAKE_FW_VER(255, 255)},
+		{MCA_FUNC_REBOOT_SAFE, 	MCA_MAKE_FW_VER(0,   6)},
 		{MCA_FUNC_DEBTB50M, 	MCA_MAKE_FW_VER(0,   0)},
 		{MCA_FUNC_PWRKEY_UP, 	MCA_MAKE_FW_VER(0,   0)},
 		{MCA_FUNC_RTC_PREPARE, 	MCA_MAKE_FW_VER(255, 255)},

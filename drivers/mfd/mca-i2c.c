@@ -277,7 +277,10 @@ static const struct regmap_range mca_stm32u031_writeable_ranges[] = {
 	regmap_reg_range(MCA_CTRL_0, MCA_CTRL_0),
 	regmap_reg_range(MCA_RTC_CONTROL, MCA_RTC_CONTROL),
 	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_PREPARE_ALARM),
+	regmap_reg_range(MCA_WDT_CONTROL, MCA_GPIO_WDT3_IO),
 	regmap_reg_range(MCA_GPIO_DIR_0, MCA_GPIO_DEB_CNT_63),
+	regmap_reg_range(MCA_MPU_NVRAM_START, MCA_MPU_NVRAM_END),
+	regmap_reg_range(MCA_RESET_SAFE_TIMEOUT, MCA_PWROFF_SAFE_TIMEOUT),
 };
 
 static const struct regmap_range mca_stm32u031_volatile_ranges[] = {
@@ -311,6 +314,7 @@ static const struct regmap_range mca_stm32u031_volatile_ranges[] = {
 	regmap_reg_range(MCA_CTRL_0, MCA_CTRL_0),
 	regmap_reg_range(MCA_RTC_CONTROL, MCA_RTC_CONTROL),
 	regmap_reg_range(MCA_RTC_ALARM_YEAR_L, MCA_RTC_PREPARE_ALARM),
+	regmap_reg_range(MCA_WDT_CONTROL, MCA_GPIO_WDT3_IO),
 	regmap_reg_range(MCA_GPIO_NUM, MCA_GPIO_DIR_7),
 	regmap_reg_range(MCA_GPIO_IRQ_CFG_0, MCA_GPIO_IRQ_CFG_63),
 };
