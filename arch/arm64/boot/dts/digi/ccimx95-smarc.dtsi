@@ -62,8 +62,8 @@
 	mca_cc95_smarc: mca@20 {
 		compatible = "digi,mca-stm32u031";
 		reg = <0x20>;
-		interrupt-parent = <&gpio1>;
-		interrupts = <10 IRQ_TYPE_EDGE_FALLING>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <7 IRQ_TYPE_EDGE_FALLING>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
 		pinctrl-names = "default";
@@ -451,7 +451,7 @@
 	pinctrl_mca: mcagrp {
 		fsl,pins = <
 			/* MCA/PMIC interrupt */
-			IMX95_PAD_PDM_BIT_STREAM1__AONMIX_TOP_GPIO1_IO_BIT10	0x31e
+			IMX95_PAD_GPIO_IO07__GPIO2_IO_BIT7		0x31e
 		>;
 	};
 
