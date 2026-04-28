@@ -48,6 +48,7 @@
 			mmc-pwrseq = <&wlan_pwrseq>;
 			vqmmc-supply = <&reg_1v8_rf>;
 			bus-width = <4>;
+			cap-power-off-card;
 			non-removable;
 			wakeup-source;
 			max-frequency = <100000000>;
