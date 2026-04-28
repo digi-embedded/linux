@@ -259,7 +259,6 @@ struct dw_mipi_dsi {
 	u32 lanes;
 	u32 format;
 	unsigned long mode_flags;
-	int rotation;
 
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs;
@@ -368,12 +367,6 @@ static int dw_mipi_dsi_host_attach(struct mipi_dsi_host *host,
 		if (ret < 0)
 			return ret;
 	}
-
-	/* check if a rotation is required on panel */
-	ret = of_property_read_u32(bridge->of_node, "rotation", &dsi->rotation);
-	if (ret < 0)
-		/* fail to get rotation, set 0 by default */
-		dsi->rotation = 0;
 
 	return 0;
 }
@@ -739,16 +732,11 @@ static void dw_mipi_dsi_video_packet_config(struct dw_mipi_dsi *dsi,
 	 * DSI_VNPCR.NPSIZE... especially because this driver supports
 	 * non-burst video modes, see dw_mipi_dsi_video_mode_config()...
 	 */
-	if (dsi->rotation == 90 || dsi->rotation == 270)
-		dsi_write(dsi, DSI_VID_PKT_SIZE,
-			  dw_mipi_is_dual_mode(dsi) ?
-			  VID_PKT_SIZE(mode->vdisplay / 2) :
-			  VID_PKT_SIZE(mode->vdisplay));
-	else
-		dsi_write(dsi, DSI_VID_PKT_SIZE,
-			  dw_mipi_is_dual_mode(dsi) ?
-			  VID_PKT_SIZE(mode->hdisplay / 2) :
-			  VID_PKT_SIZE(mode->hdisplay));
+
+	dsi_write(dsi, DSI_VID_PKT_SIZE,
+		       dw_mipi_is_dual_mode(dsi) ?
+				VID_PKT_SIZE(mode->hdisplay / 2) :
+				VID_PKT_SIZE(mode->hdisplay));
 }
 
 static void dw_mipi_dsi_command_mode_config(struct dw_mipi_dsi *dsi)
@@ -815,15 +803,9 @@ static void dw_mipi_dsi_line_timer_config(struct dw_mipi_dsi *dsi,
 {
 	u32 htotal, hsa, hbp, lbcc;
 
-	if (dsi->rotation == 90 || dsi->rotation == 270) {
-		htotal = mode->vtotal;
-		hsa = mode->vsync_end - mode->vsync_start;
-		hbp = mode->vtotal - mode->vsync_end;
-	} else {
-		htotal = mode->htotal;
-		hsa = mode->hsync_end - mode->hsync_start;
-		hbp = mode->htotal - mode->hsync_end;
-	}
+	htotal = mode->htotal;
+	hsa = mode->hsync_end - mode->hsync_start;
+	hbp = mode->htotal - mode->hsync_end;
 
 	/*
 	 * TODO dw drv improvements
@@ -862,17 +844,10 @@ static void dw_mipi_dsi_vertical_timing_config(struct dw_mipi_dsi *dsi,
 {
 	u32 vactive, vsa, vfp, vbp;
 
-	if (dsi->rotation == 90 || dsi->rotation == 270) {
-		vactive = mode->hdisplay;
-		vsa = mode->hsync_end - mode->hsync_start;
-		vfp = mode->hsync_start - mode->hdisplay;
-		vbp = mode->htotal - mode->hsync_end;
-	} else {
-		vactive = mode->vdisplay;
-		vsa = mode->vsync_end - mode->vsync_start;
-		vfp = mode->vsync_start - mode->vdisplay;
-		vbp = mode->vtotal - mode->vsync_end;
-	}
+	vactive = mode->vdisplay;
+	vsa = mode->vsync_end - mode->vsync_start;
+	vfp = mode->vsync_start - mode->vdisplay;
+	vbp = mode->vtotal - mode->vsync_end;
 
 	dsi_write(dsi, DSI_VID_VACTIVE_LINES, vactive);
 	dsi_write(dsi, DSI_VID_VSA_LINES, vsa);
@@ -1230,6 +1205,7 @@ __dw_mipi_dsi_probe(struct platform_device *pdev,
 	struct reset_control *apb_rst;
 	struct dw_mipi_dsi *dsi;
 	int ret;
+	u32 pwr;
 
 	dsi = devm_kzalloc(dev, sizeof(*dsi), GFP_KERNEL);
 	if (!dsi)
@@ -1264,7 +1240,12 @@ __dw_mipi_dsi_probe(struct platform_device *pdev,
 	 * Note that the reset was not defined in the initial device tree, so
 	 * we have to be prepared for it not being found.
 	 */
-	if (!device_property_read_bool(dev, "default-on")) {
+	pwr = dsi_read(dsi, DSI_PWR_UP);
+	/*
+	 * To obtain a continuous display after the probe,
+	 * do not reset the DSI bridge if it is powered on.
+	 */
+	if (pwr != POWERUP) {
 		apb_rst = devm_reset_control_get_optional_exclusive(dev, "apb");
 		if (IS_ERR(apb_rst)) {
 			ret = PTR_ERR(apb_rst);

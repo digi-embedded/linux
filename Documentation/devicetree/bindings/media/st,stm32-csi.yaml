@@ -4,8 +4,7 @@
 $id: http://devicetree.org/schemas/media/st,stm32-csi.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: STMicroelectronics STM32 CSI controller allowing to connect a CSI
-       based camera to the DCMIPP camera pipeline.
+title: STMicroelectronics STM32 CSI controller
 
 maintainers:
   - Alain Volmat <alain.volmat@foss.st.com>
@@ -33,6 +32,19 @@ properties:
   resets:
     maxItems: 1
 
+  vdd-supply:
+    description: Digital core power supply (0.91V)
+
+  vdda18-supply:
+    description: System analog power supply (1.8V)
+
+  power-domains:
+    maxItems: 1
+
+  access-controllers:
+    minItems: 1
+    maxItems: 2
+
   ports:
     $ref: /schemas/graph.yaml#/properties/ports
 
@@ -50,14 +62,10 @@ properties:
 
             properties:
               data-lanes:
-                description:
-                  Indicate the number of data-lanes and their mapping.
-
+                minItems: 1
                 items:
-                  minItems: 1
-                  items:
-                    - const: 1
-                    - const: 2
+                  - const: 1
+                  - const: 2
 
             required:
               - data-lanes
@@ -80,6 +88,7 @@ additionalProperties: false
 
 examples:
   - |
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/reset/st,stm32mp25-rcc.h>
     #include <dt-bindings/media/video-interfaces.h>

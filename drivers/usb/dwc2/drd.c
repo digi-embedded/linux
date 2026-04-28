@@ -113,6 +113,14 @@ static int dwc2_ovr_avalid(struct dwc2_hsotg *hsotg, bool valid)
 		gotgctl &= ~(GOTGCTL_AVALOVAL | GOTGCTL_VBVALOVAL);
 	dwc2_writel(hsotg, gotgctl, GOTGCTL);
 
+	if (valid) {
+		if (dwc2_hsotg_wait_bit_set(hsotg, GOTGCTL, GOTGCTL_ASESVLD, 50))
+			dev_dbg(hsotg->dev, "GOTGCTL_ASESVLD not set\n");
+	} else {
+		if (dwc2_hsotg_wait_bit_clear(hsotg, GOTGCTL, GOTGCTL_ASESVLD, 50))
+			dev_dbg(hsotg->dev, "GOTGCTL_ASESVLD not cleared\n");
+	}
+
 	return 0;
 }
 
@@ -137,6 +145,18 @@ static int dwc2_ovr_bvalid(struct dwc2_hsotg *hsotg, bool valid)
 	else
 		gotgctl &= ~(GOTGCTL_BVALOVAL | GOTGCTL_VBVALOVAL);
 	dwc2_writel(hsotg, gotgctl, GOTGCTL);
+
+	if (valid) {
+		/*
+		 * Wait for GOTGCTL_BSESVLD to be set. It's checked later in
+		 * dwc2_hsotg_core_connect, to remove DCTL_SFTDISCON bit.
+		 */
+		if (dwc2_hsotg_wait_bit_set(hsotg, GOTGCTL, GOTGCTL_BSESVLD, 50))
+			dev_dbg(hsotg->dev, "GOTGCTL_BSESVLD not set\n");
+	} else {
+		if (dwc2_hsotg_wait_bit_clear(hsotg, GOTGCTL, GOTGCTL_BSESVLD, 50))
+			dev_dbg(hsotg->dev, "GOTGCTL_BSESVLD not cleared\n");
+	}
 
 	return 0;
 }
@@ -185,6 +205,14 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 			role = USB_ROLE_DEVICE;
 	}
 
+	if (hsotg->current_role == role) {
+		spin_unlock_irqrestore(&hsotg->lock, flags);
+		goto skip;
+	}
+
+	/* prevent runtime suspend while changing role */
+	pm_runtime_get(hsotg->dev);
+
 	if ((IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) ||
 	     IS_ENABLED(CONFIG_USB_DWC2_DUAL_ROLE)) &&
 	     dwc2_is_device_mode(hsotg) &&
@@ -195,38 +223,82 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 		if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
 		    !hsotg->params.no_clock_gating)
 			dwc2_gadget_exit_clock_gating(hsotg, 0);
+
+		if (hsotg->params.reset_phy_on_start) {
+			spin_unlock_irqrestore(&hsotg->lock, flags);
+			/*
+			 * In case the gadget has been stopped earlier, and
+			 * the platform enters some low power states, the phy
+			 * may need a reset before starting again.
+			 */
+			if (phy_reset(hsotg->phy))
+				dev_warn(hsotg->dev, "PHY reset failed\n");
+			spin_lock_irqsave(&hsotg->lock, flags);
+		}
 	}
 
 	if (role == USB_ROLE_HOST) {
 		already = dwc2_ovr_avalid(hsotg, true);
 	} else if (role == USB_ROLE_DEVICE) {
+		if (hsotg->current_role == USB_ROLE_HOST)
+			dwc2_hcd_disconnect(hsotg, true);
 		already = dwc2_ovr_bvalid(hsotg, true);
-		if (dwc2_is_device_enabled(hsotg)) {
-			/* This clear DCTL.SFTDISCON bit */
-			dwc2_hsotg_core_connect(hsotg);
-		}
 	} else {
-		if (dwc2_is_device_mode(hsotg)) {
-			if (!dwc2_ovr_bvalid(hsotg, false))
-				/* This set DCTL.SFTDISCON bit */
-				dwc2_hsotg_core_disconnect(hsotg);
-		} else {
+		if (dwc2_is_device_mode(hsotg))
+			already = dwc2_ovr_bvalid(hsotg, false);
+		else
 			dwc2_ovr_avalid(hsotg, false);
-		}
 	}
 
+	hsotg->current_role = role;
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 
-	if (!already && hsotg->dr_mode == USB_DR_MODE_OTG)
-		/* This will raise a Connector ID Status Change Interrupt */
-		dwc2_force_mode(hsotg, role == USB_ROLE_HOST);
+	if (!already) {
+		if (hsotg->dr_mode == USB_DR_MODE_OTG)
+			/* This will raise a Connector ID Status Change Interrupt */
+			dwc2_force_mode(hsotg, role == USB_ROLE_HOST);
 
+		if (role == USB_ROLE_DEVICE && dwc2_is_device_enabled(hsotg))
+			/* This clear DCTL.SFTDISCON bit */
+			dwc2_hsotg_core_connect(hsotg);
+
+		if (role == USB_ROLE_NONE && dwc2_is_device_mode(hsotg))
+			/* This set DCTL.SFTDISCON bit */
+			dwc2_hsotg_core_disconnect(hsotg);
+	}
+
+	if (role == USB_ROLE_NONE &&
+	    (hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_HNP_SRP_CAPABLE ||
+	     hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_DEVICE ||
+	     hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_HOST)) {
+		/* OTGINT session end detection not available, so directly disconnect here */
+		spin_lock_irqsave(&hsotg->lock, flags);
+		dwc2_hsotg_disconnect(hsotg);
+		spin_unlock_irqrestore(&hsotg->lock, flags);
+	}
+
+	pm_runtime_put(hsotg->dev);
+
+skip:
 	if (!hsotg->ll_hw_enabled && hsotg->clk)
 		clk_disable_unprepare(hsotg->clk);
 
 	dev_dbg(hsotg->dev, "%s-session valid\n",
 		role == USB_ROLE_NONE ? "No" :
 		role == USB_ROLE_HOST ? "A" : "B");
+
+	if (role == USB_ROLE_NONE && !hsotg->rpm_suspended) {
+		/* Enforce dwc2_conn_id_status_change has completed */
+		if (hsotg->wq_otg)
+			flush_workqueue(hsotg->wq_otg);
+		/*
+		 * With none role, the controller can be put in low power mode,
+		 * in case of a new event, e.g. usb-role-switch, role_sw_set
+		 * will be called, to resume.
+		 */
+		hsotg->rpm_suspended = true;
+		pm_runtime_put_sync(hsotg->dev);
+	}
 
 	return 0;
 }

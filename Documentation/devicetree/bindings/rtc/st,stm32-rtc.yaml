@@ -60,6 +60,9 @@ properties:
       Refer to <include/dt-bindings/rtc/rtc-stm32.h> for the supported values.
       Pinctrl state named "default" may be defined to reserve pin for RTC output.
 
+  "#clock-cells":
+    const: 0
+
   st,alarm:
     $ref: /schemas/types.yaml#/definitions/uint32
     description: |
@@ -148,6 +151,18 @@ allOf:
       required:
         - clock-names
 
+  - if:
+      not:
+        properties:
+          st,lsco:
+            const: 0
+    then:
+      required:
+        - "#clock-cells"
+    else:
+      properties:
+        "#clock-cells": false
+
 required:
   - compatible
   - reg
@@ -180,6 +195,7 @@ examples:
       reg = <0x5c004000 0x400>;
       clocks = <&rcc RTCAPB>, <&rcc RTC>;
       clock-names = "pclk", "rtc_ck";
+      #clock-cells = <0>;
       interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
       st,alarm = <RTC_OUT1>;
       st,lsco = <RTC_OUT2_RMP>;

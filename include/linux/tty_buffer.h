@@ -15,6 +15,7 @@ struct tty_buffer {
 	unsigned int used;
 	unsigned int size;
 	unsigned int commit;
+	unsigned int lookahead;		/* Lazy update on recv, can become less than "read" */
 	unsigned int read;
 	bool flags;
 	/* Data points here */

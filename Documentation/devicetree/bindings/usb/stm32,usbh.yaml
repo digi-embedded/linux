@@ -42,6 +42,9 @@ properties:
     maxItems: 1
     description: interrupt used for wakeup
 
+  access-controllers:
+    maxItems: 1
+
 # Required child node:
 
 patternProperties:

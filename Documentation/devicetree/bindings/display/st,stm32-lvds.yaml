@@ -78,6 +78,9 @@ properties:
       - port@0
       - port@1
 
+  access-controllers:
+    maxItems: 1
+
 required:
   - compatible
   - "#clock-cells"

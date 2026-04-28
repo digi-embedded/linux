@@ -483,5 +483,5 @@ static struct platform_driver stm32_crc_driver = {
 module_platform_driver(stm32_crc_driver);
 
 MODULE_AUTHOR("Fabien Dessenne <fabien.dessenne@st.com>");
-MODULE_DESCRIPTION("STMicrolectronics STM32 CRC32 hardware driver");
+MODULE_DESCRIPTION("STMicroelectronics STM32 CRC32 hardware driver");
 MODULE_LICENSE("GPL");

@@ -76,7 +76,10 @@ static const char *const counter_synapse_action_str[] = {
 	[COUNTER_SYNAPSE_ACTION_NONE] = "none",
 	[COUNTER_SYNAPSE_ACTION_RISING_EDGE] = "rising edge",
 	[COUNTER_SYNAPSE_ACTION_FALLING_EDGE] = "falling edge",
-	[COUNTER_SYNAPSE_ACTION_BOTH_EDGES] = "both edges"
+	[COUNTER_SYNAPSE_ACTION_BOTH_EDGES] = "both edges",
+	[COUNTER_SYNAPSE_CAPTURE_RISING_EDGE] = "capture rising edge",
+	[COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE] = "capture falling edge",
+	[COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES] = "capture both edges"
 };
 
 static const char *const counter_count_direction_str[] = {
@@ -95,6 +98,11 @@ static const char *const counter_count_mode_str[] = {
 	[COUNTER_COUNT_MODE_SQUARE_WAVE_MODE] = "square wave mode",
 	[COUNTER_COUNT_MODE_SOFTWARE_TRIGGERED_STROBE] = "software triggered strobe",
 	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_STROBE] = "hardware triggered strobe",
+	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_RESET] = "hardware triggered reset",
+	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_GATED] = "hardware triggered gated",
+	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_START] = "hardware triggered start",
+	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_RESET_START] = "hardware triggered reset start",
+	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_GATED_RESET] = "hardware triggered gated reset",
 };
 
 static const char *const counter_signal_polarity_str[] = {

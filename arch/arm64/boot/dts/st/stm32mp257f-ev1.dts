@@ -14,7 +14,7 @@
 #include "stm32mp25xf.dtsi"
 #include "stm32mp25-pinctrl.dtsi"
 #include "stm32mp25xxai-pinctrl.dtsi"
-#include "stm32mp257f-ev1-ca35tdcid-resmem.dtsi"
+#include "stm32mp257f-ev1-resmem.dtsi"
 
 / {
 	model = "STMicroelectronics STM32MP257F-EV1 Evaluation Board";
@@ -62,6 +62,11 @@
 		};
 	};
 
+	clock_critical: clock_critical {
+		compatible = "st,stm32-hog";
+		clocks = <&rcc CK_LPTIM4_AM>;
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 
@@ -76,7 +81,7 @@
 			label = "User-2";
 			linux,code = <BTN_2>;
 			gpios = <&gpiog 8 GPIO_ACTIVE_HIGH>;
-			status = "okay";
+			status = "disabled";
 		};
 
 		button-wake-up {
@@ -122,7 +127,6 @@
 		enable-gpios = <&gpiog 15 GPIO_ACTIVE_HIGH>;
 		backlight = <&panel_lvds_backlight>;
 		power-supply = <&scmi_v3v3>;
-		default-on;
 		status = "okay";
 
 		width-mm = <156>;
@@ -152,7 +156,6 @@
 		compatible = "gpio-backlight";
 		gpios = <&gpioi 5 GPIO_ACTIVE_HIGH>;
 		default-on;
-		default-brightness-level = <1>;
 		status = "okay";
 	};
 
@@ -221,6 +224,62 @@
 	status = "okay";
 };
 
+&cs_cpu_debug0 {
+	status = "okay";
+};
+
+&cs_cpu_debug1 {
+	status = "okay";
+};
+
+&cs_cti0 {
+	status = "okay";
+};
+
+&cs_cti1 {
+	status = "okay";
+};
+
+&cs_cti_cpu0 {
+	status = "okay";
+};
+
+&cs_cti_cpu1 {
+	status = "okay";
+};
+
+&cs_etf {
+	status = "okay";
+};
+
+&cs_etm0 {
+	status = "okay";
+};
+
+&cs_etm1 {
+	status = "okay";
+};
+
+&cs_etr {
+	status = "okay";
+};
+
+&cs_funnel {
+	status = "okay";
+};
+
+&cs_replicator {
+	status = "okay";
+};
+
+&cs_stm {
+	status = "okay";
+};
+
+&cs_tpiu {
+	status = "okay";
+};
+
 &csi {
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
@@ -243,6 +302,10 @@
 			};
 		};
 	};
+};
+
+&dbg_bus {
+	status = "okay";
 };
 
 &dcmipp {
@@ -468,6 +531,23 @@
 	};
 };
 
+&i3c4 {
+	/*
+	 *  Connector | pins_a  | pins_b |
+	 * -----------+---------+--------|
+	 *  GPIO Exp. | I2C8+PU |   X    |
+	 * -----------+---------+--------|
+	 *  mikroBus  | I2C8+PU | SPI8   |
+	 *
+	 * X = not wired ; PU = External Pull-Up
+	 */
+	pinctrl-names = "default", "init", "sleep";
+	pinctrl-0 = <&i3c4_pins_b>;
+	pinctrl-1 = <&i3c4_init_pins_b>;
+	pinctrl-2 = <&i3c4_sleep_pins_b>;
+	status = "disabled";
+};
+
 &ipcc1 {
 	status = "okay";
 };
@@ -497,7 +577,6 @@
 };
 
 &ltdc {
-	default-on;
 	rotation-memory = <&ltdc_sec_rotation>;
 	status = "okay";
 
@@ -518,7 +597,6 @@
 };
 
 &lvds {
-	default-on;
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
 	status = "okay";
@@ -568,7 +646,7 @@
 			<&ipc_shmem_1>, <&vdev0vring0>,
 			<&vdev0vring1>, <&vdev0buffer>,
 			<&cm33_sram2>;
-	st,syscfg-nsvtor = <&a35ss_syscfg 0xa8 0xffffff80>;
+	st,syscfg-nsvtor = <&a35ss_syscfg 0x20a8 0xffffff80>;
 	status = "okay";
 };
 
@@ -777,6 +855,7 @@
 };
 
 &usart2 {
+	bootph-all;
 	pinctrl-names = "default", "idle", "sleep";
 	pinctrl-0 = <&usart2_pins_a>;
 	pinctrl-1 = <&usart2_idle_pins_a>;
@@ -784,6 +863,16 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "okay";
+};
+
+&usart2_pins_a {
+	bootph-all;
+	pins1 {
+		bootph-all;
+	};
+	pins2 {
+		bootph-all;
+	};
 };
 
 &usart6 {

@@ -105,6 +105,7 @@ struct stm32_dwmac {
 	const struct stm32_ops *ops;
 	struct device *dev;
 	struct stm32_firewall firewall;
+	bool phy_wol;
 };
 
 struct stm32_syscfg_pmcsetr {
@@ -402,6 +403,8 @@ static int stm32_dwmac_parse_data(struct stm32_dwmac *dwmac,
 		dwmac->regulator = NULL;
 	}
 
+	dwmac->phy_wol = of_property_read_bool(np, "st,phy-wol");
+
 	return 0;
 }
 
@@ -544,6 +547,8 @@ static int stm32_dwmac_probe(struct platform_device *pdev)
 	}
 
 	plat_dat->bsp_priv = dwmac;
+	if (dwmac->phy_wol)
+		plat_dat->flags |= STMMAC_FLAG_USE_PHY_WOL;
 
 	ret = stm32_dwmac_init(plat_dat);
 	if (ret)
@@ -611,7 +616,8 @@ static int stm32mp1_suspend(struct stm32_dwmac *dwmac)
 	clk_disable_unprepare(dwmac->syscfg_clk);
 	if (dwmac->enable_eth_ck)
 		clk_disable_unprepare(dwmac->clk_eth_ck);
-	clk_disable_unprepare(priv->plat->clk_ptp_ref);
+	if (netif_running(ndev))
+		clk_disable_unprepare(priv->plat->clk_ptp_ref);
 
 	/* Keep the PHY up if we use Wake-on-Lan. */
 	if (!device_may_wakeup(dwmac->dev))
@@ -626,7 +632,8 @@ static void stm32mp1_resume(struct stm32_dwmac *dwmac)
 	struct stmmac_priv *priv = netdev_priv(ndev);
 
 	clk_disable_unprepare(dwmac->clk_ethstp);
-	clk_prepare_enable(priv->plat->clk_ptp_ref);
+	if (netif_running(ndev))
+		clk_prepare_enable(priv->plat->clk_ptp_ref);
 
 	/* The PHY was up for Wake-on-Lan. */
 	if (!device_may_wakeup(dwmac->dev))
@@ -750,6 +757,7 @@ MODULE_DEVICE_TABLE(of, stm32_dwmac_match);
 static struct platform_driver stm32_dwmac_driver = {
 	.probe  = stm32_dwmac_probe,
 	.remove_new = stm32_dwmac_remove,
+	.shutdown = stm32_dwmac_remove,
 	.driver = {
 		.name           = "stm32-dwmac",
 #ifdef CONFIG_PM_SLEEP

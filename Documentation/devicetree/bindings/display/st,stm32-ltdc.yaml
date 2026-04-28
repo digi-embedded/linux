@@ -12,9 +12,10 @@ maintainers:
 
 properties:
   compatible:
-    const: st,stm32-ltdc
-    const: st,stm32mp21-ltdc
-    const: st,stm32mp25-ltdc
+    enum:
+      - st,stm32-ltdc
+      - st,stm32mp21-ltdc
+      - st,stm32mp25-ltdc
 
   reg:
     maxItems: 1
@@ -43,6 +44,13 @@ properties:
       - for external dpi rgb panel or bridge, using gpios.
       - for internal dpi input of the MIPI DSI host controller.
       Note: These 2 endpoints cannot be activated simultaneously.
+
+  access-controllers:
+    maxItems: 1
+
+  access-controller-names:
+    items:
+      - const: cmn
 
 required:
   - compatible

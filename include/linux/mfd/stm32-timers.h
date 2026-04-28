@@ -31,7 +31,9 @@
 #define TIM_BDTR	0x44	/* Break and Dead-Time Reg */
 #define TIM_DCR		0x48	/* DMA control register    */
 #define TIM_DMAR	0x4C	/* DMA register for transfer */
+#define TIM_AF1		0x60	/* Alt function register 1 */
 #define TIM_TISEL	0x68	/* Input Selection         */
+#define STM32MP25_TIM_TISEL	0x5C	/* Input Selection         */
 
 #define TIM_HWCFGR2	0x3EC	/* hardware configuration 2 Reg (MP25)	*/
 #define TIM_HWCFGR1	0x3F0	/* hardware configuration 1 Reg (MP25)	*/
@@ -44,6 +46,7 @@
 #define TIM_CR2_MMS2	GENMASK(23, 20) /* Master mode selection 2 */
 #define TIM_SMCR_SMS	(BIT(0) | BIT(1) | BIT(2)) /* Slave mode selection */
 #define TIM_SMCR_TS	(BIT(4) | BIT(5) | BIT(6)) /* Trigger selection */
+#define TIM_SMCR_SMS3	BIT(16) /* Slave mode selection bit 3 */
 #define TIM_DIER_UIE	BIT(0)	/* Update interrupt	   */
 #define TIM_DIER_CC1IE	BIT(1)  /* CC1 Interrupt Enable    */
 #define TIM_DIER_CC2IE	BIT(2)  /* CC2 Interrupt Enable    */
@@ -95,6 +98,11 @@
 #define TIM_BDTR_BKF(x)	(0xf << (16 + (x) * 4))
 #define TIM_DCR_DBA	GENMASK(4, 0)	/* DMA base addr */
 #define TIM_DCR_DBL	GENMASK(12, 8)	/* DMA burst len */
+#define TIM_AF1_ETRSEL	GENMASK(17, 14) /* ETR Input selection mask */
+#define TIM_TISEL_TI1	GENMASK(3, 0)	/* TI1 Input Selection mask*/
+#define TIM_TISEL_TI2	GENMASK(11, 8)	/* TI2 Input Selection mask*/
+#define TIM_TISEL_TI3	GENMASK(19, 16)	/* TI3 Input Selection mask*/
+#define TIM_TISEL_TI4	GENMASK(27, 24)	/* TI4 Input Selection mask*/
 #define TIM_HWCFGR1_NB_OF_CC	GENMASK(3, 0)	/* Capture/compare channels */
 #define TIM_HWCFGR1_NB_OF_DT	GENMASK(7, 4)	/* Complementary outputs & dead-time generators */
 #define TIM_HWCFGR2_CNT_WIDTH	GENMASK(15, 8)	/* Counter width */
@@ -107,6 +115,12 @@
 #define TIM_SMCR_SMS_ENCODER_MODE_1		1 /* counts TI1FP1 edges, depending on TI2FP2 level */
 #define TIM_SMCR_SMS_ENCODER_MODE_2		2 /* counts TI2FP2 edges, depending on TI1FP1 level */
 #define TIM_SMCR_SMS_ENCODER_MODE_3		3 /* counts on both TI1FP1 and TI2FP2 edges */
+#define TIM_SMCR_SMS_RESET_MODE			4 /* trigger resets counter and update registers */
+#define TIM_SMCR_SMS_GATED_MODE			5 /* trigger input gates the counter clock */
+#define TIM_SMCR_SMS_TRIGGER_MODE		6 /* trigger input starts the counter */
+#define TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1	7 /* counts on rising edges of the selected trgi */
+#define TIM_SMCR_SMS_RESET_TRIGGER_MODE		8 /* combined reset + trigger mode */
+#define TIM_SMCR_SMS_GATED_RESET_MODE		9 /* combined gated + reset mode */
 #define TIM_SMCR_TS_SHIFT	4
 #define TIM_BDTR_BKF_MASK	0xF
 #define TIM_BDTR_BKF_SHIFT(x)	(16 + (x) * 4)

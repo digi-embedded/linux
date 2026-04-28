@@ -66,6 +66,7 @@
 			non-removable;
 			st,neg-edge;
 			bus-width = <4>;
+			cap-power-off-card;
 			vmmc-supply = <&reg_rf_wl_en>;
 			vqmmc-supply = <&scmi_vddio1>;
 			cap-sdio-irq;
@@ -87,6 +88,15 @@
 			st,lsco = <RTC_OUT2_RMP>;
 			pinctrl-0 = <&ccmp25_rtc_out1_pins &ccmp25_rtc_out2_pins>;
 			pinctrl-names = "default";
+		};
+	};
+
+	/* SCMI LDO8 regulator */
+	fragment@4 {
+		target = <&scmi_ldo8_1v8_rf>;
+		__overlay__ {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
 		};
 	};
 };

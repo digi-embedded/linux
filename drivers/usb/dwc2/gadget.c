@@ -3040,8 +3040,7 @@ static void dwc2_gadget_setup_timeout(struct work_struct *work)
 	dev_dbg(hsotg->dev, "%s: DOEPINT0=0x%08x\n",  __func__, dwc2_readl(hsotg, DOEPINT(0)));
 
 	spin_lock_irqsave(&hsotg->lock, flags);
-	kill_all_requests(hsotg, hsotg->eps_out[0], -ESHUTDOWN);
-	dwc2_hsotg_enqueue_setup(hsotg);
+	dwc2_hsotg_core_init_disconnected(hsotg, false);
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 }
 
@@ -3154,6 +3153,8 @@ static void dwc2_hsotg_epint(struct dwc2_hsotg *hsotg, unsigned int idx,
 	if (ints & DXEPINT_SETUP) {  /* Setup or Timeout */
 		dev_dbg(hsotg->dev, "%s: Setup/Timeout\n",  __func__);
 
+		hsotg->retry_connect = false;
+
 		if (using_dma(hsotg) && idx == 0) {
 			/* Safety check to cancel dw_gsetup setup timeout */
 			if (hsotg->ep0_state == DWC2_EP0_SETUP)
@@ -3203,6 +3204,17 @@ static void dwc2_hsotg_epint(struct dwc2_hsotg *hsotg, unsigned int idx,
 		dev_dbg(hsotg->dev, "%s: BNA interrupt\n", __func__);
 		if (hs_ep->isochronous)
 			dwc2_gadget_handle_isoc_bna(hs_ep);
+
+		/*
+		 * In case BNA IRQ fires during setup phase, we may fall into
+		 * an endless BNA IRQ loop. So mask it here, and wait for the
+		 * next USBRSt event, to recover, using retry_connect flag.
+		 */
+		if (using_desc_dma(hsotg) && idx == 0 && !hs_ep->dir_in &&
+		    hsotg->ep0_state == DWC2_EP0_SETUP) {
+			dwc2_clear_bit(hsotg, DOEPMSK, DOEPMSK_BNAMSK);
+			hsotg->retry_connect = true;
+		}
 	}
 
 	if (dir_in && !hs_ep->isochronous) {
@@ -3227,6 +3239,38 @@ static void dwc2_hsotg_epint(struct dwc2_hsotg *hsotg, unsigned int idx,
 				dwc2_hsotg_trytx(hsotg, hs_ep);
 		}
 	}
+}
+
+static void dwc2_gadget_exit_lp(struct dwc2_hsotg *hsotg)
+{
+	if (hsotg->lx_state != DWC2_L2)
+		return;
+
+	switch (hsotg->params.power_down) {
+	case DWC2_POWER_DOWN_PARAM_PARTIAL:
+		if (dwc2_exit_partial_power_down(hsotg, 0, true))
+			dev_err(hsotg->dev, "exit partial_power_down failed\n");
+		return;
+
+	case DWC2_POWER_DOWN_PARAM_NONE:
+		if (!hsotg->params.no_clock_gating)
+			dwc2_gadget_exit_clock_gating(hsotg, 0);
+	}
+}
+
+static void dwc2_gadget_enum_timeout(struct work_struct *work)
+{
+	struct dwc2_hsotg *hsotg = container_of(work, struct dwc2_hsotg, dw_enumtimeout.work);
+	unsigned long flags;
+
+	dev_dbg(hsotg->dev, "%s enumeration timeout\n",  __func__);
+
+	spin_lock_irqsave(&hsotg->lock, flags);
+	if (!hsotg->rpm_suspended) {
+		pm_runtime_put(hsotg->dev);
+		hsotg->rpm_suspended = true;
+	}
+	spin_unlock_irqrestore(&hsotg->lock, flags);
 }
 
 /**
@@ -3376,6 +3420,7 @@ void dwc2_hsotg_disconnect(struct dwc2_hsotg *hsotg)
 	hsotg->lx_state = DWC2_L3;
 
 	usb_gadget_set_state(&hsotg->gadget, USB_STATE_NOTATTACHED);
+	hsotg->suspended_from = USB_STATE_NOTATTACHED;
 }
 
 /**
@@ -3462,8 +3507,6 @@ void dwc2_hsotg_core_init_disconnected(struct dwc2_hsotg *hsotg,
 
 	dwc2_phy_init(hsotg, true);
 
-	dwc2_hsotg_init_fifo(hsotg);
-
 	if (!is_usb_reset)
 		dwc2_set_bit(hsotg, DCTL, DCTL_SFTDISCON);
 
@@ -3486,7 +3529,22 @@ void dwc2_hsotg_core_init_disconnected(struct dwc2_hsotg *hsotg,
 	if (hsotg->params.ipg_isoc_en)
 		dcfg |= DCFG_IPG_ISOC_SUPPORDED;
 
+	/*
+	 * WA for Device Flushes Ongoing ISOC IN Packet at End-of-Periodic-Frame Boundary.
+	 * Once passed the end of periodic frame, and the controller is transmitting an
+	 * ISOC IN packet, the device fulshes the transmit FIFO. Tune periodic frame
+	 * interval to 95% instead of 80% to avoid it.
+	 */
+	if (using_desc_dma(hsotg) &&
+	    (hsotg->hw_params.snpsid >= DWC2_CORE_REV_2_70a &&
+	     hsotg->hw_params.snpsid <= DWC2_CORE_REV_4_00a)) {
+		dcfg &= ~DCFG_PERFRINT_MASK;
+		dcfg |= ((DCFG_PERFRINT_LIMIT << DCFG_PERFRINT_SHIFT) & DCFG_PERFRINT_MASK);
+	}
+
 	dwc2_writel(hsotg, dcfg,  DCFG);
+
+	dwc2_hsotg_init_fifo(hsotg);
 
 	/* Clear any pending OTG interrupts */
 	dwc2_writel(hsotg, 0xffffffff, GOTGINT);
@@ -3640,30 +3698,20 @@ void dwc2_hsotg_core_init_disconnected(struct dwc2_hsotg *hsotg,
 
 void dwc2_hsotg_core_disconnect(struct dwc2_hsotg *hsotg)
 {
-	/*
-	 * If controller is in partial power down state or in clock gating mode, it must
-	 * exit from that state before being disconnected, and detached.
-	 */
-	if (hsotg->lx_state == DWC2_L2) {
-		/* No need to check the return value as registers are not being restored. */
-		if (hsotg->in_ppd)
-			dwc2_exit_partial_power_down(hsotg, 0, false);
-
-		if (hsotg->params.power_down ==
-		    DWC2_POWER_DOWN_PARAM_NONE && hsotg->bus_suspended &&
-		    !hsotg->params.no_clock_gating)
-			dwc2_gadget_exit_clock_gating(hsotg, 0);
-	}
-
 	/* set the soft-disconnect bit */
 	dwc2_set_bit(hsotg, DCTL, DCTL_SFTDISCON);
 }
 
 void dwc2_hsotg_core_connect(struct dwc2_hsotg *hsotg)
 {
-	/* remove the soft-disconnect and let's go */
-	if (!hsotg->role_sw || (dwc2_readl(hsotg, GOTGCTL) & GOTGCTL_BSESVLD))
+	if (!hsotg->role_sw || (dwc2_readl(hsotg, GOTGCTL) & GOTGCTL_BSESVLD)) {
+		/* remove the soft-disconnect and let's go */
 		dwc2_clear_bit(hsotg, DCTL, DCTL_SFTDISCON);
+	} else {
+		/* Delayed power saving, if not connected: role_sw can exit from lp later */
+		queue_delayed_work(hsotg->wq_gadget, &hsotg->dw_enumtimeout,
+				   msecs_to_jiffies(2000));
+	}
 }
 
 /**
@@ -3816,18 +3864,27 @@ irq_retry:
 
 		dwc2_writel(hsotg, GINTSTS_USBRST, GINTSTS);
 
+		/*
+		 * Setup Phase may later fail, resulting in a non-functional state. So
+		 * keep track of previous attempt, up to the Setup completion.
+		 */
+		if (connected)
+			hsotg->retry_connect = true;
+
 		/* Report disconnection if it is not already done. */
 		dwc2_hsotg_disconnect(hsotg);
 
 		/* Reset device address to zero */
 		dwc2_clear_bit(hsotg, DCFG, DCFG_DEVADDR_MASK);
 
-		if (usb_status & GOTGCTL_BSESVLD && connected)
+		if (usb_status & GOTGCTL_BSESVLD && hsotg->retry_connect)
 			dwc2_hsotg_core_init_disconnected(hsotg, true);
 	}
 
 	if (gintsts & GINTSTS_ENUMDONE) {
 		dwc2_writel(hsotg, GINTSTS_ENUMDONE, GINTSTS);
+
+		cancel_delayed_work(&hsotg->dw_enumtimeout);
 
 		dwc2_hsotg_irq_enumdone(hsotg);
 	}
@@ -4362,6 +4419,9 @@ static int dwc2_hsotg_ep_disable_lock(struct usb_ep *ep)
 	unsigned long flags;
 	int ret;
 
+	/* Need to exit power saving to disable endpoints. */
+	dwc2_gadget_exit_lp(hsotg);
+
 	spin_lock_irqsave(&hsotg->lock, flags);
 	ret = dwc2_hsotg_ep_disable(ep);
 	spin_unlock_irqrestore(&hsotg->lock, flags);
@@ -4630,6 +4690,20 @@ static int dwc2_hsotg_udc_start(struct usb_gadget *gadget,
 			goto err;
 	}
 
+	/* Exit low power mode, before starting */
+	dwc2_gadget_exit_lp(hsotg);
+
+	if (hsotg->params.reset_phy_on_start) {
+		/*
+		 * In case the gadget has been stopped earlier, and
+		 * the platform enters some low power states, the phy
+		 * may need a reset before starting again.
+		 */
+		ret = phy_reset(hsotg->phy);
+		if (ret)
+			dev_warn(hsotg->dev, "PHY reset failed\n");
+	}
+
 	if (!IS_ERR_OR_NULL(hsotg->uphy))
 		otg_set_peripheral(hsotg->uphy->otg, &hsotg->gadget);
 
@@ -4671,6 +4745,9 @@ static int dwc2_hsotg_udc_stop(struct usb_gadget *gadget)
 
 	device_set_wakeup_capable(&gadget->dev, false);
 
+	/* Exit clock gating when driver is stopped. */
+	dwc2_gadget_exit_lp(hsotg);
+
 	/* all endpoints should be shutdown */
 	for (ep = 1; ep < hsotg->num_of_eps; ep++) {
 		if (hsotg->eps_in[ep])
@@ -4690,6 +4767,11 @@ static int dwc2_hsotg_udc_stop(struct usb_gadget *gadget)
 
 	if (!IS_ERR_OR_NULL(hsotg->uphy))
 		otg_set_peripheral(hsotg->uphy->otg, NULL);
+
+	if (!hsotg->rpm_suspended) {
+		hsotg->rpm_suspended = true;
+		pm_runtime_put_sync(hsotg->dev);
+	}
 
 	if (hsotg->dr_mode == USB_DR_MODE_PERIPHERAL)
 		dwc2_lowlevel_hw_disable(hsotg);
@@ -4757,9 +4839,6 @@ static int dwc2_hsotg_wakeup(struct usb_gadget *gadget)
 		hsotg->lx_state = DWC2_L0;
 	}
 
-	usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
-	call_gadget(hsotg, resume);
-
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 
 	return 0;
@@ -4807,6 +4886,11 @@ static int dwc2_hsotg_pullup(struct usb_gadget *gadget, int is_on)
 		return 0;
 	}
 
+	/* Need to exit low power, before (dis-)connecting */
+	spin_lock_irqsave(&hsotg->lock, flags);
+	dwc2_gadget_exit_lp(hsotg);
+	spin_unlock_irqrestore(&hsotg->lock, flags);
+
 	if (hsotg->params.stm32_has_batt_chg_det && is_on) {
 		ret = stm32mp2_usb2phy_batt_chg_det(hsotg);
 		if (ret)
@@ -4844,12 +4928,7 @@ static int dwc2_hsotg_vbus_session(struct usb_gadget *gadget, int is_active)
 	 * If controller is in partial power down state, it must exit from
 	 * that state before being initialized / de-initialized
 	 */
-	if (hsotg->lx_state == DWC2_L2 && hsotg->in_ppd)
-		/*
-		 * No need to check the return value as
-		 * registers are not being restored.
-		 */
-		dwc2_exit_partial_power_down(hsotg, 0, false);
+	dwc2_gadget_exit_lp(hsotg);
 
 	if (is_active) {
 		hsotg->op_state = OTG_STATE_B_PERIPHERAL;
@@ -5126,6 +5205,8 @@ int dwc2_gadget_init(struct dwc2_hsotg *hsotg)
 	int epnum;
 	int ret;
 
+	pm_runtime_get(hsotg->dev);
+
 	/* Dump fifo information */
 	dev_dbg(dev, "NonPeriodic TXFIFO size: %d\n",
 		hsotg->params.g_np_tx_fifo_size);
@@ -5200,6 +5281,7 @@ int dwc2_gadget_init(struct dwc2_hsotg *hsotg)
 	}
 	INIT_WORK(&hsotg->wf_gadget, dwc2_gadget_remote_wkup_change);
 	INIT_DELAYED_WORK(&hsotg->dw_gsetup, dwc2_gadget_setup_timeout);
+	INIT_DELAYED_WORK(&hsotg->dw_enumtimeout, dwc2_gadget_enum_timeout);
 
 	/* setup endpoint information */
 
@@ -5266,7 +5348,13 @@ int dwc2_hsotg_suspend(struct dwc2_hsotg *hsotg)
 
 	flush_workqueue(hsotg->wq_gadget);
 
-	if (hsotg->lx_state != DWC2_L0) {
+	if (hsotg->remote_wakeup_allowed &&
+	    (hsotg->bus_suspended || hsotg->in_ppd || hsotg->hibernated)) {
+		/*
+		 * The bus has been suspended by the HOST, and the remote
+		 * wakeup has been enabled. So don't suspend gadget or it
+		 * will disconnect.
+		 */
 		hsotg->gadget_off_for_suspend = false;
 		return 0;
 	}
@@ -5493,7 +5581,7 @@ void dwc2_gadget_program_ref_clk(struct dwc2_hsotg *hsotg)
  *
  * Return non-zero if failed to enter to hibernation.
  */
-int dwc2_gadget_enter_hibernation(struct dwc2_hsotg *hsotg)
+static int dwc2_gadget_enter_hibernation(struct dwc2_hsotg *hsotg)
 {
 	u32 gpwrdn;
 	int ret = 0;
@@ -5679,7 +5767,7 @@ int dwc2_gadget_exit_hibernation(struct dwc2_hsotg *hsotg,
  *
  * This function is for entering device mode partial power down.
  */
-int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
+static int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
 {
 	u32 pcgcctl;
 	int ret = 0;
@@ -5755,6 +5843,16 @@ int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
 
 	dev_dbg(hsotg->dev, "Exiting device partial Power Down started.\n");
 
+	if (hsotg->rpm_suspended) {
+		/*
+		 * Rely on rpm_suspended flag, to resume once, as gadget/host
+		 * exit_partial_power_down routines may get called several times,
+		 * with rem_wakeup.
+		 */
+		pm_runtime_get(hsotg->dev);
+		hsotg->rpm_suspended = false;
+	}
+
 	pcgcctl = dwc2_readl(hsotg, PCGCTL);
 	pcgcctl &= ~PCGCTL_STOPPCLK;
 	dwc2_writel(hsotg, pcgcctl, PCGCTL);
@@ -5822,7 +5920,7 @@ int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
  *
  * This function is for entering device mode clock gating.
  */
-void dwc2_gadget_enter_clock_gating(struct dwc2_hsotg *hsotg)
+static void dwc2_gadget_enter_clock_gating(struct dwc2_hsotg *hsotg)
 {
 	u32 pcgctl;
 
@@ -5860,6 +5958,15 @@ void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg, int rem_wakeup)
 
 	dev_dbg(hsotg->dev, "Exiting device clock gating.\n");
 
+	if (hsotg->rpm_suspended) {
+		/*
+		 * Rely on rpm_suspended flag, to resume once, as gadget/host exit_clock_gating
+		 * routines may get called several times, with rem_wakeup.
+		 */
+		pm_runtime_get(hsotg->dev);
+		hsotg->rpm_suspended = false;
+	}
+
 	/* Clear the Gate hclk. */
 	pcgctl = dwc2_readl(hsotg, PCGCTL);
 	pcgctl &= ~PCGCTL_GATEHCLK;
@@ -5884,4 +5991,57 @@ void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg, int rem_wakeup)
 	hsotg->lx_state = DWC2_L0;
 	hsotg->bus_suspended = false;
 	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
+}
+
+/*
+ * dwc2_gadget_enter_lp() - Put the controller when in device mode, into one
+ *			    of the supported power saving modes:
+ *			    hibernation, partia power down, clock gating or none.
+ *
+ * Return: non-zero if failed to enter power saving mode.
+ */
+int dwc2_gadget_enter_lp(struct dwc2_hsotg *hsotg)
+{
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&hsotg->lock, flags);
+	switch (hsotg->params.power_down) {
+	case DWC2_POWER_DOWN_PARAM_HIBERNATION:
+		ret = dwc2_gadget_enter_hibernation(hsotg);
+		if (ret) {
+			spin_unlock_irqrestore(&hsotg->lock, flags);
+			dev_err(hsotg->dev, "enter hibernation failed %d\n", ret);
+			return ret;
+		}
+		break;
+
+	case DWC2_POWER_DOWN_PARAM_PARTIAL:
+		ret = dwc2_gadget_enter_partial_power_down(hsotg);
+		if (ret) {
+			spin_unlock_irqrestore(&hsotg->lock, flags);
+			dev_err(hsotg->dev, "enter partial_power_down failed %d\n", ret);
+			return ret;
+		}
+		break;
+
+	case DWC2_POWER_DOWN_PARAM_NONE:
+		/*
+		 * If neither hibernation nor partial power down are supported,
+		 * clock gating is used to save power.
+		 */
+		if (!hsotg->params.no_clock_gating)
+			dwc2_gadget_enter_clock_gating(hsotg);
+	}
+	spin_unlock_irqrestore(&hsotg->lock, flags);
+
+	/* Core hasn't been put into one of the power saving modes: simply return */
+	if (!(hsotg->bus_suspended || hsotg->in_ppd || hsotg->hibernated))
+		return 0;
+
+	/* Ask phy to be suspended */
+	if (!IS_ERR_OR_NULL(hsotg->uphy))
+		usb_phy_set_suspend(hsotg->uphy, true);
+
+	return 0;
 }

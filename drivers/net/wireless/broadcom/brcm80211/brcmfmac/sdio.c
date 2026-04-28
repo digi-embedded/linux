@@ -79,6 +79,10 @@
 #define CYW55572_F1_MESBUSYCTRL	(CYW55572_MES_WATERMARK | \
 				 SBSDIO_MESBUSYCTRL_ENAB)
 
+#define CY_89459_F2_WATERMARK	0x40
+#define CY_89459_MES_WATERMARK	0x40
+#define CY_89459_MESBUSYCTRL	(CY_89459_MES_WATERMARK | \
+				 SBSDIO_MESBUSYCTRL_ENAB)
 #ifdef DEBUG
 
 #define BRCMF_TRAP_INFO_SIZE	80
@@ -154,6 +158,9 @@ struct rte_console {
 				 biggest possible glom */
 
 #define BRCMF_FIRSTREAD	(1 << 6)
+
+#define MAX_INIT_RETRY_CNT	3
+static unsigned char global_init_retry = 0;
 
 /* SBSDIO_DEVICE_CTL */
 
@@ -359,7 +366,6 @@ static int brcmf_ulp_event_notify(struct brcmf_if *ifp,
 				  void *data);
 static void
 brcmf_sched_rxf(struct brcmf_sdio *bus, struct sk_buff *skb);
-
 
 #ifdef DEBUG
 /* Device console log buffer state */
@@ -667,6 +673,8 @@ BRCMF_FW_DEF(43430B0, "brcmfmac43430b0-sdio");
 CY_FW_DEF(43439, "cyfmac43439-sdio");
 CY_FW_DEF(43455, "cyfmac43455-sdio");
 BRCMF_FW_DEF(43456, "brcmfmac43456-sdio");
+BRCMF_FW_CLM_DEF(4355, "brcmfmac4355-sdio");
+BRCMF_FW_DEF(54591, "brcmfmac54591-sdio");
 CY_FW_DEF(4354, "cyfmac4354-sdio");
 CY_FW_DEF(4356, "cyfmac4356-sdio");
 CY_FW_DEF(4359, "cyfmac4359-sdio");
@@ -705,9 +713,11 @@ static const struct brcmf_firmware_mapping brcmf_sdio_fwnames[] = {
 	BRCMF_FW_ENTRY(BRCM_CC_4345_CHIP_ID, 0xFFFFFDC0, 43455),
 	BRCMF_FW_ENTRY(BRCM_CC_43454_CHIP_ID, 0x00000040, 43455),
 	BRCMF_FW_ENTRY(BRCM_CC_4354_CHIP_ID, 0xFFFFFFFF, 4354),
+	BRCMF_FW_ENTRY(BRCM_CC_4355_CHIP_ID, 0xFFFFFFFF, 4355),
 	BRCMF_FW_ENTRY(BRCM_CC_4356_CHIP_ID, 0xFFFFFFFF, 4356),
 	BRCMF_FW_ENTRY(BRCM_CC_4359_CHIP_ID, 0xFFFFFFFF, 4359),
 	BRCMF_FW_ENTRY(CY_CC_4373_CHIP_ID, 0xFFFFFFFF, 4373),
+	BRCMF_FW_ENTRY(CY_CC_54591_CHIP_ID, 0xFFFFFFFF, 54591),
 	BRCMF_FW_ENTRY(CY_CC_43012_CHIP_ID, 0xFFFFFFFF, 43012),
 	BRCMF_FW_ENTRY(CY_CC_43439_CHIP_ID, 0xFFFFFFFF, 43439),
 	BRCMF_FW_ENTRY(CY_CC_43022_CHIP_ID, 0xFFFFFFFF, 43022),
@@ -718,6 +728,97 @@ static const struct brcmf_firmware_mapping brcmf_sdio_fwnames[] = {
 };
 
 #define TXCTL_CREDITS	2
+
+bool brcmf_sdio_bus_sleep_state(struct brcmf_sdio *bus)
+{
+	return bus->sleeping;
+}
+
+static inline bool brcmf_sdio_bus_access_allowed(u32 addr)
+{
+	return (addr == SBSDIO_FUNC1_SLEEPCSR) ? true : false;
+}
+
+u8 brcmf_sdiod_func0_rb(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x\n", addr);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus) || sdiodev->ignore_bus_error)
+		return brcmf_sdiod_func0_rb_ext(sdiodev, addr, ret);
+
+	brcmf_err(" Error Access Not allowed\n");
+	if (ret)
+		*ret = -EPERM;
+	return 0xFF;
+}
+
+void brcmf_sdiod_func0_wb(struct brcmf_sdio_dev *sdiodev, u32 addr, u32 data,
+			  int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x val 0x%x\n", addr, data);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus) || sdiodev->ignore_bus_error) {
+		brcmf_sdiod_func0_wb_ext(sdiodev, addr, data, ret);
+	} else {
+		brcmf_err(" Error Access Not allowed\n");
+		if (ret)
+			*ret = -EPERM;
+	}
+}
+
+u8 brcmf_sdiod_readb(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x\n", addr);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus) || brcmf_sdio_bus_access_allowed(addr))
+		return brcmf_sdiod_readb_ext(sdiodev, addr, ret);
+
+	brcmf_err(" Error Access Not allowed\n");
+	if (ret)
+		*ret = -EPERM;
+	return 0xFF;
+}
+
+void brcmf_sdiod_writeb(struct brcmf_sdio_dev *sdiodev, u32 addr, u32 data,
+			int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x val 0x%x\n", addr, data);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus) || brcmf_sdio_bus_access_allowed(addr)) {
+		brcmf_sdiod_writeb_ext(sdiodev, addr, data, ret);
+	} else {
+		brcmf_err(" Error Access Not allowed\n");
+		if (ret)
+			*ret = -EPERM;
+	}
+}
+
+u8 brcmf_sdiod_func_rb(struct brcmf_sdio_dev *sdiodev, struct sdio_func *func, u32 addr, int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x\n", addr);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus))
+		return brcmf_sdiod_func_rb_ext(func, addr, ret);
+
+	brcmf_err(" Error Access Not allowed\n");
+	if (ret)
+		*ret = -EPERM;
+	return 0xFF;
+}
+
+void brcmf_sdiod_func_wb(struct brcmf_sdio_dev *sdiodev, struct sdio_func *func, u32 addr,
+			 u32 data, int *ret)
+{
+	brcmf_dbg(SDIOEXT, "addr 0x%x val 0x%x\n", addr, data);
+
+	if (!brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
+		brcmf_sdiod_func_wb_ext(func, addr, data, ret);
+	} else {
+		brcmf_err(" Error Access Not allowed\n");
+		if (ret)
+			*ret = -EPERM;
+	}
+}
 
 static void pkt_align(struct sk_buff *p, int len, int align)
 {
@@ -752,6 +853,7 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	int try_cnt = 0;
 	unsigned long kso_loop_time = 0;
 	struct timespec64 ts_start, ts_end, ts_delta;
+	struct brcmf_sdio_dev *sdiod = bus->sdiodev;
 
 	brcmf_dbg(SDIO, "Enter: on=%d\n", on);
 
@@ -845,12 +947,13 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 
 	if (bus->idleclock == BRCMF_IDLE_STOP) {
 		/* Change the bus width to 4-bit mode on kso 1 */
+		sdiod->ignore_bus_error = true;
 		brcmf_sdio_set_sdbus_clk_width(bus, SDIO_SDMODE_4BIT);
+		sdiod->ignore_bus_error = false;
 	}
 
 	/* New KSO Sequence for H1 DDR50 Mode*/
 	if (bus->h1_ddr50_mode) {
-		struct brcmf_sdio_dev *sdiod = bus->sdiodev;
 		u32 ret, chipid;
 
 		/* Set Flag to ignore SDIO Bus access error during KSO */
@@ -866,7 +969,7 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	sdio_retune_release(bus->sdiodev->func1);
 
 	if (kso_loop_time > KSO_MAX_SEQ_TIME_NS)
-		brcmf_err("ERR: KSO=%d sequence took %luns > expected %uns try_cnt=%d\n"
+		brcmf_dbg(SDIO, "KSO=%d sequence took %luns > expected %uns try_cnt=%d\n"
 			  "err_cnt=%d rd_val=0x%x err=%d\n",
 			   on, kso_loop_time, KSO_MAX_SEQ_TIME_NS, try_cnt, err_cnt, rd_val, err);
 
@@ -1242,11 +1345,6 @@ done:
 	brcmf_dbg(SDIO, "Exit: err=%d\n", err);
 	return err;
 
-}
-
-bool brcmf_sdio_bus_sleep_state(struct brcmf_sdio *bus)
-{
-	return bus->sleeping;
 }
 
 #ifdef DEBUG
@@ -5587,6 +5685,25 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 	return;
 
 free:
+
+	if (global_init_retry < MAX_INIT_RETRY_CNT) {
+		global_init_retry++;
+		brcmf_err("global_init_retry:%d\n", global_init_retry);
+
+		/* start by unregistering irqs */
+		brcmf_sdiod_intr_unregister(bus->sdiodev);
+
+		brcmf_sdiod_remove(bus->sdiodev);
+
+		/* reset the adapter */
+		sdio_claim_host(bus->sdiodev->func1);
+		mmc_hw_reset(bus->sdiodev->func1->card);
+		sdio_release_host(bus->sdiodev->func1);
+
+		brcmf_bus_change_state(bus->sdiodev->bus_if, BRCMF_BUS_DOWN);
+		return;
+	}
+
 	brcmf_free(sdiod->dev);
 claim:
 	sdio_claim_host(sdiod->func1);
@@ -5596,6 +5713,7 @@ release:
 	sdio_release_host(sdiod->func1);
 fail:
 	brcmf_dbg(TRACE, "failed: dev=%s, err=%d\n", dev_name(dev), err);
+
 	device_release_driver(&sdiod->func2->dev);
 	device_release_driver(dev);
 }
@@ -5625,7 +5743,7 @@ brcmf_sdio_prepare_fw_request(struct brcmf_sdio *bus)
 	fwnames[0].path = bus->sdiodev->fw_name;
 	fwnames[1].extension = ".txt";
 	fwnames[1].path = bus->sdiodev->nvram_name;
-	
+
 	fwnames[2].extension = ".clm_blob";
 	fwnames[2].path = bus->sdiodev->clm_name;
 
@@ -5803,7 +5921,7 @@ fail:
 /* Detach and free everything */
 void brcmf_sdio_remove(struct brcmf_sdio *bus)
 {
-#if defined(CONFIG_BRCMFMAC_BT_SHARED_SDIO) || defined(CONFIG_INFFMAC_BT_SHARED_SDIO)
+#ifdef CONFIG_INFFMAC_BT_SHARED_SDIO
 	struct brcmf_bus *bus_if = bus->sdiodev->bus_if;
 #endif
 	u32 reg_val, read_reg;

@@ -30,16 +30,14 @@
 #define STM32_CSI_PCR_DL0EN			BIT(2)
 #define STM32_CSI_PCR_CLEN			BIT(1)
 #define STM32_CSI_PCR_PWRDOWN			BIT(0)
-#define STM32_CSI_VCXCFGR1(x)			((((x) + 1) * 0x0010) + 0x0)
+#define STM32_CSI_VCXCFGR(vc, dt)		((((vc) + 1) * 0x0010) + \
+						 (((((dt) + 1) * 16) / 32) * 0x4))
 #define STM32_CSI_VCXCFGR1_ALLDT		BIT(0)
-#define STM32_CSI_VCXCFGR1_DT0EN		BIT(1)
-#define STM32_CSI_VCXCFGR1_DT1EN		BIT(2)
+#define STM32_CSI_VCXCFGR1_DTEN(x)		BIT((x) + 1)
+#define STM32_CSI_VCXCFG1_ALL_FILTERS		GENMASK(7, 0)
 #define STM32_CSI_VCXCFGR1_CDTFT_SHIFT		8
-#define STM32_CSI_VCXCFGR1_DT0_SHIFT		16
-#define STM32_CSI_VCXCFGR1_DT0FT_SHIFT		24
-#define STM32_CSI_VCXCFGR2(x)			((((x) + 1) * 0x0010) + 0x4)
-#define STM32_CSI_VCXCFGR2_DT1_SHIFT		0
-#define STM32_CSI_VCXCFGR2_DT1FT_SHIFT		8
+#define STM32_CSI_VCXCFGR_DT_SHIFT(dt)		((((dt) + 1) * 16) % 32)
+#define STM32_CSI_VCXCFGR_DT_MASK(dt)		(GENMASK(15, 0) << STM32_CSI_VCXCFGR_DT_SHIFT((dt)))
 #define STM32_CSI_INPUT_BPP8			2
 #define STM32_CSI_INPUT_BPP10			3
 #define STM32_CSI_INPUT_BPP12			4
@@ -166,9 +164,28 @@ static const struct stm32_csi_event stm32_csi_events_sr1[] = {
 
 #define STM32_CSI_NUM_SR1_EVENTS ARRAY_SIZE(stm32_csi_events_sr1)
 
+/*
+ * The IP itself can handle 4 VCs and up to 7 DTs on each VC
+ * However defining so many route would make the interface very large
+ * hence limit to 7 streams which seems like already quite enough for
+ * most of use-cases
+ */
+#define STM32_CSI_VC_MAX	4
+#define STM32_CSI_DT_MAX	7
+#define STM32_CSI_STREAM_MAX	7
+
+/*
+ * Structure to hold information about to which VC channel ID and DT filter ID the stream is
+ * allocated in the IP
+ */
+#define STM32_CSI_DT_ID_ALLDT	0xff
+struct stm32_csi_dev_stream {
+	u8	vc_id;
+	u8	dt_id;
+};
+
 struct stm32_csi_dev {
 	struct device			*dev;
-	int				state;
 
 	void __iomem			*base;
 	struct clk			*pclk;
@@ -195,6 +212,10 @@ struct stm32_csi_dev {
 
 	/* Remote source */
 	struct v4l2_subdev		*s_subdev;
+	u32				s_subdev_pad_nb;
+
+	u64				enabled_source_streams;
+	struct stm32_csi_dev_stream	streams[STM32_CSI_STREAM_MAX];
 };
 
 struct stm32_csi_fmts {
@@ -468,12 +489,12 @@ static void stm32_csi_phy_reg_write(struct stm32_csi_dev *csi2priv, uint32_t add
 	writel_relaxed(0, csi2priv->base + STM32_CSI_PTCR0);
 }
 
-static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
+static int stm32_csi_start(struct stm32_csi_dev *csi2priv,
+			   struct v4l2_subdev_state *state)
 {
 	const struct stm32_csi_mbps_phy_reg *phy_regs;
 	struct v4l2_mbus_framefmt *sink_fmt;
 	const struct stm32_csi_fmts *fmt;
-	struct v4l2_subdev_state *state;
 	unsigned long phy_clk_frate;
 	int ret, i, mbps;
 	u32 lanes_ie = 0;
@@ -484,9 +505,7 @@ static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
 	dev_dbg(csi2priv->dev, "Starting the CSI2\n");
 
 	/* Get the bpp value on pad0 (input of CSI) */
-	state = v4l2_subdev_lock_and_get_active_state(&csi2priv->subdev);
-	sink_fmt = v4l2_subdev_get_pad_format(&csi2priv->subdev, state, 0);
-	v4l2_subdev_unlock_state(state);
+	sink_fmt = v4l2_subdev_state_get_format(state, STM32_CSI_PAD_SINK);
 	fmt = stm32_csi_code_to_fmt(sink_fmt->code);
 
 	/* Get the remote sensor link frequency */
@@ -618,142 +637,354 @@ static void stm32_csi_stop(struct stm32_csi_dev *csi2priv)
 	pm_runtime_put(csi2priv->dev);
 }
 
-static int stm32_csi_start_vc(struct stm32_csi_dev *csi2priv, uint32_t vc)
+static int stm32_csi_fill_frame_desc(struct stm32_csi_dev *csi2priv,
+				     struct v4l2_subdev_state *state,
+				     struct v4l2_mbus_frame_desc *fd)
 {
-	struct v4l2_subdev *subdev = &csi2priv->subdev;
-	struct v4l2_mbus_framefmt *mbus_fmt;
-	const struct stm32_csi_fmts *fmt;
-	struct v4l2_subdev_state *state;
-	int ret = 0;
-	u32 cfgr1 = 0;
-	u32 status;
-
-	state = v4l2_subdev_lock_and_get_active_state(subdev);
-	mbus_fmt = v4l2_subdev_get_pad_format(subdev, state,
-					      STM32_CSI_PAD_SOURCE);
-	v4l2_subdev_unlock_state(state);
-	fmt = stm32_csi_code_to_fmt(mbus_fmt->code);
-
-	/* If the mbus code is JPEG, don't enable filtering */
-	if (mbus_fmt->code == MEDIA_BUS_FMT_JPEG_1X8) {
-		cfgr1 |= STM32_CSI_VCXCFGR1_ALLDT;
-		cfgr1 |= fmt->input_fmt << STM32_CSI_VCXCFGR1_CDTFT_SHIFT;
-		dev_dbg(csi2priv->dev, "VC%d: enable AllDT mode\n", vc);
-	} else {
-		cfgr1 |= fmt->datatype << STM32_CSI_VCXCFGR1_DT0_SHIFT;
-		cfgr1 |= fmt->input_fmt << STM32_CSI_VCXCFGR1_DT0FT_SHIFT;
-		cfgr1 |= STM32_CSI_VCXCFGR1_DT0EN;
-		dev_dbg(csi2priv->dev, "VC%d: enable DT0(0x%x)/DT0FT(0x%x)\n",
-			vc, fmt->datatype, fmt->input_fmt);
-	}
-	writel_relaxed(cfgr1, csi2priv->base + STM32_CSI_VCXCFGR1(vc));
-
-	/* Enable processing of the virtual-channel and wait for its status */
-	writel_relaxed(STM32_CSI_CR_VCXSTART(vc) | STM32_CSI_CR_CSIEN,
-		       csi2priv->base + STM32_CSI_CR);
-
-	ret = readl_relaxed_poll_timeout(csi2priv->base + STM32_CSI_SR0,
-					 status,
-					 status & STM32_CSI_SR0_VCXSTATEF(vc),
-					 1000, 1000000);
-	if (ret) {
-		dev_err(csi2priv->dev, "failed to start VC(%d)\n", vc);
-		return ret;
-	}
-
-	return 0;
-}
-
-static int stm32_csi_stop_vc(struct stm32_csi_dev *csi2priv, uint32_t vc)
-{
-	int ret = 0;
-	u32 status;
-
-	/* Stop the Virtual Channel */
-	writel_relaxed(readl_relaxed(csi2priv->base + STM32_CSI_CR) | STM32_CSI_CR_VCXSTOP(vc),
-		       csi2priv->base + STM32_CSI_CR);
-
-	/*
-	 * FIXME - timeout is probably not correct. CSI will wait
-	 * until getting an EOF before resetting the VC
-	 */
-	ret = readl_relaxed_poll_timeout(csi2priv->base + STM32_CSI_SR0,
-					 status,
-					 !(status & STM32_CSI_SR0_VCXSTATEF(vc)),
-					 1000, 1000000);
-	if (ret) {
-		dev_err(csi2priv->dev, "failed to stop VC(%d)\n", vc);
-		return ret;
-	}
-
-	/* Disable all DTs */
-	writel_relaxed(0, csi2priv->base + STM32_CSI_VCXCFGR1(vc));
-	writel_relaxed(0, csi2priv->base + STM32_CSI_VCXCFGR2(vc));
-
-	return 0;
-}
-
-static int stm32_csi_s_stream(struct v4l2_subdev *subdev, int enable)
-{
-	struct stm32_csi_dev *csi2priv = v4l2_subdev_to_csi2priv(subdev);
+	struct v4l2_mbus_frame_desc source_fd;
+	struct v4l2_subdev_route *route;
 	int ret;
 
-	if (csi2priv->state == enable)
-		return 0;
+	memset(fd, 0, sizeof(*fd));
+	fd->type = V4L2_MBUS_FRAME_DESC_TYPE_CSI2;
 
-	if (enable) {
-		ret = stm32_csi_start(csi2priv);
-		if (ret)
-			return ret;
+	/* As much as possible we try to get the information from the source */
+	ret = v4l2_subdev_call(csi2priv->s_subdev, pad, get_frame_desc,
+			       csi2priv->s_subdev_pad_nb, &source_fd);
+	if (ret)
+		source_fd.num_entries = 0;
 
-		/* Configure & start the VC0 */
-		/*
-		 * For the time being only VC0 is used, other will be added
-		 * later on with usage of frame_desc to identify the vc to
-		 * use
-		 */
-		ret = stm32_csi_start_vc(csi2priv, 0);
-		if (ret) {
-			dev_err(csi2priv->dev, "Failed to start VC0\n");
-			stm32_csi_stop(csi2priv);
-			return ret;
+	for_each_active_route(&state->routing, route) {
+		struct v4l2_mbus_frame_desc_entry *source_entry = NULL;
+		enum v4l2_mbus_frame_desc_flags flags;
+		struct v4l2_mbus_framefmt *framefmt;
+		const struct stm32_csi_fmts *csifmt;
+		u32 pixelcode, length;
+		u8 vc, dt;
+		int i;
+
+		/* Try to get the source frame descriptor */
+		for (i = 0; i < source_fd.num_entries; i++) {
+			if (source_fd.entry[i].stream == route->sink_stream) {
+				source_entry = &source_fd.entry[i];
+				break;
+			}
 		}
 
-		ret = v4l2_subdev_call(csi2priv->s_subdev, video, s_stream, 1);
-		if (ret) {
-			stm32_csi_stop_vc(csi2priv, 0);
-			stm32_csi_stop(csi2priv);
-			return ret;
+		if (source_entry) {
+			flags = source_entry->flags;
+			length = source_entry->length;
+			pixelcode = source_entry->pixelcode;
+			vc = source_entry->bus.csi2.vc;
+			dt = source_entry->bus.csi2.dt;
+		} else {
+			framefmt = v4l2_subdev_state_get_format(state, STM32_CSI_PAD_SOURCE,
+								route->sink_stream);
+			csifmt = stm32_csi_code_to_fmt(framefmt->code);
+			flags = 0;
+			length = 0;
+			pixelcode = framefmt->code;
+			vc = 0;
+			/*
+			 * JPEG is set as MIPI_CSI2_DT_NULL in the table, report 0 instead
+			 * to let the user that we do not know the DT
+			 */
+			dt = csifmt->datatype != MIPI_CSI2_DT_NULL ? csifmt->datatype : 0;
 		}
-	} else {
-		ret = v4l2_subdev_call(csi2priv->s_subdev, video, s_stream, 0);
-		if (ret)
-			return ret;
 
-		/* Stop the VC0 */
-		ret = stm32_csi_stop_vc(csi2priv, 0);
-		if (ret)
-			dev_err(csi2priv->dev, "Failed to stop VC0\n");
+		fd->entry[fd->num_entries].stream = route->source_stream;
+		fd->entry[fd->num_entries].flags = flags;
+		fd->entry[fd->num_entries].length = length;
+		fd->entry[fd->num_entries].pixelcode = pixelcode;
+		fd->entry[fd->num_entries].bus.csi2.vc = vc;
+		fd->entry[fd->num_entries].bus.csi2.dt = dt;
 
-		stm32_csi_stop(csi2priv);
+		fd->num_entries++;
 	}
 
-	csi2priv->state = enable;
+	return 0;
+}
+
+static int stm32_csi_get_frame_desc(struct v4l2_subdev *sd, unsigned int pad,
+				    struct v4l2_mbus_frame_desc *fd)
+{
+	struct stm32_csi_dev *csi2priv = v4l2_subdev_to_csi2priv(sd);
+	struct v4l2_subdev_state *state;
+	int ret;
+
+	if (pad != STM32_CSI_PAD_SOURCE)
+		return -EINVAL;
+
+	state = v4l2_subdev_lock_and_get_active_state(sd);
+
+	ret = stm32_csi_fill_frame_desc(csi2priv, state, fd);
+
+	v4l2_subdev_unlock_state(state);
+
+	return ret;
+}
+
+static int stm32_csi_start_stream(struct stm32_csi_dev *csi2priv, u32 id, u32 vc, u32 dt, u32 code)
+{
+	const struct stm32_csi_fmts *fmt;
+	int ret = 0;
+	u32 status;
+	u32 cfgr1, cfgr1_start;
+	u32 dt_filter;
+
+	/* Get stm32_csi_fmts entry in order to get the input_fmt */
+	fmt = stm32_csi_code_to_fmt(code);
+
+	/* Get current configuration */
+	cfgr1 = readl_relaxed(csi2priv->base + STM32_CSI_VCXCFGR(vc, 0));
+	cfgr1_start = cfgr1;
+
+	/* If the mbus code is JPEG, don't enable filtering */
+	/*
+	 * TODO - it should be possible to use a DTx filter for JPEG if the
+	 * provider has given us a valid framedesc with the VC/DT used for
+	 * the JPEG stream, avoiding the requirement to use ALLDT and block
+	 * any other stream filtering
+	 */
+	if (code == MEDIA_BUS_FMT_JPEG_1X8) {
+		/* It is not possible to have JPEG together with other DT */
+		if (cfgr1 & STM32_CSI_VCXCFG1_ALL_FILTERS) {
+			dev_err(csi2priv->dev, "Reached maximum filters, can't start\n");
+			return -EIO;
+		}
+
+		cfgr1 |= STM32_CSI_VCXCFGR1_ALLDT;
+		cfgr1 |= fmt->input_fmt << STM32_CSI_VCXCFGR1_CDTFT_SHIFT;
+		dt_filter = STM32_CSI_DT_ID_ALLDT;
+		dev_dbg(csi2priv->dev, "VC%d: enable AllDT mode\n", vc);
+	} else {
+		/* Check that there isn't already a AllDT ongoing */
+		if (cfgr1 & STM32_CSI_VCXCFGR1_ALLDT) {
+			dev_err(csi2priv->dev, "Can't do filtering with AllDT enabled\n");
+			return -EIO;
+		}
+
+		/* Figure out which DT filter to use, from DT0 to DT6 */
+		dt_filter = __ffs(~((cfgr1 & STM32_CSI_VCXCFG1_ALL_FILTERS) >> 1));
+		if (dt_filter >= STM32_CSI_DT_MAX) {
+			dev_err(csi2priv->dev, "Reached maximum filters, can't start\n");
+			return -EIO;
+		}
+
+		/* For DT > 0, DT & Format is done in a different register than the enable bit */
+		if (dt_filter > 0) {
+			u32 cfgr2 = readl_relaxed(csi2priv->base +
+						  STM32_CSI_VCXCFGR(vc, dt_filter));
+			cfgr2 &= ~(STM32_CSI_VCXCFGR_DT_MASK(dt_filter));
+			cfgr2 |= ((fmt->input_fmt << 8) | dt)
+					<< STM32_CSI_VCXCFGR_DT_SHIFT(dt_filter);
+			writel_relaxed(cfgr2, csi2priv->base + STM32_CSI_VCXCFGR(vc, dt_filter));
+			dev_dbg(csi2priv->dev, "VC%d: enable DT%d(0x%x)/DT%dFT(0x%x)\n",
+				vc, dt_filter, dt, dt_filter, fmt->input_fmt);
+		} else {
+			cfgr1 &= ~(STM32_CSI_VCXCFGR_DT_MASK(0));
+			cfgr1 |= ((fmt->input_fmt << 8) | dt) << STM32_CSI_VCXCFGR_DT_SHIFT(0);
+			dev_dbg(csi2priv->dev, "VC%d: enable DT0(0x%x)/DT0FT(0x%x)\n",
+				vc, dt, fmt->input_fmt);
+		}
+		cfgr1 |= STM32_CSI_VCXCFGR1_DTEN(dt_filter);
+	}
+
+	writel_relaxed(cfgr1, csi2priv->base + STM32_CSI_VCXCFGR(vc, 0));
+
+	if (!(cfgr1_start & STM32_CSI_VCXCFG1_ALL_FILTERS)) {
+		/* Enable processing of the virtual-channel and wait for its status */
+		writel_relaxed(STM32_CSI_CR_VCXSTART(vc) | STM32_CSI_CR_CSIEN,
+			       csi2priv->base + STM32_CSI_CR);
+
+		ret = readl_relaxed_poll_timeout(csi2priv->base + STM32_CSI_SR0,
+						 status,
+						 status & STM32_CSI_SR0_VCXSTATEF(vc),
+						 1000, 1000000);
+		if (ret) {
+			dev_err(csi2priv->dev, "failed to start VC(%d)\n", vc);
+			return ret;
+		}
+	}
+
+	csi2priv->streams[id].vc_id = vc;
+	csi2priv->streams[id].dt_id = dt_filter;
 
 	return 0;
+}
+
+static int stm32_csi_stop_stream(struct stm32_csi_dev *csi2priv, u32 id)
+{
+	int ret = 0;
+	u32 cfgr1 = 0;
+	u8 vc = csi2priv->streams[id].vc_id;
+	u32 status;
+
+	/* If the stream dt_filter is STM32_CSI_DT_ID_ALLDT, then stop all the VC */
+	if (csi2priv->streams[id].dt_id == STM32_CSI_DT_ID_ALLDT) {
+		dev_dbg(csi2priv->dev, "VC%d: disable AllDT mode\n", vc);
+	} else {
+		/* Turn off the DT filter */
+		cfgr1 = readl_relaxed(csi2priv->base + STM32_CSI_VCXCFGR(vc, 0));
+		cfgr1 &= ~STM32_CSI_VCXCFGR1_DTEN(csi2priv->streams[id].dt_id);
+	}
+	writel_relaxed(cfgr1, csi2priv->base + STM32_CSI_VCXCFGR(vc, 0));
+
+	if (!(cfgr1 & STM32_CSI_VCXCFG1_ALL_FILTERS)) {
+		/* Stop the Virtual Channel */
+		writel_relaxed(readl_relaxed(csi2priv->base + STM32_CSI_CR) |
+					     STM32_CSI_CR_VCXSTOP(vc),
+			       csi2priv->base + STM32_CSI_CR);
+
+		/*
+		 * Wait until the VC status bit get down. If no data has been
+		 * given by the source (sensor) to the CSI receiver since
+		 * starting the VirtualChannel, the bit won't come back to 0.
+		 * Usually upon stream stop, the CSI is disabled hence
+		 * this doesn't lead to issues.
+		 */
+		ret = readl_relaxed_poll_timeout(csi2priv->base + STM32_CSI_SR0,
+						 status,
+						 !(status & STM32_CSI_SR0_VCXSTATEF(vc)),
+						 1000, 1000000);
+		if (ret) {
+			dev_err(csi2priv->dev, "Timeout waiting for VC%d stop\n", vc);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+static int stm32_csi_disable_streams(struct v4l2_subdev *sd,
+				     struct v4l2_subdev_state *state, u32 pad,
+				     u64 streams_mask)
+{
+	struct stm32_csi_dev *csi2priv = v4l2_subdev_to_csi2priv(sd);
+	int ret, i;
+
+	/* Stop each stream */
+	for (i = 0; i < STM32_CSI_STREAM_MAX; i++) {
+		if (!(streams_mask & BIT(i)))
+			continue;
+
+		ret = stm32_csi_stop_stream(csi2priv, i);
+		if (ret)
+			dev_info(csi2priv->dev, "Failed to stop stream:%d\n", i);
+	}
+
+	ret = v4l2_subdev_disable_streams(csi2priv->s_subdev,
+					  csi2priv->s_subdev_pad_nb, streams_mask);
+	if (ret)
+		return ret;
+
+	csi2priv->enabled_source_streams &= ~streams_mask;
+
+	/* Stop the CSI if no stream is enabled anymore */
+	if (!csi2priv->enabled_source_streams)
+		stm32_csi_stop(csi2priv);
+
+	return 0;
+}
+
+static int stm32_csi_enable_streams(struct v4l2_subdev *sd,
+				    struct v4l2_subdev_state *state, u32 pad,
+				    u64 streams_mask)
+{
+	struct stm32_csi_dev *csi2priv = v4l2_subdev_to_csi2priv(sd);
+	struct v4l2_mbus_frame_desc fd;
+	int ret, i;
+
+	/* Start the CSI if no stream is already enabled */
+	if (!csi2priv->enabled_source_streams) {
+		ret = stm32_csi_start(csi2priv, state);
+		if (ret)
+			return ret;
+	}
+
+	/* Get stream information */
+	ret = stm32_csi_fill_frame_desc(csi2priv, state, &fd);
+	if (ret)
+		goto error;
+
+	/* Configure & start each stream */
+	for (i = 0; i < STM32_CSI_STREAM_MAX; i++) {
+		if (!(streams_mask & BIT(i)))
+			continue;
+
+		if (i >= fd.num_entries) {
+			dev_warn(csi2priv->dev, "Trying to start unknown stream %d, ignoring\n", i);
+			continue;
+		}
+
+		dev_dbg(csi2priv->dev, "Starting stream #%d, VC:%d, DT:0x%x, MBUS:0x%x\n",
+			i, fd.entry[i].bus.csi2.vc, fd.entry[i].bus.csi2.dt,
+			fd.entry[i].pixelcode);
+
+		ret = stm32_csi_start_stream(csi2priv, i, fd.entry[i].bus.csi2.vc,
+					     fd.entry[i].bus.csi2.dt,
+					     fd.entry[i].pixelcode);
+		if (ret) {
+			dev_err(csi2priv->dev, "Failed to start stream:%d, VC:%d, DT:0x%x\n",
+				i, fd.entry[i].bus.csi2.vc, fd.entry[i].bus.csi2.dt);
+			goto error;
+		}
+	}
+
+	ret = v4l2_subdev_enable_streams(csi2priv->s_subdev,
+					 csi2priv->s_subdev_pad_nb, streams_mask);
+	if (ret)
+		goto error;
+
+	csi2priv->enabled_source_streams |= streams_mask;
+
+	return 0;
+
+error:
+	if (!csi2priv->enabled_source_streams)
+		stm32_csi_stop(csi2priv);
+	return ret;
+}
+
+static int __stm32_csi_set_routing(struct v4l2_subdev *sd,
+				   struct v4l2_subdev_state *state,
+				   struct v4l2_subdev_krouting *routing)
+{
+	int ret;
+
+	ret = v4l2_subdev_routing_validate(sd, routing, 0);
+	if (ret)
+		return ret;
+
+	return v4l2_subdev_set_routing_with_fmt(sd, state, routing,
+						&stm32_csi_mbus_format_default);
 }
 
 static int stm32_csi_init_cfg(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_state *sd_state)
 {
-	int i;
+	struct v4l2_subdev_krouting routing = { };
+	struct v4l2_subdev_route route;
 
-	for (i = 0; i < sd->entity.num_pads; i++) {
-		*v4l2_subdev_get_pad_format(sd, sd_state, i) =
-			stm32_csi_mbus_format_default;
-	}
+	route.sink_pad = 0;
+	route.source_pad = 1;
+	route.flags = V4L2_SUBDEV_ROUTE_FL_ACTIVE;
 
-	return 0;
+	routing.num_routes = 1;
+	routing.routes = &route;
+
+	return __stm32_csi_set_routing(sd, sd_state, &routing);
+}
+
+static int stm32_csi_set_routing(struct v4l2_subdev *sd,
+				 struct v4l2_subdev_state *state,
+				 enum v4l2_subdev_format_whence which,
+				 struct v4l2_subdev_krouting *routing)
+{
+	if (which == V4L2_SUBDEV_FORMAT_ACTIVE && media_entity_is_streaming(&sd->entity))
+		return -EBUSY;
+
+	return __stm32_csi_set_routing(sd, state, routing);
 }
 
 static int stm32_csi_enum_mbus_code(struct v4l2_subdev *sd,
@@ -775,6 +1006,10 @@ static int stm32_csi_set_pad_format(struct v4l2_subdev *sd,
 	struct v4l2_mbus_framefmt *framefmt;
 	const struct stm32_csi_fmts *fmt;
 
+	/* Source format is fully defined by the sink format, so not settable */
+	if (format->pad == STM32_CSI_PAD_SOURCE)
+		return v4l2_subdev_get_fmt(sd, state, format);
+
 	fmt = stm32_csi_code_to_fmt(format->format.code);
 	if (!fmt) {
 		dev_dbg(csi2priv->dev, "Unsupported code %d, use default\n",
@@ -782,14 +1017,18 @@ static int stm32_csi_set_pad_format(struct v4l2_subdev *sd,
 		format->format.code = stm32_csi_mbus_format_default.code;
 	}
 
-	framefmt = v4l2_subdev_get_pad_format(sd, state, STM32_CSI_PAD_SINK);
+	framefmt = v4l2_subdev_state_get_format(state, format->pad, format->stream);
+	if (!framefmt)
+		return -EINVAL;
 
-	if (format->pad == STM32_CSI_PAD_SOURCE)
-		format->format = *framefmt;
-	else
-		*framefmt = format->format;
+	*framefmt = format->format;
 
-	framefmt = v4l2_subdev_get_pad_format(sd, state, STM32_CSI_PAD_SOURCE);
+	/* Propagate to source format, and adjust the mbus code */
+	framefmt = v4l2_subdev_state_get_opposite_stream_format(state, format->pad,
+								format->stream);
+	if (!framefmt)
+		return -EINVAL;
+
 	*framefmt = format->format;
 
 	return 0;
@@ -827,7 +1066,7 @@ static const struct v4l2_subdev_core_ops stm32_csi_core_ops = {
 };
 
 static const struct v4l2_subdev_video_ops stm32_csi_video_ops = {
-	.s_stream	= stm32_csi_s_stream,
+	.s_stream	= v4l2_subdev_s_stream_helper,
 };
 
 static const struct v4l2_subdev_pad_ops stm32_csi_pad_ops = {
@@ -835,6 +1074,10 @@ static const struct v4l2_subdev_pad_ops stm32_csi_pad_ops = {
 	.enum_mbus_code	= stm32_csi_enum_mbus_code,
 	.set_fmt	= stm32_csi_set_pad_format,
 	.get_fmt	= v4l2_subdev_get_fmt,
+	.set_routing	= stm32_csi_set_routing,
+	.enable_streams	= stm32_csi_enable_streams,
+	.disable_streams = stm32_csi_disable_streams,
+	.get_frame_desc = stm32_csi_get_frame_desc,
 };
 
 static const struct v4l2_subdev_ops stm32_csi_subdev_ops = {
@@ -861,6 +1104,7 @@ static int stm32_csi_async_bound(struct v4l2_async_notifier *notifier,
 	}
 
 	csi2priv->s_subdev = s_subdev;
+	csi2priv->s_subdev_pad_nb = remote_pad;
 
 	return media_create_pad_link(&csi2priv->s_subdev->entity,
 				     remote_pad, &csi2priv->subdev.entity, 0,
@@ -1048,7 +1292,8 @@ static int stm32_csi_probe(struct platform_device *pdev)
 
 	/* Create our media pads */
 	csi2priv->subdev.entity.function = MEDIA_ENT_F_VID_IF_BRIDGE;
-	csi2priv->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	csi2priv->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE |
+				  V4L2_SUBDEV_FL_STREAMS;
 	csi2priv->pads[STM32_CSI_PAD_SINK].flags = MEDIA_PAD_FL_SINK;
 	csi2priv->pads[STM32_CSI_PAD_SOURCE].flags = MEDIA_PAD_FL_SOURCE;
 

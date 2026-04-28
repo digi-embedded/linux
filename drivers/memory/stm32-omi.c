@@ -6,14 +6,32 @@
 
 #include <memory/stm32-omi.h>
 
-static void stm32_omi_read_fifo(u8 *val, void __iomem *addr)
+static void stm32_omi_read_fifo(void *val, void __iomem *addr, u8 len)
 {
-	*val = readb_relaxed(addr);
+	switch (len) {
+	case sizeof(u32):
+		*((u32 *)val) = readl_relaxed(addr);
+		break;
+	case sizeof(u16):
+		*((u16 *)val) = readw_relaxed(addr);
+		break;
+	case sizeof(u8):
+		*((u8 *)val) = readb_relaxed(addr);
+	};
 }
 
-static void stm32_omi_write_fifo(u8 *val, void __iomem *addr)
+static void stm32_omi_write_fifo(void *val, void __iomem *addr, u8 len)
 {
-	writeb_relaxed(*val, addr);
+	switch (len) {
+	case sizeof(u32):
+		writel_relaxed(*((u32 *)val), addr);
+		break;
+	case sizeof(u16):
+		writew_relaxed(*((u16 *)val), addr);
+		break;
+	case sizeof(u8):
+		writeb_relaxed(*((u8 *)val), addr);
+	};
 }
 
 int stm32_omi_abort(struct stm32_omi *omi)
@@ -37,19 +55,20 @@ int stm32_omi_abort(struct stm32_omi *omi)
 }
 EXPORT_SYMBOL(stm32_omi_abort);
 
-int stm32_omi_tx_poll(struct stm32_omi *omi, u8 *buf, u32 len, bool read)
+int stm32_omi_tx_poll(struct stm32_omi *omi, void *buf, u32 len, bool read)
 {
 	void __iomem *regs_base = omi->regs_base;
-	void (*tx_fifo)(u8 *val, void __iomem *addr);
+	void (*tx_fifo)(void *val, void __iomem *addr, u8 len);
 	u32 sr;
 	int ret;
+	u8 step;
 
 	if (read)
 		tx_fifo = stm32_omi_read_fifo;
 	else
 		tx_fifo = stm32_omi_write_fifo;
 
-	while (len--) {
+	while (len) {
 		ret = readl_relaxed_poll_timeout_atomic(regs_base + OSPI_SR,
 							sr, sr & SR_FTF, 1,
 							STM32_FIFO_TIMEOUT_US);
@@ -60,7 +79,17 @@ int stm32_omi_tx_poll(struct stm32_omi *omi, u8 *buf, u32 len, bool read)
 					len, sr);
 			return ret;
 		}
-		tx_fifo(buf++, regs_base + OSPI_DR);
+
+		if (len >= sizeof(u32))
+			step = sizeof(u32);
+		else if (len >= sizeof(u16))
+			step = sizeof(u16);
+		else
+			step = sizeof(u8);
+
+		tx_fifo(buf, regs_base + OSPI_DR, step);
+		len -= step;
+		buf += step;
 	}
 
 	return 0;
@@ -80,22 +109,16 @@ EXPORT_SYMBOL(stm32_omi_wait_nobusy);
 int stm32_omi_wait_cmd(struct stm32_omi *omi)
 {
 	void __iomem *regs_base = omi->regs_base;
-	u32 cr, sr;
+	u32 sr;
 	int err = 0;
 
-	if ((readl_relaxed(regs_base + OSPI_SR) & SR_TCF) ||
-	    omi->fmode == CR_FMODE_APM)
+	if (omi->fmode == CR_FMODE_APM)
 		goto out;
 
-	reinit_completion(&omi->data_completion);
-	cr = readl_relaxed(regs_base + OSPI_CR);
-	writel_relaxed(cr | CR_TCIE | CR_TEIE, regs_base + OSPI_CR);
+	err = readl_relaxed_poll_timeout_atomic(regs_base + OSPI_SR,
+						sr, (sr & (SR_TEF | SR_TCF)), 1,
+						STM32_WAIT_CMD_TIMEOUT_US);
 
-	if (!wait_for_completion_timeout(&omi->data_completion,
-				msecs_to_jiffies(STM32_COMP_TIMEOUT_MS)))
-		err = -ETIMEDOUT;
-
-	sr = readl_relaxed(regs_base + OSPI_SR);
 	if (sr & SR_TCF)
 		/* avoid false timeout */
 		err = 0;
@@ -130,29 +153,29 @@ static irqreturn_t stm32_omi_irq(int irq, void *dev_id)
 	cr = readl_relaxed(regs_base + OSPI_CR);
 	sr = readl_relaxed(regs_base + OSPI_SR);
 
-	if (cr & CR_SMIE && sr & SR_SMF) {
+	if (sr & SR_SMF) {
 		/* disable irq */
 		cr &= ~CR_SMIE;
 		writel_relaxed(cr, regs_base + OSPI_CR);
 		complete(&omi->match_completion);
-
-		return IRQ_HANDLED;
-	}
-
-	if (sr & (SR_TEF | SR_TCF)) {
-		/* disable irq */
-		cr &= ~CR_TCIE & ~CR_TEIE;
-		writel_relaxed(cr, regs_base + OSPI_CR);
-		complete(&omi->data_completion);
 	}
 
 	return IRQ_HANDLED;
 }
 
-void stm32_omi_dma_setup(struct stm32_omi *omi,
-			 struct dma_slave_config *dma_cfg)
+int stm32_omi_dma_setup(struct stm32_omi *omi,
+			struct dma_slave_config *dma_cfg)
 {
+	struct dma_slave_caps caps;
+	int ret = 0;
+
 	if (dma_cfg && omi->dma_chrx) {
+		ret = dma_get_slave_caps(omi->dma_chrx, &caps);
+		if (ret)
+			return ret;
+
+		dma_cfg->src_maxburst = caps.max_burst / dma_cfg->src_addr_width;
+
 		if (dmaengine_slave_config(omi->dma_chrx, dma_cfg)) {
 			dev_err(omi->dev, "dma rx config failed\n");
 			dma_release_channel(omi->dma_chrx);
@@ -161,6 +184,12 @@ void stm32_omi_dma_setup(struct stm32_omi *omi,
 	}
 
 	if (dma_cfg && omi->dma_chtx) {
+		ret = dma_get_slave_caps(omi->dma_chtx, &caps);
+		if (ret)
+			return ret;
+
+		dma_cfg->dst_maxburst = caps.max_burst / dma_cfg->dst_addr_width;
+
 		if (dmaengine_slave_config(omi->dma_chtx, dma_cfg)) {
 			dev_err(omi->dev, "dma tx config failed\n");
 			dma_release_channel(omi->dma_chtx);
@@ -169,6 +198,8 @@ void stm32_omi_dma_setup(struct stm32_omi *omi,
 	}
 
 	init_completion(&omi->dma_completion);
+
+	return ret;
 }
 EXPORT_SYMBOL(stm32_omi_dma_setup);
 
@@ -577,7 +608,6 @@ static int stm32_omi_probe(struct platform_device *pdev)
 		dev_info(dev, "No memory-map region found\n");
 	}
 
-	init_completion(&omi->data_completion);
 	init_completion(&omi->match_completion);
 
 	vdev = platform_device_alloc(name, PLATFORM_DEVID_AUTO);

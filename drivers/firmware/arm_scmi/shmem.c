@@ -7,6 +7,7 @@
 
 #include <linux/ktime.h>
 #include <linux/io.h>
+#include <linux/iopoll.h>
 #include <linux/processor.h>
 #include <linux/types.h>
 
@@ -35,7 +36,8 @@ struct scmi_shared_mem {
 void shmem_tx_prepare(struct scmi_shared_mem __iomem *shmem,
 		      struct scmi_xfer *xfer, struct scmi_chan_info *cinfo)
 {
-	ktime_t stop;
+	int ret;
+	u32 val;
 
 	/*
 	 * Ideally channel must be free by now unless OS timeout last
@@ -51,12 +53,10 @@ void shmem_tx_prepare(struct scmi_shared_mem __iomem *shmem,
 	 * this is just to ease debugging and avoid complete hangs on boot
 	 * due to a misbehaving SCMI firmware.
 	 */
-	stop = ktime_add_ms(ktime_get(), 2 * cinfo->rx_timeout_ms);
-	spin_until_cond((ioread32(&shmem->channel_status) &
-			 SCMI_SHMEM_CHAN_STAT_CHANNEL_FREE) ||
-			 ktime_after(ktime_get(), stop));
-	if (!(ioread32(&shmem->channel_status) &
-	      SCMI_SHMEM_CHAN_STAT_CHANNEL_FREE)) {
+	ret = readl_relaxed_poll_timeout_atomic(&shmem->channel_status, val,
+						val & SCMI_SHMEM_CHAN_STAT_CHANNEL_FREE,
+						0, 2000 * cinfo->rx_timeout_ms);
+	if (ret < 0) {
 		WARN_ON_ONCE(1);
 		dev_err(cinfo->dev,
 			"Timeout waiting for a free TX channel !\n");

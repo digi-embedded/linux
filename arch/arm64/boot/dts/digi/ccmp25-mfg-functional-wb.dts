@@ -75,6 +75,7 @@
 	non-removable;
 	st,neg-edge;
 	bus-width = <4>;
+	cap-power-off-card;
 	vmmc-supply = <&reg_rf_wl_en>;
 	vqmmc-supply = <&scmi_vddio1>;
 	cap-sdio-irq;
@@ -112,4 +113,22 @@
 	st,lsco = <RTC_OUT2_RMP>;
 	pinctrl-0 = <&ccmp25_rtc_out1_pins &ccmp25_rtc_out2_pins>;
 	pinctrl-names = "default";
+};
+
+/* PMIC LDO6 (PCIe 1.5V) */
+&scmi_ldo6 {
+	regulator-min-microvolt = <1500000>;
+	regulator-max-microvolt = <1500000>;
+};
+
+/* PMIC LDO7 (HDMI 1.8V) */
+&scmi_ldo7 {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
+};
+
+/* PMIC LDO8 (RF 1.8V) */
+&scmi_ldo8_1v8_rf {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
 };

@@ -279,6 +279,9 @@ struct optee_smc_get_shm_config_result {
 /* Secure world supports pre-allocating RPC arg struct */
 #define OPTEE_SMC_SEC_CAP_RPC_ARG		BIT(6)
 
+/* Non-standard capabilities not yet in mainline OP-TEE driver */
+#define OPTEE_SMC_SEC_CAP_PM_NOIRQ		BIT(15)
+
 #define OPTEE_SMC_FUNCID_EXCHANGE_CAPABILITIES	9
 #define OPTEE_SMC_EXCHANGE_CAPABILITIES \
 	OPTEE_SMC_FAST_CALL_VAL(OPTEE_SMC_FUNCID_EXCHANGE_CAPABILITIES)
@@ -449,6 +452,12 @@ struct optee_smc_disable_shm_cache_result {
 #define OPTEE_SMC_IT_NOTIF_VALUE_VALID		BIT(0)
 #define OPTEE_SMC_IT_NOTIF_VALUE_PENDING	BIT(1)
 
+/* See OPTEE_SMC_CALL_WITH_RPC_ARG above */
+#define OPTEE_SMC_FUNCID_CALL_WITH_RPC_ARG	18
+
+/* See OPTEE_SMC_CALL_WITH_REGD_ARG above */
+#define OPTEE_SMC_FUNCID_CALL_WITH_REGD_ARG	19
+
 /*
  * Notification that OP-TEE generates and interruption.
  */
@@ -460,11 +469,29 @@ struct optee_smc_disable_shm_cache_result {
 #define OPTEE_SMC_SET_IT_NOTIF_MASK \
 	OPTEE_SMC_FAST_CALL_VAL(OPTEE_SMC_FUNCID_SET_IT_NOTIF_MASK)
 
-/* See OPTEE_SMC_CALL_WITH_RPC_ARG above */
-#define OPTEE_SMC_FUNCID_CALL_WITH_RPC_ARG	18
+/*
+ * OPTEE_SMC_CALL_WITH_ARG_NSEC_NOIRQ
+ * Equivaent to OPTEE_SMC_CALL_WITH_ARG but with foreign interrupts masked.
+ */
+#define OPTEE_SMC_FUNCID_CALL_WITH_ARG_NSEC_NOIRQ	56
+#define OPTEE_SMC_CALL_WITH_ARG_NSEC_NOIRQ \
+	OPTEE_SMC_STD_CALL_VAL(OPTEE_SMC_FUNCID_CALL_WITH_ARG_NSEC_NOIRQ)
 
-/* See OPTEE_SMC_CALL_WITH_REGD_ARG above */
-#define OPTEE_SMC_FUNCID_CALL_WITH_REGD_ARG	19
+/*
+ * OPTEE_SMC_CALL_WITH_RPC_ARG_NSEC_NOIRQ
+ * Equivaent to OPTEE_SMC_CALL_WITH_RPC_ARG but with foreign interrupts masked.
+ */
+#define OPTEE_SMC_FUNCID_CALL_WITH_RPC_ARG_NSEC_NOIRQ	57
+#define OPTEE_SMC_CALL_WITH_RPC_ARG_NSEC_NOIRQ \
+	OPTEE_SMC_STD_CALL_VAL(OPTEE_SMC_FUNCID_CALL_WITH_RPC_ARG_NSEC_NOIRQ)
+
+/*
+ * OPTEE_SMC_CALL_WITH_REGD_ARG_NSEC_NOIRQ
+ * Equivaent to OPTEE_SMC_CALL_WITH_REGD_ARG but with foreign interrupts masked.
+ */
+#define OPTEE_SMC_FUNCID_CALL_WITH_REGD_ARG_NSEC_NOIRQ	58
+#define OPTEE_SMC_CALL_WITH_REGD_ARG_NSEC_NOIRQ \
+	OPTEE_SMC_STD_CALL_VAL(OPTEE_SMC_FUNCID_CALL_WITH_REGD_ARG_NSEC_NOIRQ)
 
 /*
  * Resume from RPC (for example after processing a foreign interrupt)

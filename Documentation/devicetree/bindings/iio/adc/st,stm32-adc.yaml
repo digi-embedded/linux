@@ -559,30 +559,30 @@ patternProperties:
               contains:
                 const: st,stm32mp21-adc
 
-          then:
-            properties:
-              reg:
-                const: 0x0
+        then:
+          properties:
+            reg:
+              const: 0x0
 
-              interrupts:
-                const: 0
+            interrupts:
+              const: 0
 
-              assigned-resolution-bits:
-                enum: [6, 8, 10, 12]
-                default: 12
+            assigned-resolution-bits:
+              enum: [6, 8, 10, 12]
+              default: 12
 
-              st,adc-channels:
-                minItems: 1
-                maxItems: 20
-                items:
-                  minimum: 0
-                  maximum: 19
+            st,adc-channels:
+              minItems: 1
+              maxItems: 20
+              items:
+                minimum: 0
+                maximum: 19
 
-              st,min-sample-time-nsecs:
-                minItems: 1
-                maxItems: 20
-                items:
-                  minimum: 40
+            st,min-sample-time-nsecs:
+              minItems: 1
+              maxItems: 20
+              items:
+                minimum: 40
 
       - if:
           properties:

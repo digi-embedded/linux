@@ -277,6 +277,7 @@ static int rm68200_unprepare(struct drm_panel *panel)
 	if (ret)
 		dev_warn(panel->dev, "failed to enter sleep mode: %d\n", ret);
 
+	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
 	pm_runtime_mark_last_busy(panel->dev);
 	ret = pm_runtime_put_autosuspend(panel->dev);
 	if (ret < 0)
@@ -396,14 +397,18 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 	if (!ctx)
 		return -ENOMEM;
 
-	if (device_property_read_bool(dev, "default-on"))
-		ctx->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
-	else
-		ctx->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
-
+	ctx->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_ASIS);
 	if (IS_ERR(ctx->reset_gpio))
 		return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio),
 				     "cannot get reset GPIO\n");
+
+	if (ctx->reset_gpio) {
+		ret = gpiod_get_direction(ctx->reset_gpio);
+		if (ret != 0)
+			gpiod_direction_output(ctx->reset_gpio, 1);
+		else
+			gpiod_direction_output(ctx->reset_gpio, 0);
+	}
 
 	ctx->supply = devm_regulator_get(dev, "power");
 	if (IS_ERR(ctx->supply))
@@ -421,19 +426,16 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 			  MIPI_DSI_MODE_NO_EOT_PACKET;
 
 	pm_runtime_enable(ctx->dev);
-	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
+	/* set delay to 60s to keep alive the panel to wait the splash screen */
+	pm_runtime_set_autosuspend_delay(ctx->dev, 60000);
 	pm_runtime_use_autosuspend(ctx->dev);
 
 	drm_panel_init(&ctx->panel, dev, &rm68200_drm_funcs,
 		       DRM_MODE_CONNECTOR_DSI);
 
-	if (device_property_read_bool(dev, "default-on")) {
-		ret = pm_runtime_get_sync(dev);
-		if (ret < 0)
-			goto disable_pm_runtime;
-
-		ctx->prepared = true;
-	}
+	pm_runtime_get_sync(ctx->dev);
+	pm_runtime_mark_last_busy(ctx->dev);
+	pm_runtime_put_autosuspend(ctx->dev);
 
 	ret = drm_panel_of_backlight(&ctx->panel);
 	if (ret)
@@ -445,16 +447,10 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 	if (ret < 0) {
 		dev_err(dev, "mipi_dsi_attach() failed: %d\n", ret);
 		drm_panel_remove(&ctx->panel);
-		goto disable_pm_runtime;
+		return ret;
 	}
 
 	return 0;
-
-disable_pm_runtime:
-	pm_runtime_dont_use_autosuspend(dev);
-	pm_runtime_disable(dev);
-
-	return ret;
 }
 
 static void rm68200_remove(struct mipi_dsi_device *dsi)

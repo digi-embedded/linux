@@ -22,10 +22,10 @@ static const struct hantro_fmt stm32mp25_vdec_fmts[] = {
 		.codec_mode = HANTRO_MODE_NONE,
 		.frmsize = {
 			.min_width = FMT_MIN_WIDTH,
-			.max_width = FMT_FHD_WIDTH,
+			.max_width = FMT_4K_WIDTH,
 			.step_width = MB_DIM,
 			.min_height = FMT_MIN_HEIGHT,
-			.max_height = FMT_FHD_HEIGHT,
+			.max_height = FMT_4K_HEIGHT,
 			.step_height = MB_DIM,
 		},
 	},
@@ -77,7 +77,7 @@ static const struct hantro_fmt stm32mp25_vdec_fmts[] = {
 			.step_width = MB_DIM,
 			.min_height = 48,
 			.max_height = FMT_4K_HEIGHT,
-			.step_height = MB_DIM,
+			.step_height = 8,
 		},
 	},
 };

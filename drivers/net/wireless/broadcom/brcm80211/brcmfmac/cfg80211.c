@@ -490,6 +490,7 @@ struct wl_wsec_info {
 
 static bool brcmf_has_pmkid(const u8 *parse, u32 len, u32 *offset_in_ie);
 static int brcmf_setup_wiphybands(struct brcmf_cfg80211_info *cfg);
+static void brcmf_wiphy_reset_band_and_channel(struct wiphy *wiphy);
 static bool
 wl_cfgoce_has_ie(const u8 *ie, const u8 **tlvs, u32 *tlvs_len,
 		 const u8 *oui, u32 oui_len, u8 type);
@@ -806,6 +807,7 @@ brcmf_add_iwie(struct brcmf_cfg80211_info *cfg, struct brcmf_if *ifp, s32 pktfla
 {
 	int err = 0;
 	u32 buf_len;
+	int str_num;
 	struct ie_set_buffer *ie_setbuf;
 
 	if (ie_id != WLAN_EID_INTERWORKING) {
@@ -836,7 +838,12 @@ brcmf_add_iwie(struct brcmf_cfg80211_info *cfg, struct brcmf_if *ifp, s32 pktfla
 	if (!ie_setbuf)
 		return -ENOMEM;
 
-	strscpy(ie_setbuf->cmd, "add", sizeof(ie_setbuf->cmd));
+	str_num = strscpy(ie_setbuf->cmd, "add", sizeof(ie_setbuf->cmd));
+	if (str_num <= 0) {
+		kfree(ie_setbuf);
+		brcmf_err("string length copy error %d\n", str_num);
+		return str_num;
+	}
 
 	/* Buffer contains only 1 IE */
 	ie_setbuf->ie_buffer.iecount = cpu_to_le32(1);
@@ -6761,7 +6768,7 @@ brcmf_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 		memcpy(&mf_params->da[0], &mgmt->da[0], ETH_ALEN);
 		memcpy(&mf_params->bssid[0], &mgmt->bssid[0], ETH_ALEN);
-		*cookie = (u64)mf_params->data;
+		*cookie = (u64)(uintptr_t)mf_params->data;
 		mf_params->packet_id = cpu_to_le32(*cookie);
 		unsafe_memcpy(mf_params->data, &buf[DOT11_MGMT_HDR_LEN],
 		       le16_to_cpu(mf_params->len), /* alloc enough buf*/);
@@ -7119,7 +7126,6 @@ brcmf_cfg80211_update_conn_params(struct wiphy *wiphy,
 	return err;
 }
 
-#ifdef CONFIG_PM
 static int
 brcmf_cfg80211_set_rekey_data(struct wiphy *wiphy, struct net_device *ndev,
 			      struct cfg80211_gtk_rekey_data *gtk)
@@ -7144,7 +7150,6 @@ brcmf_cfg80211_set_rekey_data(struct wiphy *wiphy, struct net_device *ndev,
 
 	return ret;
 }
-#endif
 
 static int brcmf_cfg80211_set_pmk(struct wiphy *wiphy, struct net_device *dev,
 				  const struct cfg80211_pmk_conf *conf)
@@ -8271,6 +8276,7 @@ brcmf_notify_connect_status(struct brcmf_if *ifp,
 				complete(&cfg->vif_disabled);
 			brcmf_net_setcarrier(ifp, false);
 		}
+		brcmf_proto_cleanup_if(ifp->drvr, ifp);
 	} else if (brcmf_is_nonetwork(cfg, e)) {
 		if (brcmf_is_ibssmode(ifp->vif))
 			clear_bit(BRCMF_VIF_STATUS_CONNECTING,
@@ -9124,6 +9130,7 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 {
 	struct brcmf_pub *drvr = ifp->drvr;
 	struct ieee80211_supported_band *band;
+	struct brcmf_cfg80211_info *cfg = drvr->config;
 	int err, i;
 	__le32 bandlist[4];
 	u32 n_bands;
@@ -9135,11 +9142,17 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 		return err;
 	}
 
-	brcmf_wiphy_reset_band_and_channel(wiphy);
+	/* Reset bands if needed */
+	if (cfg->bands_reset_required) {
+		brcmf_dbg(INFO, "Performing band reset due to country change\n");
+		brcmf_wiphy_reset_band_and_channel(wiphy);
+		cfg->bands_reset_required = false;
+	}
 
 	n_bands = le32_to_cpu(bandlist[0]);
 	for (i = 1; i <= n_bands && i < ARRAY_SIZE(bandlist); i++) {
-		if (bandlist[i] == cpu_to_le32(WLC_BAND_2G)) {
+		if (bandlist[i] == cpu_to_le32(WLC_BAND_2G) &&
+		    !wiphy->bands[NL80211_BAND_2GHZ]) {
 			band = kmemdup(&__wl_band_2ghz, sizeof(__wl_band_2ghz),
 				       GFP_KERNEL);
 			if (!band)
@@ -9153,7 +9166,8 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 			/* restore 2G channels info */
 			band->n_channels = ARRAY_SIZE(__wl_2ghz_channels);
 			wiphy->bands[NL80211_BAND_2GHZ] = band;
-		} else if (bandlist[i] == cpu_to_le32(WLC_BAND_5G)) {
+		} else if (bandlist[i] == cpu_to_le32(WLC_BAND_5G) &&
+		    !wiphy->bands[NL80211_BAND_5GHZ]) {
 			band = kmemdup(&__wl_band_5ghz, sizeof(__wl_band_5ghz),
 				       GFP_KERNEL);
 			if (!band)
@@ -9168,6 +9182,7 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 			band->n_channels = ARRAY_SIZE(__wl_5ghz_channels);
 			wiphy->bands[NL80211_BAND_5GHZ] = band;
 		} else if (bandlist[i] == cpu_to_le32(WLC_BAND_6G) &&
+			!wiphy->bands[NL80211_BAND_6GHZ] &&
 		    brcmf_feat_is_6ghz_enabled(ifp)) {
 			band = kmemdup(&__wl_band_6ghz, sizeof(__wl_band_6ghz),
 				       GFP_KERNEL);
@@ -9264,7 +9279,6 @@ static int brcmf_construct_chaninfo(struct brcmf_cfg80211_info *cfg,
 		bphy_err(drvr, "get chanspecs error (%d)\n", err);
 		goto fail_pbuf;
 	}
-
 	err = brcmf_fill_band_with_default_chanlist(wiphy, ifp);
 	if (err) {
 		bphy_err(drvr, "could not retrore band and channels: err=%d\n", err);
@@ -10822,7 +10836,11 @@ static void brcmf_cfg80211_reg_notifier(struct wiphy *wiphy,
 		bphy_err(drvr, "Firmware rejected country setting\n");
 		return;
 	}
-	brcmf_setup_wiphybands(cfg);
+	drvr->config->bands_reset_required = true;
+	brcmf_dbg(INFO, "Marking bands for reset due to country change\n");
+	err = brcmf_setup_wiphybands(cfg);
+	if (err)
+		drvr->config->bands_reset_required = false;
 }
 
 static void brcmf_free_wiphy(struct wiphy *wiphy)

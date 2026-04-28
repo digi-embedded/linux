@@ -1477,7 +1477,8 @@ static int stm32_i3c_master_send_direct_ccc_cmd(struct stm32_i3c_ddata *ddata,
 
 	/* Directed message */
 	_cmd = &xfer->cmds[1];
-	_cmd->msg_cr |= FIELD_PREP(I3C_CR_ADD, cmd->dests[0].addr);
+	_cmd->msg_cr = FIELD_PREP(I3C_CR_MTYPE, MTYPE_I3C_DIRECT_MSG) |
+		       FIELD_PREP(I3C_CR_ADD, cmd->dests[0].addr);
 	_cmd->data_len = cmd->dests[0].payload.len;
 	_cmd->msg_cr |= FIELD_PREP(I3C_CR_DCNT, _cmd->data_len);
 	if (cmd->rnw) {

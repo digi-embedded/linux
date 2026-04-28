@@ -26,7 +26,15 @@ properties:
 
   clocks:
     items:
-      description: PHY ref clock
+      - description: PHY core clock
+      - description: PHY clock in stop mode
+    minItems: 1
+
+  clock-names:
+    items:
+      - const: core
+      - const: stp
+    minItems: 1
 
   resets:
     items:
@@ -153,8 +161,10 @@ properties:
     default: 0
 
   "#clock-cells":
-    description: number of clock cells for ck_usb2phyXXXX_48m consumer
-    const: 0
+    const: 1
+    description:
+      One cell corresponding to the requested clock, 0 for the
+      PLL clock output, 1 for the OHCI clock output.
 
 required:
   - compatible
@@ -176,7 +186,7 @@ examples:
     usb2_phy2: usb-phy {
         compatible      = "st,stm32mp25-usb2phy";
         #phy-cells      = <0>;
-        #clock-cells    = <0>;
+        #clock-cells    = <1>;
         st,syscfg       = <&syscfg 0x2800>;
         clocks          = <&rcc CK_KER_USB2PHY2>;
         resets          = <&rcc USB2PHY2_R>;

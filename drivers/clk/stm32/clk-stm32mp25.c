@@ -130,8 +130,8 @@ enum {
 	TIMG2,
 	PLL3,
 	DSI_TXBYTE,
-	HSE_KER,
 	HSI_KER,
+	HSE_KER,
 	MSI_KER,
 };
 
@@ -336,7 +336,6 @@ enum enum_gate_cfg {
 	GATE_MDF1,
 	GATE_MSI_KER,
 	GATE_OSPIIOM,
-	GATE_PCIE,
 	GATE_PKA,
 	GATE_RNG,
 	GATE_RTCC3,
@@ -388,6 +387,7 @@ enum enum_gate_cfg {
 	GATE_USART6,
 	GATE_USB2,
 	GATE_USB2PHY1,
+	GATE_USB2PHY1STP,
 	GATE_USB2PHY2,
 	GATE_USB3DR,
 	GATE_USB3PCIEPHY,
@@ -442,6 +442,7 @@ enum enum_gate_cfg {
 	GATE_MSI,
 	GATE_OSPI1,
 	GATE_OSPI2,
+	GATE_PCIE,
 	GATE_PLL1,
 	GATE_PLL2,
 	GATE_PLL3,
@@ -552,7 +553,6 @@ static const struct stm32_gate_cfg stm32mp25_gates[GATE_NB] = {
 	GATE_CFG(GATE_MCO2,		RCC_MCO2CFGR,		8,	0),
 	GATE_CFG(GATE_MDF1,		RCC_MDF1CFGR,		1,	0),
 	GATE_CFG(GATE_OSPIIOM,		RCC_OSPIIOMCFGR,	1,	0),
-	GATE_CFG(GATE_PCIE,		RCC_PCIECFGR,		1,	0),
 	GATE_CFG(GATE_PKA,		RCC_PKACFGR,		1,	0),
 	GATE_CFG(GATE_RTCC3,		RCC_C3CFGR,		26,	0),
 	GATE_CFG(GATE_RNG,		RCC_RNGCFGR,		1,	0),
@@ -604,6 +604,7 @@ static const struct stm32_gate_cfg stm32mp25_gates[GATE_NB] = {
 	GATE_CFG(GATE_USART6,		RCC_USART6CFGR,		1,	0),
 	GATE_CFG(GATE_USB2,		RCC_USB2CFGR,		1,	0),
 	GATE_CFG(GATE_USB2PHY1,		RCC_USB2PHY1CFGR,	1,	0),
+	GATE_CFG(GATE_USB2PHY1STP,	RCC_USB2PHY1CFGR,	4,	0),
 	GATE_CFG(GATE_USB2PHY2,		RCC_USB2PHY2CFGR,	1,	0),
 	GATE_CFG(GATE_USB3DR,		RCC_USB3DRCFGR,		1,	0),
 	GATE_CFG(GATE_USB3PCIEPHY,	RCC_USB3PCIEPHYCFGR,	1,	0),
@@ -661,6 +662,7 @@ static const struct stm32_gate_cfg stm32mp25_gates[GATE_NB] = {
 	GATE_CFG(GATE_MSI_KER,		RCC_D3DCR,		1,	0),
 	GATE_CFG(GATE_OSPI1,		RCC_OSPI1CFGR,		1,	0),
 	GATE_CFG(GATE_OSPI2,		RCC_OSPI2CFGR,		1,	0),
+	GATE_CFG(GATE_PCIE,		RCC_PCIECFGR,		1,	0),
 	GATE_CFG(GATE_PLL1,		RCC_PLL2CFGR1,		8,	0),
 	GATE_CFG(GATE_PLL2,		RCC_PLL2CFGR1,		8,	0),
 	GATE_CFG(GATE_PLL3,		RCC_PLL3CFGR1,		8,	0),
@@ -1362,12 +1364,6 @@ static struct clk_stm32_gate ck_icn_p_ospiiom = {
 	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_ospiiom", ICN_LS_MCU, &clk_stm32_gate_ops, 0),
 };
 
-/* PCIE */
-static struct clk_stm32_gate ck_icn_p_pcie = {
-	.gate_id = GATE_PCIE,
-	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_pcie", ICN_LS_MCU, &clk_stm32_gate_ops, 0),
-};
-
 /* PKA */
 static struct clk_stm32_gate ck_icn_p_pka = {
 	.gate_id = GATE_PKA,
@@ -1839,6 +1835,42 @@ static struct clk_stm32_composite ck_ker_usb2phy1 = {
 					    &clk_stm32_composite_ops, 0),
 };
 
+static int clk_stm32_usb2phy1_stp_enable(struct clk_hw *hw)
+{
+	return clk_stm32_gate_ops.enable(hw);
+}
+
+static void clk_stm32_usb2phy1_stp_disable(struct clk_hw *hw)
+{
+	clk_stm32_gate_ops.disable(hw);
+}
+
+static int clk_stm32_usb2phy1_stp_is_enabled(struct clk_hw *hw)
+{
+	return clk_stm32_gate_ops.is_enabled(hw);
+}
+
+static unsigned long clk_stm32_usb2phy1_stp_recalc_rate(struct clk_hw *hw,
+							unsigned long parent_rate)
+{
+	/* The rate of ck_ker_usb2phy1_stp is the same as ck_ker_usb2phy1 */
+	return clk_hw_get_rate(&ck_ker_usb2phy1.hw);
+}
+
+static const struct clk_ops clk_stm32_usb2phy1_stp_ops = {
+	.enable		= clk_stm32_usb2phy1_stp_enable,
+	.disable	= clk_stm32_usb2phy1_stp_disable,
+	.is_enabled	= clk_stm32_usb2phy1_stp_is_enabled,
+	.recalc_rate	= clk_stm32_usb2phy1_stp_recalc_rate,
+};
+
+/* Parent clock of ck_ker_usb2phy1_stp is HSE_KER to ensure it remains active during low power */
+static struct clk_stm32_gate ck_ker_usb2phy1_stp = {
+	.gate_id = GATE_USB2PHY1STP,
+	.hw.init = CLK_HW_INIT_INDEX("ck_ker_usb2phy1_stp", HSE_KER,
+				     &clk_stm32_usb2phy1_stp_ops, 0),
+};
+
 /* USBH */
 static struct clk_stm32_gate ck_icn_m_usb2ehci = {
 	.gate_id = GATE_USB2,
@@ -1990,7 +2022,6 @@ static int stm32mp25_check_security(struct device_node *np, void __iomem *base,
 static const struct clock_config stm32mp25_clock_cfg[] = {
 	STM32_GATE_CFG(CK_BUS_ETH1, ck_icn_p_eth1, SEC_RIFSC(60)),
 	STM32_GATE_CFG(CK_BUS_ETH2, ck_icn_p_eth2, SEC_RIFSC(61)),
-	STM32_GATE_CFG(CK_BUS_PCIE, ck_icn_p_pcie, SEC_RIFSC(68)),
 	STM32_GATE_CFG(CK_BUS_ETHSW, ck_icn_p_ethsw, SEC_RIFSC(70)),
 	STM32_GATE_CFG(CK_BUS_ADC12, ck_icn_p_adc12, SEC_RIFSC(58)),
 	STM32_GATE_CFG(CK_BUS_ADC3, ck_icn_p_adc3, SEC_RIFSC(59)),
@@ -2200,6 +2231,7 @@ static const struct clock_config stm32mp25_clock_cfg[] = {
 	STM32_COMPOSITE_CFG(CK_KER_ADC12, ck_ker_adc12, SEC_RIFSC(58)),
 	STM32_COMPOSITE_CFG(CK_KER_ADC3, ck_ker_adc3, SEC_RIFSC(59)),
 	STM32_COMPOSITE_CFG(CK_KER_USB2PHY1, ck_ker_usb2phy1, SEC_RIFSC(63)),
+	STM32_GATE_CFG(CK_KER_USB2PHY1STP, ck_ker_usb2phy1_stp, SEC_RIFSC(63)),
 	STM32_GATE_CFG(CK_KER_USB2PHY2, ck_ker_usb2phy2, SEC_RIFSC(66)),
 	STM32_COMPOSITE_CFG(CK_KER_USB2PHY2EN, ck_ker_usb2phy2_en, SEC_RIFSC(66)),
 	STM32_COMPOSITE_CFG(CK_KER_USB3PCIEPHY, ck_ker_usb3pciephy, SEC_RIFSC(67)),

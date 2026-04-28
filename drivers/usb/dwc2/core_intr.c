@@ -259,6 +259,10 @@ static void dwc2_handle_conn_id_status_change_intr(struct dwc2_hsotg *hsotg)
 	gintmsk &= ~GINTSTS_SOF;
 	dwc2_writel(hsotg, gintmsk, GINTMSK);
 
+	/* Switching to host mode, need to disable channels interrupts */
+	if (dwc2_is_host_mode(hsotg))
+		dwc2_writel(hsotg, 0, HAINTMSK);
+
 	dev_dbg(hsotg->dev, " ++Connector ID Status Change Interrupt++  (%s)\n",
 		dwc2_is_host_mode(hsotg) ? "Host" : "Device");
 
@@ -294,7 +298,7 @@ static void dwc2_handle_session_req_intr(struct dwc2_hsotg *hsotg)
 	if (dwc2_is_device_mode(hsotg)) {
 		if (hsotg->lx_state == DWC2_L2) {
 			if (hsotg->in_ppd) {
-				ret = dwc2_exit_partial_power_down(hsotg, 0,
+				ret = dwc2_exit_partial_power_down(hsotg, DWC2_POWER_DOWN_RESUME,
 								   true);
 				if (ret)
 					dev_err(hsotg->dev,
@@ -305,7 +309,7 @@ static void dwc2_handle_session_req_intr(struct dwc2_hsotg *hsotg)
 			if (hsotg->params.power_down ==
 			    DWC2_POWER_DOWN_PARAM_NONE && hsotg->bus_suspended &&
 			    !hsotg->params.no_clock_gating)
-				dwc2_gadget_exit_clock_gating(hsotg, 0);
+				dwc2_gadget_exit_clock_gating(hsotg, DWC2_POWER_DOWN_RESUME);
 		}
 
 		/*
@@ -419,6 +423,10 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 	}
 
 	if (dwc2_is_device_mode(hsotg)) {
+		/* Prevents remote wakeup interrupt race while suspending */
+		if (dwc2_is_device_connected(hsotg))
+			pm_wakeup_hard_event(hsotg->dev);
+
 		dev_dbg(hsotg->dev, "DSTS=0x%0x\n",
 			dwc2_readl(hsotg, DSTS));
 		if (hsotg->lx_state == DWC2_L2) {
@@ -427,7 +435,8 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 				/* Clear Remote Wakeup Signaling */
 				dctl &= ~DCTL_RMTWKUPSIG;
 				dwc2_writel(hsotg, dctl, DCTL);
-				ret = dwc2_exit_partial_power_down(hsotg, 1,
+				ret = dwc2_exit_partial_power_down(hsotg,
+								   DWC2_POWER_DOWN_REMOTE_WKUP,
 								   true);
 				if (ret)
 					dev_err(hsotg->dev,
@@ -442,16 +451,17 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 
 			/* Change to L0 state, when no_clock_gating == true */
 			hsotg->lx_state = DWC2_L0;
-			usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
-			call_gadget(hsotg, resume);
 		} else {
 			/* Change to L0 state */
 			hsotg->lx_state = DWC2_L0;
 		}
+		usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
+		call_gadget(hsotg, resume);
 	} else {
 		if (hsotg->lx_state == DWC2_L2) {
 			if (hsotg->in_ppd) {
-				ret = dwc2_exit_partial_power_down(hsotg, 1,
+				ret = dwc2_exit_partial_power_down(hsotg,
+								   DWC2_POWER_DOWN_REMOTE_WKUP,
 								   true);
 				if (ret)
 					dev_err(hsotg->dev,
@@ -461,7 +471,7 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 			if (hsotg->params.power_down ==
 			    DWC2_POWER_DOWN_PARAM_NONE && hsotg->bus_suspended &&
 			    !hsotg->params.no_clock_gating)
-				dwc2_host_exit_clock_gating(hsotg, 1);
+				dwc2_host_exit_clock_gating(hsotg, DWC2_POWER_DOWN_REMOTE_WKUP);
 
 			/*
 			 * If we've got this quirk then the PHY is stuck upon
@@ -511,7 +521,6 @@ static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 {
 	u32 gintsts = dwc2_readl(hsotg, GINTSTS) & dwc2_readl(hsotg, GINTMSK);
 	u32 dsts;
-	int ret;
 
 	if (gintsts & GINTSTS_ERLYSUSP) {
 		dev_dbg(hsotg->dev, "USBSUSP temporarily ignored, raced with ERLYSUSP\n");
@@ -550,35 +559,28 @@ static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 		if (!dwc2_is_device_connected(hsotg)) {
 			dev_dbg(hsotg->dev,
 				"ignore suspend request before enumeration\n");
+			/*
+			 * Connect timing: timeout to put the controller in low power, in
+			 * case the enumeration doesn't complete. Typical case is to start
+			 * the gadget driver, without a cable plugged. Still prevent to
+			 * suspend during enumeration process.
+			 */
+			if (hsotg->wq_gadget)
+				queue_delayed_work(hsotg->wq_gadget, &hsotg->dw_enumtimeout,
+						   msecs_to_jiffies(2000));
+
+			if (hsotg->rpm_suspended) {
+				dev_dbg(hsotg->dev, "enumeration raced with dwc2_port_suspend()\n");
+				hsotg->rpm_suspended = false;
+				pm_runtime_get(hsotg->dev);
+			}
+
 			return;
 		}
 		if (dsts & DSTS_SUSPSTS) {
-			switch (hsotg->params.power_down) {
-			case DWC2_POWER_DOWN_PARAM_PARTIAL:
-				ret = dwc2_enter_partial_power_down(hsotg);
-				if (ret)
-					dev_err(hsotg->dev,
-						"enter partial_power_down failed\n");
-
-				udelay(100);
-
-				/* Ask phy to be suspended */
-				if (!IS_ERR_OR_NULL(hsotg->uphy))
-					usb_phy_set_suspend(hsotg->uphy, true);
-				break;
-			case DWC2_POWER_DOWN_PARAM_HIBERNATION:
-				ret = dwc2_enter_hibernation(hsotg, 0);
-				if (ret)
-					dev_err(hsotg->dev,
-						"enter hibernation failed\n");
-				break;
-			case DWC2_POWER_DOWN_PARAM_NONE:
-				/*
-				 * If neither hibernation nor partial power down are supported,
-				 * clock gating is used to save power.
-				 */
-				if (!hsotg->params.no_clock_gating)
-					dwc2_gadget_enter_clock_gating(hsotg);
+			if (!hsotg->rpm_suspended) {
+				hsotg->rpm_suspended = true;
+				pm_runtime_put(hsotg->dev);
 			}
 
 			/*

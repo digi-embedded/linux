@@ -73,6 +73,8 @@
 #define SYSCFG_USB2PHYTRIM2_TXPREEMPAMPTUNE_MASK	GENMASK(1, 0)
 #define SYSCFG_USB2PHYTRIM2_TXPREEMPPULSETUNE_MASK	BIT(2)
 
+#define USB2PHY_CLK_NUM		2
+
 struct stm32_usb2phy {
 	struct phy *phy;
 	struct regmap *regmap;
@@ -80,11 +82,14 @@ struct stm32_usb2phy {
 	struct reset_control *rstc;
 	struct regulator *vbus;
 	struct clk *phyref;
+	struct clk *stp;
 	struct regulator *vdd33, *vdda18;
 	enum phy_mode mode;
+	int submode;
 	u32 mask_trim1, value_trim1, mask_trim2, value_trim2;
 	bool is_init;
-	struct clk_hw clk48_hw;
+	struct clk_hw clkpll_hw;
+	struct clk_hw clkohci_hw;
 	atomic_t en_refcnt;
 	const struct stm32mp2_usb2phy_hw_data *hw_data;
 	bool do_wakeup;
@@ -251,21 +256,6 @@ static int stm32_usb2phy_enable(struct stm32_usb2phy *phy_dev)
 		return ret;
 	}
 
-	if (phy_data->valid_mode == USB2_MODE_HOST_ONLY) {
-		/*
-		 * The clock should default to active after standby, as it is
-		 * needed when resuming OHCI to access its registers.
-		 * CMN is default reset to 1, so enforce it is cleared, when the
-		 * clock enable request from OHCI driver comes at resume time.
-		 */
-		ret = regmap_clear_bits(phy_dev->regmap, phy_data->cr_offset,
-					SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
-		if (ret) {
-			dev_err(dev, "can't clear CMN bit (%d)\n", ret);
-			return ret;
-		}
-	}
-
 	if (phy_dev->mask_trim1) {
 		ret = regmap_update_bits(phy_dev->regmap, phy_dev->hw_data->trim1_offset,
 					 phy_dev->mask_trim1, phy_dev->value_trim1);
@@ -398,34 +388,25 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 	const struct stm32mp2_usb2phy_hw_data *phy_data = phy_dev->hw_data;
 	struct device *dev = &phy->dev;
 
+	/* Simply return when host only or stm32mp21 OTG (controlled by OTG GGPIO) */
+	if (phy_data->valid_mode == USB2_MODE_HOST_ONLY || phy_data->valid_mode == USB2_MODE_OTG)
+		return 0;
+
 	switch (mode) {
 	case PHY_MODE_USB_HOST:
-		if (phy_data->valid_mode == USB2_MODE_HOST_ONLY)
+		if (submode == USB_ROLE_NONE) {
 			ret = regmap_update_bits(phy_dev->regmap,
 						 phy_data->cr_offset,
-						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
-						 0);
-		else if (phy_data->valid_mode == USB2_MODE_OTG)
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVALID_MASK, 0);
+		} else {
 			ret = regmap_update_bits(phy_dev->regmap,
 						 phy_data->cr_offset,
-						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
-						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
-		else {
-			if (submode == USB_ROLE_NONE) {
-				ret = regmap_update_bits(phy_dev->regmap,
-							 phy_data->cr_offset,
-							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK, 0);
-			} else {
-				ret = regmap_update_bits(phy_dev->regmap,
-							 phy_data->cr_offset,
-							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVALID_MASK,
-							 SYSCFG_USB2PHY2CR_VBUSVALID_MASK);
-			}
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVALID_MASK,
+						 SYSCFG_USB2PHY2CR_VBUSVALID_MASK);
 		}
 		if (ret) {
 			dev_err(dev, "can't set usb2phycr (%d)\n", ret);
@@ -434,32 +415,25 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 		break;
 
 	case PHY_MODE_USB_DEVICE:
-		if (phy_data->valid_mode == USB2_MODE_OTG)
+		if (submode == USB_ROLE_NONE) {
 			ret = regmap_update_bits(phy_dev->regmap,
 						 phy_data->cr_offset,
-						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
-						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
-		else {
-			if (submode == USB_ROLE_NONE) {
-				ret = regmap_update_bits(phy_dev->regmap,
-							 phy_data->cr_offset,
-							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
-							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK);
-			} else {
-				ret = regmap_update_bits(phy_dev->regmap,
-							 phy_data->cr_offset,
-							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
-							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
-							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK);
-			}
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK);
+		} else {
+			ret = regmap_update_bits(phy_dev->regmap,
+						 phy_data->cr_offset,
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
+						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK);
 		}
 		if (ret) {
 			dev_err(dev, "can't set usb2phycr (%d)\n", ret);
@@ -472,6 +446,7 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 	}
 
 	phy_dev->mode = mode;
+	phy_dev->submode = submode;
 
 	return 0;
 }
@@ -489,7 +464,7 @@ static int stm32_usb2phy_init(struct phy *phy)
 	}
 
 	if (phy_dev->mode != PHY_MODE_INVALID) {
-		ret = stm32_usb2phy_set_mode(phy, phy_dev->mode, USB_ROLE_NONE);
+		ret = stm32_usb2phy_set_mode(phy, phy_dev->mode, phy_dev->submode);
 		if (ret) {
 			dev_err(dev, "can't set phy mode (%d)\n", ret);
 			goto error_disable;
@@ -527,12 +502,9 @@ static int stm32_usb2phy_phy_power_on(struct phy *phy)
 	struct stm32_usb2phy *phy_dev = phy_get_drvdata(phy);
 	struct device *dev = &phy->dev;
 
-	if (phy_dev->wakeirq > 0) {
+	if (phy_dev->wakeirq > 0)
 		if (enable_irq_wake(phy_dev->wakeirq))
 			dev_warn(dev, "Wake irq not enabled\n");
-		if (device_wakeup_enable(phy_dev->dev))
-			dev_warn(dev, "device_wakeup_enable failed\n");
-	}
 
 	if (phy_dev->vbus)
 		return regulator_enable(phy_dev->vbus);
@@ -545,12 +517,9 @@ static int stm32_usb2phy_phy_power_off(struct phy *phy)
 	struct stm32_usb2phy *phy_dev = phy_get_drvdata(phy);
 	struct device *dev = &phy->dev;
 
-	if (phy_dev->wakeirq > 0) {
-		if (device_wakeup_disable(phy_dev->dev))
-			dev_warn(dev, "device_wakeup_disable failed\n");
+	if (phy_dev->wakeirq > 0)
 		if (disable_irq_wake(phy_dev->wakeirq))
 			dev_warn(dev, "Wake irq not disabled\n");
-	}
 
 	if (phy_dev->vbus)
 		return regulator_disable(phy_dev->vbus);
@@ -558,64 +527,148 @@ static int stm32_usb2phy_phy_power_off(struct phy *phy)
 	return 0;
 }
 
+static int stm32_usb2phy_phy_reset(struct phy *phy)
+{
+	struct stm32_usb2phy *phy_dev = phy_get_drvdata(phy);
+
+	/*
+	 * On stm32mp21, when exiting pcsi/osi idle state, the PHY may
+	 * need a reset, to properly resume operation. This allows the
+	 * clock to be suspended in low power state. There's no STPEN
+	 * bit in RCC anyway, to keep the clock active in stop modes.
+	 * This is useful, in conjunction with DWC2 controller to
+	 * initiate a new gadget session (e.g. either udc_start, or
+	 * drd role switch set routine).
+	 */
+	return reset_control_reset(phy_dev->rstc);
+}
+
 static const struct phy_ops stm32_usb2phy_data = {
 	.init = stm32_usb2phy_init,
 	.exit = stm32_usb2phy_exit,
 	.power_on = stm32_usb2phy_phy_power_on,
 	.power_off = stm32_usb2phy_phy_power_off,
+	.reset = stm32_usb2phy_phy_reset,
 	.set_mode = stm32_usb2phy_set_mode,
 	.owner = THIS_MODULE,
 };
 
-static int stm32_usb2phy_clk48_prepare(struct clk_hw *hw)
+static int stm32_usb2phy_clkpll_prepare(struct clk_hw *hw)
 {
-	struct stm32_usb2phy *phy_dev = container_of(hw, struct stm32_usb2phy,
-							   clk48_hw);
+	struct stm32_usb2phy *phy_dev = container_of(hw, struct stm32_usb2phy, clkpll_hw);
 
 	return stm32_usb2phy_enable(phy_dev);
 }
 
-static void stm32_usb2phy_clk48_unprepare(struct clk_hw *hw)
+static void stm32_usb2phy_clkpll_unprepare(struct clk_hw *hw)
 {
-	struct stm32_usb2phy *phy_dev = container_of(hw, struct stm32_usb2phy,
-							   clk48_hw);
+	struct stm32_usb2phy *phy_dev = container_of(hw, struct stm32_usb2phy, clkpll_hw);
 
 	stm32_usb2phy_disable(phy_dev);
 }
 
-static unsigned long stm32_usb2phy_clk48_recalc_rate(struct clk_hw *hw,
-							   unsigned long parent_rate)
+static unsigned long stm32_usb2phy_clkpll_recalc_rate(struct clk_hw *hw,
+						      unsigned long parent_rate)
+{
+	return 480000000;
+}
+
+static const struct clk_ops stm32_usb2phy_clkpll_ops = {
+	.prepare = stm32_usb2phy_clkpll_prepare,
+	.unprepare = stm32_usb2phy_clkpll_unprepare,
+	.recalc_rate = stm32_usb2phy_clkpll_recalc_rate,
+};
+
+static int stm32_usb2phy_clkohci_prepare(struct clk_hw *hw)
+{
+	struct stm32_usb2phy *phy_dev = container_of(hw, struct stm32_usb2phy, clkohci_hw);
+	const struct stm32mp2_usb2phy_hw_data *phy_data = phy_dev->hw_data;
+	int ret;
+
+	/*
+	 * CMN = 0: PLL remains active event in suspend or sleep.
+	 * So the clock needs to remain active even in stop mode.
+	 */
+	ret = clk_prepare_enable(phy_dev->stp);
+	if (ret)
+		return ret;
+
+	ret = regmap_clear_bits(phy_dev->regmap, phy_data->cr_offset,
+				SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
+
+	if (ret)
+		clk_disable_unprepare(phy_dev->stp);
+
+	return ret;
+}
+
+static void stm32_usb2phy_clkohci_unprepare(struct clk_hw *hw)
+{
+	struct stm32_usb2phy *phy_dev = container_of(hw, struct stm32_usb2phy, clkohci_hw);
+	const struct stm32mp2_usb2phy_hw_data *phy_data = phy_dev->hw_data;
+
+	regmap_set_bits(phy_dev->regmap, phy_data->cr_offset, SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
+
+	clk_disable_unprepare(phy_dev->stp);
+}
+
+static unsigned long stm32_usb2phy_clkohci_recalc_rate(struct clk_hw *hw,
+						       unsigned long parent_rate)
 {
 	return 48000000;
 }
 
-static const struct clk_ops stm32_usb2phy_clk48_ops = {
-	.prepare = stm32_usb2phy_clk48_prepare,
-	.unprepare = stm32_usb2phy_clk48_unprepare,
-	.recalc_rate = stm32_usb2phy_clk48_recalc_rate,
+static const struct clk_ops stm32_usb2phy_clkohci_ops = {
+	.prepare = stm32_usb2phy_clkohci_prepare,
+	.unprepare = stm32_usb2phy_clkohci_unprepare,
+	.recalc_rate = stm32_usb2phy_clkohci_recalc_rate,
 };
 
 static int stm32_usb2phy_clk48_register(struct stm32_usb2phy *phy_dev)
 {
+	struct clk_hw_onecell_data *clk_data;
 	struct clk_init_data init = { };
 	int ret = 0;
 	char name[20];
 
-	snprintf(name, sizeof(name), "ck_usb2phy%x_48m", phy_dev->hw_data->cr_offset);
+	snprintf(name, sizeof(name), "ck_usb2phy%x_pll", phy_dev->hw_data->cr_offset);
 	init.name = name;
-	init.ops = &stm32_usb2phy_clk48_ops;
+	init.ops = &stm32_usb2phy_clkpll_ops;
 
-	phy_dev->clk48_hw.init = &init;
+	phy_dev->clkpll_hw.init = &init;
 
-	ret = devm_clk_hw_register(phy_dev->dev, &phy_dev->clk48_hw);
+	ret = devm_clk_hw_register(phy_dev->dev, &phy_dev->clkpll_hw);
 	if (ret) {
-		dev_err(phy_dev->dev, "failed to register 48m clk\n");
+		dev_err(phy_dev->dev, "failed to register pll clk\n");
 		return ret;
 	}
 
-	ret = devm_of_clk_add_hw_provider(phy_dev->dev, of_clk_hw_simple_get, &phy_dev->clk48_hw);
+	snprintf(name, sizeof(name), "ck_usb2phy%x_48m", phy_dev->hw_data->cr_offset);
+
+	phy_dev->clkohci_hw.init = CLK_HW_INIT_HW(name, &phy_dev->clkpll_hw,
+						  &stm32_usb2phy_clkohci_ops, 0);
+
+	ret = devm_clk_hw_register(phy_dev->dev, &phy_dev->clkohci_hw);
+	if (ret) {
+		dev_err(phy_dev->dev, "failed to register ohci clk\n");
+		return ret;
+	}
+
+	/*
+	 * USB2PHY provides several clocks used either by either USHB (EHCI/OHCI), OTG or USB3DR.
+	 * In case of OHCI, CMN bit must be cleared (clkohci_hw). This clock is required to access
+	 * the registers, to resume the controller from suspended state.
+	 * So declare two clocks, the PLL used in all case, and the OHCI clocks used by OHCI
+	 * controller.
+	 */
+	clk_data = devm_kzalloc(phy_dev->dev, struct_size(clk_data, hws, USB2PHY_CLK_NUM),
+				GFP_KERNEL);
+	clk_data->num = USB2PHY_CLK_NUM;
+	clk_data->hws[0] = &phy_dev->clkpll_hw;
+	clk_data->hws[1] = &phy_dev->clkohci_hw;
+	ret = devm_of_clk_add_hw_provider(phy_dev->dev, of_clk_hw_onecell_get, clk_data);
 	if (ret)
-		dev_err(phy_dev->dev, "adding clk provider 48m failed\n");
+		dev_err(phy_dev->dev, "adding clk provider failed\n");
 
 	return ret;
 }
@@ -788,11 +841,6 @@ static int stm32_usb2phy_tuning(struct phy *phy)
 
 static irqreturn_t stm32_usb2phy_irq_wakeup_handler(int irq, void *dev_id)
 {
-	struct device *dev = dev_id;
-
-	/* Prevents remote wakeup interrupt race while suspending */
-	pm_wakeup_hard_event(dev);
-
 	return IRQ_HANDLED;
 }
 
@@ -818,9 +866,13 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 	if (IS_ERR(phy_dev->rstc))
 		return dev_err_probe(dev, PTR_ERR(phy_dev->rstc), "failed to get USB2PHY reset\n");
 
-	phy_dev->phyref = devm_clk_get(dev, NULL);
+	phy_dev->phyref = devm_clk_get(dev, "core");
 	if (IS_ERR(phy_dev->phyref))
 		return dev_err_probe(dev, PTR_ERR(phy_dev->phyref), "failed to get phyref clk\n");
+
+	phy_dev->stp = devm_clk_get_optional(dev, "stp");
+	if (IS_ERR(phy_dev->stp))
+		return dev_err_probe(dev, PTR_ERR(phy_dev->stp), "failed to get stp clk\n");
 
 	phy_dev->regmap = syscon_regmap_lookup_by_phandle(np, "st,syscfg");
 	if (IS_ERR(phy_dev->regmap))
@@ -852,12 +904,10 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 
 		ret = devm_request_threaded_irq(dev, phy_dev->wakeirq, NULL,
 						stm32_usb2phy_irq_wakeup_handler, IRQF_ONESHOT,
-						NULL, dev);
+						NULL, NULL);
 		if (ret)
 			return dev_err_probe(dev, ret, "unable to request wake IRQ %d\n",
 						 phy_dev->wakeirq);
-
-		device_set_wakeup_capable(dev, true);
 	}
 
 	phy_dev->hw_data = stm32_usb2phy_get_hwdata(dev, phycr);

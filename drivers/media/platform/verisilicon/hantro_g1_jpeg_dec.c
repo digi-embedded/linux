@@ -239,6 +239,8 @@ int hantro_g1_jpeg_dec_run(struct hantro_ctx *ctx)
 	int ret;
 	u32 i;
 
+	hantro_g1_check_idle(vpu);
+
 	hantro_start_prepare_run(ctx);
 
 	src_buf = hantro_get_src_buf(ctx);
@@ -262,7 +264,7 @@ int hantro_g1_jpeg_dec_run(struct hantro_ctx *ctx)
 
 	/* Check JPEG width/height */
 	if (header.frame.width != width ||
-	    header.frame.height != height) {
+	    MB_HEIGHT(header.frame.height) != MB_HEIGHT(height)) {
 		dev_err(vpu->dev,
 			"Resolution mismatch: %dx%d (JPEG) versus %lux%lu (user)",
 			header.frame.width, header.frame.height, width, height);
@@ -388,8 +390,12 @@ int hantro_g1_jpeg_dec_run(struct hantro_ctx *ctx)
 
 	reg |= G1_REG_DEC_CTRL2_STRM_START_BIT(stream_bit_offset(&header));
 
-	if (header.restart_interval)
+	if (header.restart_interval) {
 		reg |= G1_REG_DEC_CTRL2_SYNC_MARKER_E;
+		vdpu_write_relaxed(vpu,
+				   G1_REG_DEC_CTRL5_PJPEG_REST_FREQ(header.restart_interval),
+				   G1_REG_DEC_CTRL5);
+	}
 
 	vdpu_write_relaxed(vpu, reg, G1_REG_DEC_CTRL2);
 

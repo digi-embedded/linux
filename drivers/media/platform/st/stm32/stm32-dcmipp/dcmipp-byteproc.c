@@ -684,18 +684,18 @@ static int dcmipp_byteproc_s_stream(struct v4l2_subdev *sd, int enable)
 		if (ret)
 			return ret;
 
-		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
+		ret = v4l2_subdev_enable_streams(s_subdev, pad->index, 1);
 		if (ret < 0) {
 			dev_err(byteproc->dev,
-				"failed to start source subdev streaming (%d)\n",
+				"byteproc: failed to start source subdev streaming (%d)\n",
 				ret);
 			return ret;
 		}
 	} else {
-		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
+		ret = v4l2_subdev_disable_streams(s_subdev, pad->index, 1);
 		if (ret < 0) {
 			dev_err(byteproc->dev,
-				"failed to stop source subdev streaming (%d)\n",
+				"byteproc: failed to stop source subdev streaming (%d)\n",
 				ret);
 			return ret;
 		}

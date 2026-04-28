@@ -134,7 +134,6 @@
 		compatible = "gpio-backlight";
 		gpios = <&gpiod 13 GPIO_ACTIVE_LOW>;
 		default-on;
-		default-brightness-level = <1>;
 		status = "okay";
 	};
 
@@ -180,6 +179,46 @@
 &cec {
 	pinctrl-names = "default";
 	pinctrl-0 = <&cec_pins_a>;
+	status = "okay";
+};
+
+&cs_cti_trace {
+	status = "okay";
+};
+
+&cs_cti_cpu0 {
+	status = "okay";
+};
+
+&cs_cti_cpu1 {
+	status = "okay";
+};
+
+&cs_etf {
+	status = "okay";
+};
+
+&cs_etm0 {
+	status = "okay";
+};
+
+&cs_etm1 {
+	status = "okay";
+};
+
+&cs_funnel {
+	status = "okay";
+};
+
+&cs_stm {
+	status = "okay";
+};
+
+&cs_tpiu {
+	status = "okay";
+};
+
+&dbg_bus {
 	status = "okay";
 };
 
@@ -341,7 +380,6 @@
 &dsi {
 	#address-cells = <1>;
 	#size-cells = <0>;
-	default-on;
 	status = "okay";
 
 	panel_dsi: panel@0 {
@@ -352,7 +390,6 @@
 		power-supply = <&v3v3>;
 		vcc-supply = <&v3v3>;
 		iovcc-supply = <&v3v3>;
-		default-on;
 		status = "okay";
 
 		port {
@@ -551,7 +588,6 @@
 };
 
 &ltdc {
-	default-on;
 	status = "okay";
 
 	port {
@@ -569,6 +605,7 @@
 };
 
 &qspi {
+	bootph-pre-ram;
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&qspi_clk_pins_a
 		     &qspi_bk1_pins_a
@@ -601,6 +638,41 @@
 		spi-max-frequency = <108000000>;
 		#address-cells = <1>;
 		#size-cells = <1>;
+	};
+};
+
+&qspi_clk_pins_a {
+	bootph-pre-ram;
+	pins {
+		bootph-pre-ram;
+	};
+};
+
+&qspi_bk1_pins_a {
+	bootph-pre-ram;
+	pins {
+		bootph-pre-ram;
+	};
+};
+
+&qspi_cs1_pins_a {
+	bootph-pre-ram;
+	pins {
+		bootph-pre-ram;
+	};
+};
+
+&qspi_bk2_pins_a {
+	bootph-pre-ram;
+	pins {
+		bootph-pre-ram;
+	};
+};
+
+&qspi_cs2_pins_a {
+	bootph-pre-ram;
+	pins {
+		bootph-pre-ram;
 	};
 };
 

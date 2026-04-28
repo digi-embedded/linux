@@ -35,13 +35,13 @@
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_gem_atomic_helper.h>
 #include <drm/drm_gem_dma_helper.h>
+#include <drm/drm_managed.h>
 #include <drm/drm_of.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_vblank.h>
-#include <drm/drm_managed.h>
 
 #include <video/videomode.h>
 
@@ -826,10 +826,8 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
 	u32 hsync, vsync, accum_hbp, accum_vbp, accum_act_w, accum_act_h;
 	u32 total_width, total_height;
-	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
 	u32 bus_formats = MEDIA_BUS_FMT_RGB888_1X24;
 	u32 bus_flags = 0;
-	u32 pitch, rota0_buf, rota1_buf;
 	u32 val;
 	int ret;
 
@@ -842,8 +840,8 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 			reset_control_deassert(ldev->rstc);
 		}
 
-		/* Wait a while to clear the current display */
-		mdelay(30);
+		/* Wait a while to clear the current display (around 2 frames) */
+		mdelay(2 * 1000 / drm_mode_vrefresh(mode));
 
 		pm_runtime_put_sync_suspend(ddev->dev);
 	}
@@ -877,8 +875,6 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 		bus_flags = connector->display_info.bus_flags;
 		if (connector->display_info.num_bus_formats)
 			bus_formats = connector->display_info.bus_formats[0];
-
-		orientation = connector->display_info.panel_orientation;
 	}
 
 	if (encoder->encoder_type == DRM_MODE_ENCODER_LVDS) {
@@ -940,46 +936,23 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	total_width = mode->htotal - 1;
 	total_height = mode->vtotal - 1;
 
-	/* check that an output rotation is required */
-	if (ldev->caps.crtc_rotation &&
-	    (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
-	     orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)) {
-		/* Set Synchronization size */
-		val = (vsync << 16) | hsync;
-		regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
+	/* Set Synchronization size */
+	val = (hsync << 16) | vsync;
+	regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
 
-		/* Set Accumulated Back porch */
-		val = (accum_vbp << 16) | accum_hbp;
-		regmap_update_bits(ldev->regmap, LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
+	/* Set Accumulated Back porch */
+	val = (accum_hbp << 16) | accum_vbp;
+	regmap_update_bits(ldev->regmap, LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
 
-		/* Set Accumulated Active Width */
-		val = (accum_act_h << 16) | accum_act_w;
-		regmap_update_bits(ldev->regmap, LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
+	/* Set Accumulated Active Width */
+	val = (accum_act_w << 16) | accum_act_h;
+	regmap_update_bits(ldev->regmap, LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
 
-		/* Set total width & height */
-		val = (total_height << 16) | total_width;
-		regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
+	/* Set total width & height */
+	val = (total_width << 16) | total_height;
+	regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
 
-		regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_w + 1));
-	} else {
-		/* Set Synchronization size */
-		val = (hsync << 16) | vsync;
-		regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
-
-		/* Set Accumulated Back porch */
-		val = (accum_hbp << 16) | accum_vbp;
-		regmap_update_bits(ldev->regmap, LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
-
-		/* Set Accumulated Active Width */
-		val = (accum_act_w << 16) | accum_act_h;
-		regmap_update_bits(ldev->regmap, LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
-
-		/* Set total width & height */
-		val = (total_width << 16) | total_height;
-		regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
-
-		regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_h + 1));
-	}
+	regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_h + 1));
 
 	/* Configures the HS, VS, DE and PC polarities. Default Active Low */
 	val = 0;
@@ -1032,57 +1005,11 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 		}
 	}
 
-	/* check that an output rotation is required */
-	if (ldev->caps.crtc_rotation &&
-	    (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
-	     orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)) {
-		/*
-		 * Size of the rotation buffer must be larger than the size
-		 * of two frames (format RGB24).
-		 */
-		if (ldev->rot_mem->size < mode->hdisplay * mode->vdisplay * 2 * 3) {
-			DRM_WARN("Rotation buffer too small");
-			return;
-		}
-
-		/* The width of the framebuffer must not exceed 1366 pixels */
-		if (mode->vdisplay > 1366)
-			return;
-
-		rota0_buf = (u32)ldev->rot_mem->base;
-		rota1_buf = (u32)ldev->rot_mem->base + (ldev->rot_mem->size >> 1);
-
-		regmap_write(ldev->regmap, LTDC_RB0AR, rota0_buf);
-		regmap_write(ldev->regmap, LTDC_RB1AR, rota1_buf);
-
-		/*
-		 * LTDC_RBPR register is used define the pitch (line-to-line address increment)
-		 * of the stored rotation buffer. The pitch is proportional to the width of the
-		 * composed display (before rotation) and,(after rotation) proportional to the
-		 * non-raster dimension of the display panel.
-		 */
-		pitch = ((mode->hdisplay + 9) / 10) * 64;
-		regmap_write(ldev->regmap, LTDC_RBPR, pitch);
-
-		DRM_DEBUG_DRIVER("Rotation buffer0 address %x\n", rota0_buf);
-		DRM_DEBUG_DRIVER("Rotation buffer1 address %x\n", rota1_buf);
-		DRM_DEBUG_DRIVER("Rotation buffer picth %x\n", pitch);
-
-		if (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
-		    orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)
-			regmap_set_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
-		else
-			regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
-	}
-
 	/* Sets the background color value */
 	regmap_write(ldev->regmap, LTDC_BCCR, BCCR_BCBLACK);
 
 	/* Enable error IRQ */
 	regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE);
-
-	if (ldev->caps.crtc_rotation)
-		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FURIE);
 
 	/* Commit shadow registers = update planes at next vblank */
 	if (!ldev->caps.plane_reg_shadow)
@@ -1125,8 +1052,12 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 			regmap_write_bits(ldev->regmap, LTDC_L1RCR + layer_index * LAY_OFS,
 					  LXRCR_IMR | LXRCR_VBR | LXRCR_GRMSK, LXRCR_IMR);
 
-	/* Disable LTDC */
+	/* Disable display streaming */
 	regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_LTDCEN);
+
+	/* Disable crtc rotation */
+	if (ldev->caps.crtc_rotation)
+		regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
 
 	/* Set to sleep state the pinctrl whatever type of encoder */
 	pinctrl_pm_select_sleep_state(ddev->dev);
@@ -1471,36 +1402,64 @@ static void ltdc_plane_update(struct drm_plane *plane, struct drm_atomic_state *
 	u32 val, pitch_in_bytes, line_length, line_number, ahbp, avbp;
 	u32 paddr, paddr1, paddr2, lxcr;
 	enum ltdc_pix_fmt pf;
-	unsigned int plane_rotation = newstate->rotation;
-	struct drm_connector_list_iter co_iter;
-	struct drm_connector *connector = NULL;
-	struct drm_encoder *encoder = NULL, *en_iter;
+	unsigned int plane_rotation = DRM_MODE_ROTATE_0;
 	struct drm_rect dst, src;
 	struct drm_display_mode *mode;
-	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
+	u32 pitch, rota0_buf, rota1_buf;
 
 	if (!newstate->crtc || !fb) {
 		DRM_DEBUG_DRIVER("fb or crtc NULL");
 		return;
 	}
 
-	/* get encoder from crtc */
-	drm_for_each_encoder(en_iter, ddev)
-		if (en_iter->crtc == newstate->crtc) {
-			encoder = en_iter;
-			break;
+	if (ldev->caps.crtc_rotation) {
+		/* read the global control register */
+		regmap_read(ldev->regmap, LTDC_GCR, &val);
+
+		/*
+		 * 90° and 270° rotations are only supported on the primary layer.
+		 * Due to hardware limitations, it is not allowed to use multiple layers
+		 * when a rotation is enabled on the primary layer.
+		 */
+		if (plane->index && (val & GCR_ROTEN)) {
+			DRM_WARN("Rotation enabled on primary plane, do not use another layer");
+			return;
 		}
+	}
 
-	if (encoder) {
-		/* Get the connector from encoder */
-		drm_connector_list_iter_begin(ddev, &co_iter);
-		drm_for_each_connector_iter(connector, &co_iter)
-			if (connector->encoder == encoder)
-				break;
-		drm_connector_list_iter_end(&co_iter);
+	/*
+	 * A rotation of 90 degrees if performed by combining a clockwise rotation,
+	 * and a vertical mirror.
+	 */
+	if (newstate->rotation & DRM_MODE_ROTATE_90)
+		plane_rotation = DRM_MODE_ROTATE_90 | DRM_MODE_REFLECT_Y;
 
-		if (connector)
-			orientation = connector->display_info.panel_orientation;
+	/*
+	 * A rotation of 180 degrees if performed by combining a horizontal mirror
+	 * and a vertical mirror.
+	 */
+	if (newstate->rotation & DRM_MODE_ROTATE_180)
+		plane_rotation = DRM_MODE_REFLECT_X | DRM_MODE_REFLECT_Y;
+
+	/*
+	 * A rotation of 270 degrees if performed by combining a clockwise rotation,
+	 * and a horizontal mirror.
+	 */
+	if (newstate->rotation & DRM_MODE_ROTATE_270)
+		plane_rotation = DRM_MODE_ROTATE_90 | DRM_MODE_REFLECT_X;
+
+	if (newstate->rotation & DRM_MODE_REFLECT_X) {
+		if (plane_rotation & DRM_MODE_REFLECT_X)
+			plane_rotation -= DRM_MODE_REFLECT_X;
+		else
+			plane_rotation += DRM_MODE_REFLECT_X;
+	}
+
+	if (newstate->rotation & DRM_MODE_REFLECT_Y) {
+		if (plane_rotation & DRM_MODE_REFLECT_Y)
+			plane_rotation -= DRM_MODE_REFLECT_Y;
+		else
+			plane_rotation += DRM_MODE_REFLECT_Y;
 	}
 
 	/* convert src_ from 16:16 format */
@@ -1520,68 +1479,70 @@ static void ltdc_plane_update(struct drm_plane *plane, struct drm_atomic_state *
 		}
 	}
 
-	/* Get horizontal & vertical back porch values */
 	mode = &newstate->crtc->state->adjusted_mode;
-	avbp = mode->vtotal - mode->vsync_start - 1;
-	ahbp = mode->htotal - mode->hsync_start - 1;
 
-	if (ldev->caps.crtc_rotation &&
-	    (orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP ||
-	     orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP)) {
-		/* Configures the horizontal start and stop position */
-		val = (dst.x1 + 1 + ahbp) + ((dst.x2 + ahbp) << 16);
-		regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
-				  LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
+	if (plane_rotation & DRM_MODE_ROTATE_90) {
+		/* stop display streaming to allows rotation */
+		regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_LTDCEN);
 
-		/* Configures the vertical start and stop position */
-		val = (dst.y1 + 1 + avbp) + ((dst.y2 + avbp) << 16);
-		regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
-				  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
+		/* wait at least 1 frame to stop display streaming (around 2 frames) */
+		mdelay(2 * 1000 / drm_mode_vrefresh(mode));
+
+		/* Get horizontal & vertical back porch values */
+		ahbp = mode->vtotal - mode->vsync_start - 1;
+		avbp = mode->htotal - mode->hsync_start - 1;
 
 		/*
-		 * need to mirroring on X (rotation will switch lines & columns,
-		 * not a real rotate
+		 * Size of the rotation buffer must be larger than the size
+		 * of two frames (format RGB24).
 		 */
-		if (orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP) {
-			if (plane_rotation & DRM_MODE_REFLECT_X)
-				plane_rotation &= ~DRM_MODE_REFLECT_X;
-			else
-				plane_rotation |= DRM_MODE_REFLECT_X;
+		if (ldev->rot_mem->size < mode->hdisplay * mode->vdisplay * 2 * 3) {
+			DRM_WARN("Rotation buffer too small");
+			return;
 		}
 
+		/* The width of the framebuffer must not exceed 1366 pixels */
+		if (mode->vdisplay > 1366)
+			return;
+
+		rota0_buf = (u32)ldev->rot_mem->base;
+		rota1_buf = (u32)ldev->rot_mem->base + (ldev->rot_mem->size >> 1);
+
+		regmap_write(ldev->regmap, LTDC_RB0AR, rota0_buf);
+		regmap_write(ldev->regmap, LTDC_RB1AR, rota1_buf);
+
 		/*
-		 * need to mirroring on Y (rotation will switch lines & columns,
-		 * not a real rotate
+		 * LTDC_RBPR register is used define the pitch (line-to-line address increment)
+		 * of the stored rotation buffer. The pitch is proportional to the width of the
+		 * composed display (before rotation) and,(after rotation) proportional to the
+		 * non-raster dimension of the display panel.
 		 */
-		if (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP) {
-			if (plane_rotation & DRM_MODE_REFLECT_Y)
-				plane_rotation &= ~DRM_MODE_REFLECT_Y;
-			else
-				plane_rotation |= DRM_MODE_REFLECT_Y;
-		}
+		pitch = ((mode->vdisplay + 9) / 10) * 64;
+		regmap_write(ldev->regmap, LTDC_RBPR, pitch);
+
+		DRM_DEBUG_DRIVER("Rotation buffer0 address %x\n", rota0_buf);
+		DRM_DEBUG_DRIVER("Rotation buffer1 address %x\n", rota1_buf);
+		DRM_DEBUG_DRIVER("Rotation buffer picth %x\n", pitch);
+
+		/* Enable fifo underrun rotation interrupt */
+		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FURIE);
+
+		regmap_set_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN | GCR_LTDCEN);
 	} else {
-		/* Configures the horizontal start and stop position */
-		val = ((dst.x2 + ahbp) << 16) + (dst.x1 + 1 + ahbp);
-		regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
-				  LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
-
-		/* Configures the vertical start and stop position */
-		val = ((dst.y2 + avbp) << 16) + (dst.y1 + 1 + avbp);
-		regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
-				  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
-
-		if (orientation == DRM_MODE_PANEL_ORIENTATION_BOTTOM_UP) {
-			if (plane_rotation & DRM_MODE_REFLECT_X)
-				plane_rotation &= ~DRM_MODE_REFLECT_X;
-			else
-				plane_rotation |= DRM_MODE_REFLECT_X;
-
-			if (plane_rotation & DRM_MODE_REFLECT_Y)
-				plane_rotation &= ~DRM_MODE_REFLECT_Y;
-			else
-				plane_rotation |= DRM_MODE_REFLECT_Y;
-		}
+		/* Get horizontal & vertical back porch values */
+		avbp = mode->vtotal - mode->vsync_start - 1;
+		ahbp = mode->htotal - mode->hsync_start - 1;
 	}
+
+	/* Configures the horizontal start and stop position */
+	val = ((dst.x2 + ahbp) << 16) + (dst.x1 + 1 + ahbp);
+	regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
+			  LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
+
+	/* Configures the vertical start and stop position */
+	val = ((dst.y2 + avbp) << 16) + (dst.y1 + 1 + avbp);
+	regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
+			  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
 
 	/* Specifies the pixel format */
 	pf = to_ltdc_pixelformat(fb->format->format);
@@ -1858,9 +1819,6 @@ static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 	/* Disable layer */
 	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, 0);
 
-	/* Set the transparency of the layer to the default value */
-	regmap_write_bits(ldev->regmap, LTDC_L1CACR + lofs, LXCACR_CONSTA, 0x00);
-
 	/* Reset the layer transparency to hide any related background color */
 	regmap_write_bits(ldev->regmap, LTDC_L1CACR + lofs, LXCACR_CONSTA, 0x00);
 
@@ -2024,7 +1982,6 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 {
 	struct ltdc_device *ldev = ddev->dev_private;
 	struct drm_plane *primary, *overlay;
-	int supported_rotations = DRM_MODE_ROTATE_0 | DRM_MODE_REFLECT_X | DRM_MODE_REFLECT_Y;
 	unsigned int i;
 	int ret;
 	struct drm_connector *connector = NULL;
@@ -2041,7 +1998,7 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 	primary = ltdc_plane_create(ddev, DRM_PLANE_TYPE_PRIMARY, 0);
 	if (!primary) {
 		DRM_ERROR("Can not create primary plane\n");
-		return -EINVAL;
+		return -ENOMEM;
 	}
 
 	if (ldev->caps.dynamic_zorder)
@@ -2049,9 +2006,21 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 	else
 		drm_plane_create_zpos_immutable_property(primary, 0);
 
-	if (ldev->caps.plane_rotation)
-		drm_plane_create_rotation_property(primary, DRM_MODE_ROTATE_0,
-						   supported_rotations);
+	if (ldev->caps.plane_rotation) {
+		if (ldev->caps.crtc_rotation)
+			drm_plane_create_rotation_property(primary, DRM_MODE_ROTATE_0,
+							   DRM_MODE_ROTATE_0 |
+							   DRM_MODE_REFLECT_X |
+							   DRM_MODE_REFLECT_Y |
+							   DRM_MODE_ROTATE_90 |
+							   DRM_MODE_ROTATE_180 |
+							   DRM_MODE_ROTATE_270);
+		else
+			drm_plane_create_rotation_property(primary, DRM_MODE_ROTATE_0,
+							   DRM_MODE_ROTATE_0 |
+							   DRM_MODE_REFLECT_X |
+							   DRM_MODE_REFLECT_Y);
+	}
 
 	/* Init CRTC according to its hardware features */
 	if (ldev->caps.crc)
@@ -2086,7 +2055,9 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 
 		if (ldev->caps.plane_rotation)
 			drm_plane_create_rotation_property(overlay, DRM_MODE_ROTATE_0,
-							   supported_rotations);
+							   DRM_MODE_ROTATE_0 |
+							   DRM_MODE_REFLECT_X |
+							   DRM_MODE_REFLECT_Y);
 	}
 
 	return 0;
@@ -2098,9 +2069,6 @@ static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 	struct drm_device *ddev = encoder->dev;
 	struct ltdc_device *ldev =  ddev->dev_private;
 	struct device *dev = ddev->dev;
-	struct drm_connector *connector = NULL;
-	struct drm_connector_list_iter iter;
-	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
 	int target = mode->clock * 1000;
 	int target_min = mode->clock * (1000 - clock_tolerance);
 	int target_max = mode->clock * (1000 + clock_tolerance);
@@ -2116,32 +2084,6 @@ static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 	}
 
 	DRM_DEBUG_DRIVER("clk rate target %d, available %d\n", target, result);
-
-	/* Get the connector from encoder */
-	drm_connector_list_iter_begin(ddev, &iter);
-	drm_for_each_connector_iter(connector, &iter)
-		if (connector->encoder == encoder)
-			break;
-	drm_connector_list_iter_end(&iter);
-
-	if (connector)
-		orientation = connector->display_info.panel_orientation;
-
-	/* check that an output rotation is required */
-	if (ldev->caps.crtc_rotation &&
-	    (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
-	     orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)) {
-		/*
-		 * Size of the rotation buffer must be larger than the size
-		 * of two frames (format RGB24).
-		 */
-		if (ldev->rot_mem->size < mode->hdisplay * mode->vdisplay * 2 * 3)
-			return MODE_MEM;
-
-		/* The width of the framebuffer must not exceed 1366 pixels */
-		if (mode->vdisplay > 1366)
-			return MODE_BAD_WIDTH;
-	}
 
 	/* Filter modes according to the max frequency supported by the pads */
 	if (result > ldev->caps.pad_max_freq_hz)
@@ -2171,48 +2113,7 @@ static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 	return MODE_OK;
 }
 
-static bool ltdc_encoder_mode_fixup(struct drm_encoder *encoder,
-				    const struct drm_display_mode *mode,
-				    struct drm_display_mode *adjusted_mode)
-{
-	struct drm_device *ddev = encoder->dev;
-	struct ltdc_device *ldev =  ddev->dev_private;
-	int rate = mode->clock * 1000;
-	int ret;
-
-	if (encoder->encoder_type == DRM_MODE_ENCODER_LVDS) {
-		if (ldev->lvds_clk) {
-			ret = clk_set_parent(ldev->pixel_clk, ldev->lvds_clk);
-			if (ret) {
-				DRM_ERROR("Could not set parent clock: %d\n", ret);
-				return false;
-			}
-		}
-	} else {
-		if (ldev->ltdc_clk) {
-			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
-			if (ret) {
-				DRM_ERROR("Could not set parent clock: %d\n", ret);
-				return false;
-			}
-		}
-	}
-
-	if (clk_set_rate(ldev->pixel_clk, rate) < 0) {
-		DRM_ERROR("Cannot set rate (%dHz) for pixel clk\n", rate);
-		return false;
-	}
-
-	adjusted_mode->clock = clk_get_rate(ldev->pixel_clk) / 1000;
-
-	DRM_DEBUG_DRIVER("requested clock %dkHz, adjusted clock %dkHz\n",
-			 mode->clock, adjusted_mode->clock);
-
-	return true;
-}
-
 static const struct drm_encoder_helper_funcs ltdc_encoder_helper_funcs = {
-	.mode_fixup = ltdc_encoder_mode_fixup,
 	.mode_valid = ltdc_encoder_mode_valid,
 };
 
@@ -2486,8 +2387,7 @@ int ltdc_load(struct drm_device *ddev)
 	struct resource *res;
 	int irq, i, nb_endpoints;
 	int ret = -ENODEV;
-	u32 mbl;
-	bool def_value;
+	u32 mbl, gcr;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -2544,20 +2444,6 @@ int ltdc_load(struct drm_device *ddev)
 
 	mutex_init(&ldev->err_lock);
 
-	def_value = device_property_read_bool(dev, "default-on");
-
-	/*
-	 * To obtain a continuous display after the probe, the clocks must
-	 * remain activated and reset shouldn't be done
-	 */
-	if (!def_value) {
-		if (!IS_ERR(ldev->rstc)) {
-			reset_control_assert(ldev->rstc);
-			usleep_range(10, 20);
-			reset_control_deassert(ldev->rstc);
-		}
-	}
-
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	ldev->regs = devm_ioremap_resource(dev, res);
 	if (IS_ERR(ldev->regs)) {
@@ -2571,6 +2457,21 @@ int ltdc_load(struct drm_device *ddev)
 		DRM_ERROR("Unable to regmap ltdc registers\n");
 		ret = PTR_ERR(ldev->regmap);
 		goto err;
+	}
+
+	/*
+	 * To obtain a continuous display after the probe, the clocks must
+	 * remain activated and reset shouldn't be done
+	 */
+	regmap_read(ldev->regmap, LTDC_GCR, &gcr);
+
+	/* Check if the ltdc has been activated */
+	if (!(gcr & GCR_LTDCEN)) {
+		if (!IS_ERR(ldev->rstc)) {
+			reset_control_assert(ldev->rstc);
+			usleep_range(10, 20);
+			reset_control_deassert(ldev->rstc);
+		}
 	}
 
 	ret = ltdc_get_caps(ddev);
@@ -2628,19 +2529,37 @@ int ltdc_load(struct drm_device *ddev)
 		goto err;
 	}
 
-	pm_runtime_set_active(ddev->dev);
-	pm_runtime_enable(ddev->dev);
-
-	if (def_value) {
+	/* Check if the ltdc has been activated */
+	if (gcr & GCR_LTDCEN) {
 		/* keep runtime active after the probe */
+		pm_runtime_set_active(ddev->dev);
+		pm_runtime_enable(ddev->dev);
+
 		ret = pm_runtime_resume_and_get(ddev->dev);
 		if (ret) {
 			DRM_ERROR("Failed to load driver, cannot resume pm\n");
 			return ret;
 		}
 	} else {
+		/* suspend device to disable the clocks */
+		ltdc_suspend(ldev);
+
 		/* set to sleep state the pinctrl to stop data trasfert */
 		pinctrl_pm_select_sleep_state(ddev->dev);
+
+		/*
+		 * Parent of the pixel clock should default to the reference clock (rcc clock).
+		 * If the driver has already been started, this action is not necessary and
+		 *  may cause an issue on register reading/writing.
+		 */
+		if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
+			if (ret)
+				return dev_err_probe(dev, PTR_ERR(ldev->lvds_clk),
+						     "Could not set parent clock\n");
+		}
+
+		pm_runtime_enable(ddev->dev);
 	}
 
 	/* Get the secure rotation buffer memory resource */
@@ -2656,18 +2575,13 @@ int ltdc_load(struct drm_device *ddev)
 err:
 	of_reserved_mem_device_release(dev);
 
-	for (i = 0; i < nb_endpoints; i++)
-		drm_of_panel_bridge_remove(ddev->dev->of_node, 0, i);
-
 	return ret;
 }
 
 void ltdc_unload(struct drm_device *ddev)
 {
-	struct device *dev = ddev->dev;
 	struct ltdc_device *ldev = ddev->dev_private;
 	struct stm32_firewall *fwl = (struct stm32_firewall *)ldev->firewall;
-	int nb_endpoints, i;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -2675,11 +2589,6 @@ void ltdc_unload(struct drm_device *ddev)
 		pm_runtime_put_sync_suspend(ddev->dev);
 
 	stm32_firewall_release_access(fwl);
-
-	nb_endpoints = of_graph_get_endpoint_count(dev->of_node);
-
-	for (i = 0; i < nb_endpoints; i++)
-		drm_of_panel_bridge_remove(ddev->dev->of_node, 0, i);
 
 	pm_runtime_disable(ddev->dev);
 }
@@ -2720,18 +2629,11 @@ int ltdc_parse_device_tree(struct device *dev)
 int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 {
 	struct device_node *node;
-	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
 
-	ldev->pixel_clk = devm_clk_get(dev, "lcd");
-	if (IS_ERR(ldev->pixel_clk)) {
-		if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
-			DRM_ERROR("Unable to get lcd clock\n");
-		return PTR_ERR(ldev->pixel_clk);
-	}
-
-	if (of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc")) {
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc") ||
+	    of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
 		ldev->bus_clk = devm_clk_get(dev, "bus");
 		if (IS_ERR(ldev->bus_clk))
 			return dev_err_probe(dev, PTR_ERR(ldev->bus_clk),
@@ -2739,16 +2641,6 @@ int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 	}
 
 	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
-		ldev->bus_clk = devm_clk_get(dev, "bus");
-		if (IS_ERR(ldev->bus_clk))
-			return dev_err_probe(dev, PTR_ERR(ldev->bus_clk),
-					     "Unable to get bus clock\n");
-
-		ldev->ltdc_clk = devm_clk_get(dev, "ref");
-		if (IS_ERR(ldev->ltdc_clk))
-			return dev_err_probe(dev, PTR_ERR(ldev->ltdc_clk),
-					     "Unable to get ltdc clock\n");
-
 		/*
 		 * The lvds output clock is not available if the lvds is not probed.
 		 * This is a usual case, it is necessary to check the node to avoid
@@ -2766,16 +2658,23 @@ int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 			of_node_put(node);
 		}
 
-		/*
-		 * Parent of the pixel clock should default to the reference clock (rcc clock).
-		 * If the driver has already been started, this action is not necessary and
-		 *  may cause an issue on register reading/writing.
-		 */
-		if (!device_property_read_bool(dev, "default-on")) {
-			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
-			if (ret)
-				return dev_err_probe(dev, PTR_ERR(ldev->lvds_clk),
-						     "Could not set parent clock\n");
+		ldev->pixel_clk = devm_clk_get(dev, "ref");
+		if (IS_ERR(ldev->pixel_clk)) {
+			if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
+				DRM_ERROR("Unable to get lcd clock\n");
+			return PTR_ERR(ldev->pixel_clk);
+		}
+
+		ldev->ltdc_clk = devm_clk_get(dev, "lcd");
+		if (IS_ERR(ldev->ltdc_clk))
+			return dev_err_probe(dev, PTR_ERR(ldev->ltdc_clk),
+					     "Unable to get ltdc clock\n");
+	} else {
+		ldev->pixel_clk = devm_clk_get(dev, "lcd");
+		if (IS_ERR(ldev->pixel_clk)) {
+			if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
+				DRM_ERROR("Unable to get lcd clock\n");
+			return PTR_ERR(ldev->pixel_clk);
 		}
 	}
 

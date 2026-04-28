@@ -144,7 +144,7 @@ static int stm32_ospi_tx(struct stm32_ospi *ospi, const struct spi_mem_op *op)
 {
 	struct stm32_omi *omi = ospi->omi;
 	struct stm32_ospi_flash *flash = &ospi->flash[ospi->last_cs];
-	u8 *buf;
+	void *buf;
 	u8 dummy = 0xff;
 	int ret;
 
@@ -162,7 +162,7 @@ static int stm32_ospi_tx(struct stm32_ospi *ospi, const struct spi_mem_op *op)
 	if (op->data.dir == SPI_MEM_DATA_IN)
 		buf = op->data.buf.in;
 	else
-		buf = (u8 *)op->data.buf.out;
+		buf = (void *)op->data.buf.out;
 
 	if (flash->octal_dtr && op->addr.val % 2) {
 		/* Read/write dummy byte */
@@ -1055,9 +1055,9 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 	dma_cfg.dst_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
 	dma_cfg.src_addr = omi->regs_phys_base + OSPI_DR;
 	dma_cfg.dst_addr = omi->regs_phys_base + OSPI_DR;
-	dma_cfg.src_maxburst = 4;
-	dma_cfg.dst_maxburst = 4;
-	stm32_omi_dma_setup(omi, &dma_cfg);
+	ret = stm32_omi_dma_setup(omi, &dma_cfg);
+	if (ret)
+		return ret;
 
 	mutex_init(&ospi->lock);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2025, Digi International, Inc.
+ * Copyright 2022-2026, Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -386,6 +386,7 @@
 
 /* Console on UART5 */
 &uart5 {
+	bootph-all;
 	pinctrl-names = "default", "sleep", "idle";
 	pinctrl-0 = <&ccmp13_uart5_pins_a>;
 	pinctrl-1 = <&ccmp13_uart5_sleep_pins_a>;
@@ -677,13 +678,16 @@
 	};
 
 	ccmp13_uart5_pins_a: ccmp13_uart5-0 {
+		bootph-all;
 		pins1 {
+			bootph-all;
 			pinmux = <STM32_PINMUX('A', 0, AF8)>; /* UART5_TX */
 			bias-disable;
 			drive-push-pull;
 			slew-rate = <0>;
 		};
 		pins2 {
+			bootph-all;
 			pinmux = <STM32_PINMUX('F', 13, AF8)>; /* UART5_RX */
 			bias-pull-up;
 		};

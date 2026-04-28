@@ -204,6 +204,20 @@ int ldsem_down_write_nested(struct ld_semaphore *sem, int subclass,
  *
  *	Optional.
  *
+ * @lookahead_buf: [DRV] ``void ()(struct tty_struct *tty, const u8 *cp,
+ *			 const u8 *fp, size_t count)``
+ *
+ *	This function is called by the low-level tty driver for characters
+ *	not eaten by ->receive_buf() or ->receive_buf2(). It is useful for
+ *	processing high-priority characters such as software flow-control
+ *	characters that could otherwise get stuck into the intermediate
+ *	buffer until tty has room to receive them. Ldisc must be able to
+ *	handle later a ->receive_buf() or ->receive_buf2() call for the
+ *	same characters (e.g. by skipping the actions for high-priority
+ *	characters already handled by ->lookahead_buf()).
+ *
+ *	Optional.
+ *
  * @owner: module containting this ldisc (for reference counting)
  *
  * This structure defines the interface between the tty line discipline
@@ -246,6 +260,8 @@ struct tty_ldisc_ops {
 	void	(*dcd_change)(struct tty_struct *tty, bool active);
 	size_t	(*receive_buf2)(struct tty_struct *tty, const u8 *cp,
 				const u8 *fp, size_t count);
+	void	(*lookahead_buf)(struct tty_struct *tty, const u8 *cp,
+				 const u8 *fp, size_t count);
 
 	struct  module *owner;
 };

@@ -481,6 +481,8 @@ struct brcmf_fws_stats {
 	u32 txs_host_tossed;
 	u32 bus_flow_block;
 	u32 fws_flow_block;
+	u32 cnt_recv_err;
+	u32 cnt_cleanup_if;
 };
 
 struct brcmf_fws_info {
@@ -507,6 +509,7 @@ struct brcmf_fws_info {
 	bool bus_flow_blocked;
 	bool creditmap_received;
 	bool credit_recover;
+	bool sdio_recv_error;
 	u8 mode;
 	bool avoid_queueing;
 #if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
@@ -743,6 +746,25 @@ static void brcmf_fws_macdesc_init(struct brcmf_fws_mac_descriptor *desc,
 	desc->ac_bitmap = 0xff; /* update this when handling APSD */
 	if (addr)
 		memcpy(&desc->ea[0], addr, ETH_ALEN);
+}
+
+static void brcmf_fws_macdesc_reset(struct brcmf_fws_mac_descriptor *entry)
+{
+	int i;
+
+	brcmf_fws_macdesc_init(entry, entry->ea, entry->interface_id);
+	entry->mac_handle = 0;
+	entry->suppressed = 0;
+	entry->transit_count = 0;
+	entry->suppr_transit_count = 0;
+	entry->generation = 0;
+
+	for (i = 0; i < BRCMF_FWS_FIFO_COUNT; i++)
+		entry->seq[i] = 0;
+
+	entry->send_tim_signal = 0;
+	entry->traffic_pending_bmp = 0;
+	entry->traffic_lastreported_bmp = 0;
 }
 
 static
@@ -1588,7 +1610,7 @@ static void brcmf_fws_credit_auto_recover(struct brcmf_fws_info *fws, u8 *data)
 		  fws->fifo_credit[3], fws->fifo_credit[4]);
 }
 
-void brcmf_fws_set_credit_recover(struct brcmf_pub *drvr)
+void brcmf_fws_recv_err(struct brcmf_pub *drvr)
 {
 	struct brcmf_fws_info *fws = NULL;
 
@@ -1600,10 +1622,12 @@ void brcmf_fws_set_credit_recover(struct brcmf_pub *drvr)
 	if (!fws)
 		return;
 
-	brcmf_err("Trigger credit recover\n");
+	brcmf_dbg(SDIO, "Enter\n");
 
 	brcmf_fws_lock(fws);
+	fws->stats.cnt_recv_err++;
 	fws->credit_recover = true;
+	fws->sdio_recv_error = true;
 	brcmf_fws_unlock(fws);
 }
 
@@ -2416,35 +2440,35 @@ static void brcmf_fws_dequeue_worker(struct work_struct *worker)
 }
 
 #ifdef DEBUG
+
 static int brcmf_debugfs_fws_stats_read(struct seq_file *seq, void *data)
 {
 	struct brcmf_bus *bus_if = dev_get_drvdata(seq->private);
-	struct brcmf_fws_stats *fwstats = &(drvr_to_fws(bus_if->drvr)->stats);
+	struct brcmf_fws_info *fws = drvr_to_fws(bus_if->drvr);
+	struct brcmf_fws_stats *fwstats = &fws->stats;
 
 	seq_printf(seq,
-		   "header_pulls:      %u\n"
-		   "header_only_pkt:   %u\n"
-		   "tlv_parse_failed:  %u\n"
-		   "tlv_invalid_type:  %u\n"
-		   "mac_update_fails:  %u\n"
-		   "ps_update_fails:   %u\n"
-		   "if_update_fails:   %u\n"
-		   "pkt2bus:           %u\n"
-		   "generic_error:     %u\n"
-		   "rollback_success:  %u\n"
-		   "rollback_failed:   %u\n"
-		   "delayq_full:       %u\n"
-		   "supprq_full:       %u\n"
-		   "txs_indicate:      %u\n"
-		   "txs_discard:       %u\n"
-		   "txs_suppr_core:    %u\n"
-		   "txs_suppr_ps:      %u\n"
-		   "txs_tossed:        %u\n"
-		   "txs_host_tossed:   %u\n"
-		   "bus_flow_block:    %u\n"
-		   "fws_flow_block:    %u\n"
-		   "send_pkts:         BK:%u BE:%u VO:%u VI:%u BCMC:%u\n"
-		   "requested_sent:    BK:%u BE:%u VO:%u VI:%u BCMC:%u\n",
+		   "header_pulls:    %8u\t"
+		   "header_only_pkt: %8u\n"
+		   "tlv_parse_failed:%8u\t"
+		   "tlv_invalid_type:%8u\n"
+		   "mac_update_fails:%8u\t"
+		   "ps_update_fails: %8u\t"
+		   "if_update_fails: %8u\n"
+		   "pkt2bus:         %8u\t"
+		   "generic_error:   %8u\n"
+		   "rollback_success:%8u\t"
+		   "rollback_failed: %8u\n"
+		   "delayq_full:     %8u\t"
+		   "supprq_full:     %8u\n"
+		   "txs_indicate:    %8u\t"
+		   "txs_discard:     %8u\n"
+		   "txs_suppr_core:  %8u\t"
+		   "txs_suppr_ps:    %8u\n"
+		   "txs_tossed:      %8u\t"
+		   "txs_host_tossed: %8u\n"
+		   "bus_flow_block:  %8u\t"
+		   "fws_flow_block:  %8u\n",
 		   fwstats->header_pulls,
 		   fwstats->header_only_pkt,
 		   fwstats->tlv_parse_failed,
@@ -2465,7 +2489,17 @@ static int brcmf_debugfs_fws_stats_read(struct seq_file *seq, void *data)
 		   fwstats->txs_tossed,
 		   fwstats->txs_host_tossed,
 		   fwstats->bus_flow_block,
-		   fwstats->fws_flow_block,
+		   fwstats->fws_flow_block);
+
+	seq_printf(seq,
+		   "receive error:   %8u\t"
+		   "cleanup if:      %8u\n\n",
+		   fwstats->cnt_recv_err,
+		   fwstats->cnt_cleanup_if);
+
+	seq_printf(seq,
+		   "send_pkts:         BK:%u BE:%u VO:%u VI:%u BCMC:%u\n"
+		   "requested_sent:    BK:%u BE:%u VO:%u VI:%u BCMC:%u\n\n",
 		   fwstats->send_pkts[0], fwstats->send_pkts[1],
 		   fwstats->send_pkts[2], fwstats->send_pkts[3],
 		   fwstats->send_pkts[4],
@@ -2671,4 +2705,43 @@ void brcmf_fws_bus_blocked(struct brcmf_pub *drvr, bool flow_blocked)
 		else
 			fws->stats.bus_flow_block++;
 	}
+}
+
+void brcmf_fws_cleanup_interface(struct brcmf_if *ifp)
+{
+	struct brcmf_fws_info *fws = drvr_to_fws(ifp->drvr);
+	struct brcmf_fws_mac_descriptor *entry;
+	struct brcmf_fws_mac_descriptor *table;
+	bool (*matchfn)(struct sk_buff *, void *) = brcmf_fws_ifidx_match;
+	int ifidx = ifp->ifidx;
+	int i;
+
+	if (!fws->sdio_recv_error)
+		return;
+
+	brcmf_dbg(SDIO, "Enter\n");
+
+	brcmf_fws_lock(fws);
+
+	fws->stats.cnt_cleanup_if++;
+	fws->sdio_recv_error = false;
+
+	entry = &fws->desc.iface[ifidx];
+	brcmf_dbg(SDIO, "iface[%d] mac %pM if %d psq len %d\n",
+		  ifidx, entry->ea, entry->interface_id, entry->psq.len);
+
+	/* cleanup interface */
+	brcmf_fws_psq_flush(fws, &entry->psq, ifidx);
+	brcmf_fws_macdesc_reset(entry);
+
+	/* cleanup individual nodes */
+	table = &fws->desc.nodes[0];
+	for (i = 0; i < ARRAY_SIZE(fws->desc.nodes); i++)
+		brcmf_fws_macdesc_cleanup(fws, &table[i], ifidx);
+
+	/* cleanup txq and hanger */
+	brcmf_fws_bus_txq_cleanup(fws, matchfn, ifidx);
+	brcmf_fws_hanger_cleanup(fws, matchfn, ifidx);
+
+	brcmf_fws_unlock(fws);
 }

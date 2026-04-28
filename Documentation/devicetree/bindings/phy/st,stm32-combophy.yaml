@@ -63,6 +63,10 @@ properties:
   power-domains:
     maxItems: 1
 
+  access-controllers:
+    maxItems: 1
+    description: Phandle to the rifsc device to check access right.
+
   st,ssc-on:
     type: boolean
     description:

@@ -281,6 +281,14 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 		else
 			opp_pad_fmt->code = MEDIA_BUS_FMT_RGB888_1X24;
 
+		/* Need to consider ISP output as RGB in case of CSI Yxx input */
+		if (dcmipp_is_input_csi(isp->ved.dcmipp) &&
+		    (fmt->format.code == MEDIA_BUS_FMT_Y8_1X8 ||
+		     fmt->format.code == MEDIA_BUS_FMT_Y10_1X10 ||
+		     fmt->format.code == MEDIA_BUS_FMT_Y12_1X12 ||
+		     fmt->format.code == MEDIA_BUS_FMT_Y14_1X14))
+			opp_pad_fmt->code = MEDIA_BUS_FMT_RGB888_1X24;
+
 		crop->top = 0;
 		crop->left = 0;
 		crop->width = fmt->format.width;
@@ -305,6 +313,15 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 			fmt->format.code = MEDIA_BUS_FMT_YUV8_1X24;
 		else
 			fmt->format.code = MEDIA_BUS_FMT_RGB888_1X24;
+
+		/* Need to consider ISP output as RGB in case of CSI Yxx input */
+		if (dcmipp_is_input_csi(isp->ved.dcmipp) &&
+		    (opp_pad_fmt->code == MEDIA_BUS_FMT_Y8_1X8 ||
+		     opp_pad_fmt->code == MEDIA_BUS_FMT_Y10_1X10 ||
+		     opp_pad_fmt->code == MEDIA_BUS_FMT_Y12_1X12 ||
+		     opp_pad_fmt->code == MEDIA_BUS_FMT_Y14_1X14))
+			fmt->format.code = MEDIA_BUS_FMT_RGB888_1X24;
+
 		if (compose->width && compose->height) {
 			fmt->format.width = compose->width;
 			fmt->format.height = compose->height;
@@ -518,8 +535,19 @@ static void dcmipp_isp_config_decimation(struct dcmipp_isp_device *isp,
 
 /* Histogram block - only available starting from stm32mp21 */
 #define DCMIPP_P1HSCR			0x8b0
-/* 4 Comp / 64 bins per comp / 1 region / decimated by 2*/
-#define DCMIPP_P1HSCR_DEFAULT		0x08411000
+/*
+ * Adopt a default Histogram configuration allowing to always work
+ * independently from the input format and resolution
+ * That is:
+ *   - after demosaicing
+ *   - 4 components
+ *   - 1 region only (full frame, rounded to decimation factors)
+ *   - 64 bins per comp (closest and lower to 320 / 4)
+ *   - Decimation, need a total of 5Mpix / 65536, that is around 76
+ *     - H decimation by 16
+ *     - V decimation by 8
+ */
+#define DCMIPP_P1HSCR_DEFAULT		0x08434006
 
 #define DCMIPP_P1HSSTR			0x8b4
 #define DCMIPP_P1HSSTR_START(x, y)	((x) | ((y) << 16))
@@ -539,10 +567,11 @@ static void dcmipp_isp_config_histo(struct dcmipp_isp_device *isp,
 	 * valid settings
 	 */
 	reg_write(isp, DCMIPP_P1HSCR, DCMIPP_P1HSCR_DEFAULT);
-	reg_write(isp, DCMIPP_P1HSSTR,
-		  DCMIPP_P1HSSTR_START(compose->width / 4, compose->height / 4));
+	reg_write(isp, DCMIPP_P1HSSTR, DCMIPP_P1HSSTR_START(0, 0));
+	/* Size (horizontal / vertical) must be multiple of the decimation */
 	reg_write(isp, DCMIPP_P1HSSZR,
-		  DCMIPP_P1HSSZR_SIZE(compose->width / 2, compose->height / 2));
+		  DCMIPP_P1HSSZR_SIZE((compose->width / 16) & ~0xf,
+				      (compose->height / 8) & ~0x07));
 }
 
 static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
@@ -588,6 +617,13 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 
 		/* Configure default ISP Histo area */
 		dcmipp_isp_config_histo(isp, compose);
+
+		ret = v4l2_subdev_enable_streams(s_subdev, pad->index, 1);
+		if (ret < 0) {
+			dev_err(isp->dev,
+				"isp: failed to start source subdev streaming (%d)\n", ret);
+			goto error_s_stream;
+		}
 	} else {
 		if (isp->usecnt > 1)
 			goto out;
@@ -596,13 +632,13 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		reg_write(isp, DCMIPP_P1SRCR, 0);
 		reg_write(isp, DCMIPP_P1DECR, 0);
 		reg_write(isp, DCMIPP_P1DMCR, 0);
-	}
 
-	ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
-	if (ret < 0) {
-		dev_err(isp->dev,
-			"failed to start source subdev streaming (%d)\n", ret);
-		goto error_s_stream;
+		ret = v4l2_subdev_disable_streams(s_subdev, pad->index, 1);
+		if (ret < 0) {
+			dev_err(isp->dev,
+				"isp: failed to stop source subdev streaming (%d)\n", ret);
+			goto error_s_stream;
+		}
 	}
 
 out:

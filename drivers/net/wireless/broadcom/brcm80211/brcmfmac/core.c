@@ -60,6 +60,11 @@
 /* Macro to calculate packing factor with scalar 4 in a xTLV */
 #define PACKING_FACTOR(args) ((args) % 4 == 0 ? 0 : (4 - ((args) % 4)))
 
+/* Store the mac that user set from cfg80211 api.
+ * If dongle gets reset, the mac will be restored to dongle.
+ */
+u8 user_mac_addr[ETH_ALEN] = {0};
+
 struct d11rxhdr_le {
 	__le16 RxFrameSize;
 	u16 PAD;
@@ -432,8 +437,10 @@ static int brcmf_netdev_set_mac_address(struct net_device *ndev, void *addr)
 	if (err >= 0) {
 		brcmf_dbg(TRACE, "updated to %pM\n", sa->sa_data);
 		memcpy(ifp->mac_addr, sa->sa_data, ETH_ALEN);
+		memcpy(user_mac_addr, sa->sa_data, ETH_ALEN);
 		eth_hw_addr_set(ifp->ndev, ifp->mac_addr);
 	}
+
 	return err;
 }
 
@@ -749,21 +756,27 @@ void brcmf_rx_event(struct device *dev, struct sk_buff *skb)
 
 void brcmf_txfinalize(struct brcmf_if *ifp, struct sk_buff *txp, bool success)
 {
-	struct ethhdr *eh;
-	u16 type;
+	if (!txp) {
+		if (!success && ifp && ifp->ndev)
+			ifp->ndev->stats.tx_errors++;
+		return;
+	}
 
 	if (!ifp) {
 		brcmu_pkt_buf_free_skb(txp);
 		return;
 	}
 
-	eh = (struct ethhdr *)(txp->data);
-	type = ntohs(eh->h_proto);
+	if (txp->data) {
+		struct ethhdr *eh = (struct ethhdr *)(txp->data);
+		u16 type = ntohs(eh->h_proto);
 
-	if (type == ETH_P_PAE) {
-		atomic_dec(&ifp->pend_8021x_cnt);
-		if (waitqueue_active(&ifp->pend_8021x_wait))
-			wake_up(&ifp->pend_8021x_wait);
+		if (type == ETH_P_PAE) {
+			atomic_dec(&ifp->pend_8021x_cnt);
+			/* Adding comment to avoid WARNING */
+			if (waitqueue_active(&ifp->pend_8021x_wait))
+				wake_up(&ifp->pend_8021x_wait);
+		}
 	}
 
 	if (!success && ifp->ndev)
@@ -1554,6 +1567,10 @@ static void brcmf_core_bus_reset(struct work_struct *work)
 	struct brcmf_pub *drvr = container_of(work, struct brcmf_pub,
 					      bus_reset);
 
+	/* WLAN REG TOGGLE */
+	brcmf_wlanregon_gpio_toggle(0);
+	msleep(100);
+	brcmf_wlanregon_gpio_toggle(1);
 	brcmf_bus_reset(drvr->bus_if);
 }
 
@@ -1589,6 +1606,9 @@ static int brcmf_bus_started(struct brcmf_pub *drvr, struct cfg80211_ops *ops)
 	int i, num;
 
 	brcmf_dbg(TRACE, "\n");
+
+	if (is_valid_ether_addr(user_mac_addr))
+		memcpy(drvr->settings->mac, user_mac_addr, ETH_ALEN);
 
 	/* add primary networking interface */
 	ifp = brcmf_add_if(drvr, 0, 0, false, "wlan%d",
@@ -1817,6 +1837,11 @@ void brcmf_dev_coredump(struct device *dev)
 
 	if (brcmf_debug_create_memdump(bus_if, NULL, 0) < 0)
 		brcmf_dbg(TRACE, "failed to create coredump\n");
+}
+
+void brcmf_wlanregon_gpio_toggle(u8 gpio_on)
+{
+	/* WLAN REG ON/OFF Toggle code to be added */
 }
 
 void brcmf_fw_crashed(struct device *dev)

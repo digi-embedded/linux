@@ -67,8 +67,6 @@
 /* Histogram block - only available starting from stm32mp21 */
 #define DCMIPP_P1HSCR			0x8b0
 #define DCMIPP_P1HSCR_ENABLE		BIT(0)
-/* 4 Comp / 64 bins per comp / 1 region / decimated by 2*/
-#define DCMIPP_P1HSCR_DEFAULT		0x08411000
 
 #define DCMIPP_P1HSSTR			0x8b4
 #define DCMIPP_P1HSSTR_START(x, y)	((x) | ((y) << 16))

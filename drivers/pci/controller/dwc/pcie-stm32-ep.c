@@ -18,10 +18,8 @@
 #include "pcie-designware.h"
 #include "pcie-stm32.h"
 
-enum stm32_pcie_ep_link_status {
-	STM32_PCIE_EP_LINK_DISABLED,
-	STM32_PCIE_EP_LINK_ENABLED,
-};
+#define STM32_PCIE_EP_PERST_IRQ_ENABLED 1
+#define STM32_PCIE_EP_LINK_ENABLED 2
 
 struct stm32_pcie {
 	struct dw_pcie *pci;
@@ -30,7 +28,7 @@ struct stm32_pcie {
 	struct phy *phy;
 	struct clk *clk;
 	struct gpio_desc *reset_gpio;
-	enum stm32_pcie_ep_link_status link_status;
+	int link_status;
 	unsigned int perst_irq;
 };
 
@@ -42,69 +40,22 @@ static const struct of_device_id stm32_pcie_ep_of_match[] = {
 static void stm32_pcie_ep_init(struct dw_pcie_ep *ep)
 {
 	struct dw_pcie *pci = to_dw_pcie_from_ep(ep);
-	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
 	enum pci_barno bar;
 
 	for (bar = BAR_0; bar <= PCI_STD_NUM_BARS; bar++)
 		dw_pcie_ep_reset_bar(pci, bar);
-
-	/* Defer Completion Requests until link started */
-	regmap_update_bits(stm32_pcie->regmap, SYSCFG_PCIECR,
-			   STM32MP25_PCIECR_REQ_RETRY_EN,
-			   STM32MP25_PCIECR_REQ_RETRY_EN);
-}
-
-static int stm32_pcie_enable_link(struct dw_pcie *pci)
-{
-	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
-	int ret;
-
-	regmap_update_bits(stm32_pcie->regmap, SYSCFG_PCIECR,
-			   STM32MP25_PCIECR_LTSSM_EN,
-			   STM32MP25_PCIECR_LTSSM_EN);
-
-	ret = dw_pcie_wait_for_link(pci);
-	if (ret)
-		return ret;
-
-	regmap_update_bits(stm32_pcie->regmap, SYSCFG_PCIECR,
-			   STM32MP25_PCIECR_REQ_RETRY_EN,
-			   0);
-
-	return 0;
-}
-
-static void stm32_pcie_disable_link(struct dw_pcie *pci)
-{
-	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
-
-	regmap_update_bits(stm32_pcie->regmap, SYSCFG_PCIECR,
-			   STM32MP25_PCIECR_REQ_RETRY_EN,
-			   STM32MP25_PCIECR_REQ_RETRY_EN);
-
-	regmap_update_bits(stm32_pcie->regmap, SYSCFG_PCIECR, STM32MP25_PCIECR_LTSSM_EN, 0);
 }
 
 static int stm32_pcie_start_link(struct dw_pcie *pci)
 {
 	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
-	struct dw_pcie_ep *ep = &pci->ep;
-	int ret;
 
-	if (stm32_pcie->link_status == STM32_PCIE_EP_LINK_ENABLED) {
-		dev_dbg(pci->dev, "Link is already enabled\n");
+	if (stm32_pcie->link_status & STM32_PCIE_EP_PERST_IRQ_ENABLED) {
+		dev_dbg(pci->dev, "perst_irq is already enabled\n");
 		return 0;
 	}
 
-	ret = stm32_pcie_enable_link(pci);
-	if (ret) {
-		dev_err(pci->dev, "PCIe cannot establish link: %d\n", ret);
-		return ret;
-	}
-
-	dw_pcie_ep_linkup(ep);
-
-	stm32_pcie->link_status = STM32_PCIE_EP_LINK_ENABLED;
+	stm32_pcie->link_status |= STM32_PCIE_EP_PERST_IRQ_ENABLED;
 
 	enable_irq(stm32_pcie->perst_irq);
 
@@ -115,16 +66,14 @@ static void stm32_pcie_stop_link(struct dw_pcie *pci)
 {
 	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
 
-	if (stm32_pcie->link_status == STM32_PCIE_EP_LINK_DISABLED) {
-		dev_dbg(pci->dev, "Link is already disabled\n");
+	if (!(stm32_pcie->link_status & STM32_PCIE_EP_PERST_IRQ_ENABLED)) {
+		dev_dbg(pci->dev, "perst_irq is already disabled\n");
 		return;
 	}
 
 	disable_irq(stm32_pcie->perst_irq);
 
-	stm32_pcie_disable_link(pci);
-
-	stm32_pcie->link_status = STM32_PCIE_EP_LINK_DISABLED;
+	stm32_pcie->link_status &= ~STM32_PCIE_EP_PERST_IRQ_ENABLED;
 }
 
 static int stm32_pcie_raise_irq(struct dw_pcie_ep *ep, u8 func_no,
@@ -148,12 +97,6 @@ static const struct pci_epc_features stm32_pcie_epc_features = {
 	.force_core_init = true,
 	.core_init_notifier = true,
 	.msi_capable = true,
-	.msix_capable = false,
-	.bar_fixed_size[0] = SZ_1M,
-	.bar_fixed_size[1] = SZ_64K,
-	.bar_fixed_size[2] = SZ_1M,
-	.bar_fixed_size[3] = SZ_1M,
-	.reserved_bar = 1 << BAR_4 | 1 << BAR_5,
 	.align = SZ_64K,
 };
 
@@ -200,25 +143,24 @@ static void stm32_pcie_perst_assert(struct dw_pcie *pci)
 {
 	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
 	struct device *dev = pci->dev;
+	struct dw_pcie_ep *ep = &pci->ep;
 
-	dev_dbg(dev, "PERST asserted by host. Shutting down the PCIe link\n");
-
-	/*
-	 * Do not try to release resources if the PERST# is
-	 * asserted before the link is started.
-	 */
-	if (stm32_pcie->link_status == STM32_PCIE_EP_LINK_DISABLED) {
+	if (!(stm32_pcie->link_status & STM32_PCIE_EP_LINK_ENABLED)) {
 		dev_dbg(pci->dev, "Link is already disabled\n");
 		return;
 	}
 
-	stm32_pcie_disable_link(pci);
+	dev_dbg(dev, "PERST asserted by host. Shutting down the PCIe link\n");
+
+	regmap_update_bits(stm32_pcie->regmap, SYSCFG_PCIECR, STM32MP25_PCIECR_LTSSM_EN, 0);
+
+	dw_pcie_ep_deinit_notify(ep);
 
 	stm32_pcie_disable_resources(stm32_pcie);
 
 	pm_runtime_put_sync(dev);
 
-	stm32_pcie->link_status = STM32_PCIE_EP_LINK_DISABLED;
+	stm32_pcie->link_status &= ~STM32_PCIE_EP_LINK_ENABLED;
 }
 
 static void stm32_pcie_perst_deassert(struct dw_pcie *pci)
@@ -228,7 +170,7 @@ static void stm32_pcie_perst_deassert(struct dw_pcie *pci)
 	struct dw_pcie_ep *ep = &pci->ep;
 	int ret;
 
-	if (stm32_pcie->link_status == STM32_PCIE_EP_LINK_ENABLED) {
+	if (stm32_pcie->link_status & STM32_PCIE_EP_LINK_ENABLED) {
 		dev_dbg(pci->dev, "Link is already enabled\n");
 		return;
 	}
@@ -258,15 +200,14 @@ static void stm32_pcie_perst_deassert(struct dw_pcie *pci)
 
 	dw_pcie_ep_init_notify(ep);
 
-	ret = stm32_pcie_enable_link(pci);
-	if (ret) {
-		dev_err(dev, "PCIe Cannot establish link: %d\n", ret);
-		stm32_pcie_disable_resources(stm32_pcie);
-		pm_runtime_put_sync(dev);
-		return;
-	}
+	/* Enable link training */
+	regmap_update_bits(stm32_pcie->regmap, SYSCFG_PCIECR,
+			   STM32MP25_PCIECR_LTSSM_EN,
+			   STM32MP25_PCIECR_LTSSM_EN);
 
-	stm32_pcie->link_status = STM32_PCIE_EP_LINK_ENABLED;
+	dw_pcie_ep_linkup(ep);
+
+	stm32_pcie->link_status |= STM32_PCIE_EP_LINK_ENABLED;
 }
 
 static irqreturn_t stm32_pcie_ep_perst_irq_thread(int irq, void *data)
@@ -280,6 +221,9 @@ static irqreturn_t stm32_pcie_ep_perst_irq_thread(int irq, void *data)
 		stm32_pcie_perst_assert(pci);
 	else
 		stm32_pcie_perst_deassert(pci);
+
+	irq_set_irq_type(gpiod_to_irq(stm32_pcie->reset_gpio),
+			 (perst ? IRQF_TRIGGER_HIGH : IRQF_TRIGGER_LOW));
 
 	return IRQ_HANDLED;
 }
@@ -319,6 +263,8 @@ static int stm32_add_pcie_ep(struct stm32_pcie *stm32_pcie,
 		pm_runtime_put_sync(dev);
 		return ret;
 	}
+
+	ep->page_size = stm32_pcie_get_features(ep)->align;
 
 	ret = dw_pcie_ep_init(ep);
 	if (ret) {
@@ -396,8 +342,7 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 
 	ret = devm_request_threaded_irq(dev, stm32_pcie->perst_irq, NULL,
 					stm32_pcie_ep_perst_irq_thread,
-					IRQF_TRIGGER_RISING |
-					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
 					"perst_irq", stm32_pcie);
 	if (ret) {
 		dev_err(dev, "Failed to request PERST IRQ: %d\n", ret);
@@ -415,6 +360,8 @@ static int stm32_pcie_remove(struct platform_device *pdev)
 	disable_irq(stm32_pcie->perst_irq);
 
 	dw_pcie_ep_exit(ep);
+
+	dw_pcie_ep_deinit_notify(ep);
 
 	stm32_pcie_disable_resources(stm32_pcie);
 

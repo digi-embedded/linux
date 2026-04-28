@@ -127,6 +127,10 @@ properties:
   "#address-cells":
     const: 1
 
+  access-controllers:
+    minItems: 1
+    maxItems: 2
+
 patternProperties:
   '^trig-conns@([0-9]+)$':
     type: object

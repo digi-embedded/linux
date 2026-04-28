@@ -35,22 +35,15 @@ properties:
       # I2C-BUS INTERFACE REAL TIME CLOCK MODULE
       - epson,rx8010
       # I2C-BUS INTERFACE REAL TIME CLOCK MODULE
-      - epson,rx8025
       - epson,rx8035
       # I2C-BUS INTERFACE REAL TIME CLOCK MODULE with Battery Backed RAM
       - epson,rx8571
       # I2C-BUS INTERFACE REAL TIME CLOCK MODULE
       - epson,rx8581
-      # Intersil ISL1208 Low Power RTC with Battery Backed SRAM
-      - isil,isl1208
-      # Intersil ISL1218 Low Power RTC with Battery Backed SRAM
-      - isil,isl1218
       # Real Time Clock Module with I2C-Bus
       - microcrystal,rv3029
       # Real Time Clock
       - microcrystal,rv8523
-      # Real-time Clock Module
-      - pericom,pt7c4338
       # I2C bus SERIAL INTERFACE REAL-TIME CLOCK IC
       - ricoh,r2025sd
       # I2C bus SERIAL INTERFACE REAL-TIME CLOCK IC

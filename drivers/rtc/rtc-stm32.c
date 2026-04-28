@@ -237,6 +237,7 @@ static int stm32_rtc_clk_lsco_register(struct platform_device *pdev)
 {
 	struct stm32_rtc *rtc = platform_get_drvdata(pdev);
 	struct stm32_rtc_registers regs = rtc->data->regs;
+	unsigned long flags = 0;
 	u8 lscoen;
 	int ret;
 
@@ -247,9 +248,16 @@ static int stm32_rtc_clk_lsco_register(struct platform_device *pdev)
 	lscoen = (rtc->lsco == RTC_OUT1) ? STM32_RTC_CFGR_LSCOEN_OUT1 :
 					   STM32_RTC_CFGR_LSCOEN_OUT2_RMP;
 
+	/*
+	 * For backward compatibility with old DT without #clock-cells
+	 * and with no clock clients, keep the clock always enabled.
+	 */
+	if (!of_property_present(pdev->dev.of_node, "#clock-cells"))
+		flags = CLK_IGNORE_UNUSED | CLK_IS_CRITICAL;
+
 	rtc->clk_lsco = clk_register_gate(&pdev->dev, "rtc_lsco",
 					  __clk_get_name(rtc->rtc_ck),
-					  CLK_IGNORE_UNUSED | CLK_IS_CRITICAL,
+					  flags,
 					  rtc->base + regs.cfgr, lscoen,
 					  0, NULL);
 	if (IS_ERR(rtc->clk_lsco))
