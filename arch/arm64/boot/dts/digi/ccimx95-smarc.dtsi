@@ -208,13 +208,11 @@
 
 &pcie0 {
 	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_OUTPUT>;
-	reset-gpio = <&mca_gpio 25 0>;		/* PB10 */
 	status = "okay";
 };
 
 &pcie1 {
 	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_OUTPUT>;
-	reset-gpio = <&mca_gpio 10 0>;		/* PB1 */
 	status = "okay";
 };
 
