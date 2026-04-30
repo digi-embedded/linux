@@ -89,8 +89,21 @@ struct brcmf_cfg80211_info;
 	BRCMF_ENUM_DEF(DCS_REQUEST, 73) \
 	BRCMF_ENUM_DEF(FIFO_CREDIT_MAP, 74) \
 	BRCMF_ENUM_DEF(ACTION_FRAME_RX, 75) \
+	BRCMF_ENUM_DEF(SA_COMPLETE_IND, 80) \
+	BRCMF_ENUM_DEF(ASSOC_REQ_IE, 87) \
+	BRCMF_ENUM_DEF(ASSOC_RESP_IE, 88) \
 	BRCMF_ENUM_DEF(TDLS_PEER_EVENT, 92) \
-	BRCMF_ENUM_DEF(BCMC_CREDIT_SUPPORT, 127)
+	BRCMF_ENUM_DEF(PHY_TEMP, 111) \
+	BRCMF_ENUM_DEF(BCMC_CREDIT_SUPPORT, 127) \
+	BRCMF_ENUM_DEF(ULP, 146) \
+	BRCMF_ENUM_DEF(TWT_SETUP, 157) \
+	BRCMF_ENUM_DEF(EXT_AUTH_REQ, 187) \
+	BRCMF_ENUM_DEF(EXT_AUTH_FRAME_RX, 188) \
+	BRCMF_ENUM_DEF(MGMT_FRAME_TXSTATUS, 189) \
+	BRCMF_ENUM_DEF(MGMT_FRAME_OFF_CHAN_COMPLETE, 190) \
+	BRCMF_ENUM_DEF(TWT_TEARDOWN, 195) \
+	BRCMF_ENUM_DEF(EXT_ASSOC_FRAME_RX, 196) \
+	BRCMF_ENUM_DEF(ICMP_ECHO_REQ, 202)
 
 #define BRCMF_ENUM_DEF(id, val) \
 	BRCMF_E_##id = (val),
@@ -102,7 +115,7 @@ enum brcmf_fweh_event_code {
 	 * minimum length check in device firmware so it is
 	 * hard-coded here.
 	 */
-	BRCMF_E_LAST = 139
+	BRCMF_E_LAST = 203
 };
 #undef BRCMF_ENUM_DEF
 
@@ -142,19 +155,26 @@ enum brcmf_fweh_event_code {
 #define BRCMF_E_STATUS_FWSUP_PREP_G2		11
 
 /* reason field values in struct brcmf_event_msg */
-#define BRCMF_E_REASON_INITIAL_ASSOC		0
-#define BRCMF_E_REASON_LOW_RSSI			1
-#define BRCMF_E_REASON_DEAUTH			2
-#define BRCMF_E_REASON_DISASSOC			3
-#define BRCMF_E_REASON_BCNS_LOST		4
-#define BRCMF_E_REASON_MINTXRATE		9
-#define BRCMF_E_REASON_TXFAIL			10
+/* roam reason codes */
+#define BRCMF_E_REASON_INITIAL_ASSOC      0       /* initial assoc */
+#define BRCMF_E_REASON_LOW_RSSI           1       /* roamed due to low RSSI */
+#define BRCMF_E_REASON_DEAUTH             2       /* roamed due to DEAUTH indication */
+#define BRCMF_E_REASON_DISASSOC           3       /* roamed due to DISASSOC indication */
+#define BRCMF_E_REASON_BCNS_LOST          4       /* roamed due to lost beacons */
+#define BRCMF_E_REASON_FAST_ROAM_FAILED   5       /* roamed due to fast roam failure */
+#define BRCMF_E_REASON_DIRECTED_ROAM      6       /* roamed due to request by AP */
+#define BRCMF_E_REASON_TSPEC_REJECTED     7       /* roamed due to TSPEC rejection */
+#define BRCMF_E_REASON_BETTER_AP          8       /* roamed due to finding better AP */
+#define BRCMF_E_REASON_MINTXRATE          9       /* roamed because at mintxrate for too long */
+#define BRCMF_E_REASON_TXFAIL             10      /* We can hear AP, but AP can't hear us */
+#define BRCMF_E_REASON_BSSTRANS_REQ       11      /* roamed due to BSS Transition request by AP */
+#define BRCMF_E_REASON_LOW_RSSI_CU        12      /* roamed due to low RSSI and Channel Usage */
+#define BRCMF_E_REASON_RADAR_DETECTED     13      /* roamed due to radar detection by STA */
+#define BRCMF_E_REASON_CSA                14      /* roamed due to CSA from AP */
+#define BRCMF_E_REASON_ESTM_LOW           15	  /* roamed due to ESTM low tput */
+#define BRCMF_E_REASON_LAST               16
 
 #define BRCMF_E_REASON_LINK_BSSCFG_DIS		4
-#define BRCMF_E_REASON_FAST_ROAM_FAILED		5
-#define BRCMF_E_REASON_DIRECTED_ROAM		6
-#define BRCMF_E_REASON_TSPEC_REJECTED		7
-#define BRCMF_E_REASON_BETTER_AP		8
 
 #define BRCMF_E_REASON_TDLS_PEER_DISCOVERED	0
 #define BRCMF_E_REASON_TDLS_PEER_CONNECTED	1
@@ -281,6 +301,33 @@ struct brcmf_if_event {
 	u8 flags;
 	u8 bsscfgidx;
 	u8 role;
+};
+
+enum event_msgs_ext_command {
+	EVENTMSGS_NONE		=	0,
+	EVENTMSGS_SET_BIT	=	1,
+	EVENTMSGS_RESET_BIT	=	2,
+	EVENTMSGS_SET_MASK	=	3
+};
+
+#define EVENTMSGS_VER 1
+#define EVENTMSGS_EXT_STRUCT_SIZE	offsetof(struct eventmsgs_ext, mask[0])
+
+/* len-	for SET it would be mask size from the application to the firmware */
+/*		for GET it would be actual firmware mask size */
+/* maxgetsize -	is only used for GET. indicate max mask size that the */
+/*				application can read from the firmware */
+struct eventmsgs_ext {
+	u8	ver;
+	u8	command;
+	u8	len;
+	u8	maxgetsize;
+	u8	mask[1];
+};
+
+struct roam_reason_name {
+	u32 reason;
+	char *reason_name;
 };
 
 typedef int (*brcmf_fweh_handler_t)(struct brcmf_if *ifp,

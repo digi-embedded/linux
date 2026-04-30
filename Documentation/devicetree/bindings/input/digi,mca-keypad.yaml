@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/input/digi,mca-keypad.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Digi MCA matrix keypad controller
+
+maintainers:
+  - name: Digi International
+    email: hector.palacios@digi.com
+
+description: |
+  Matrix keypad controller provided by the Digi MCA (Micro Controller Assist).
+
+  The MCA keypad controller interfaces with matrix keypads using 2-point
+  contact keys. It can detect, debounce, and decode one or multiple keys
+  pressed simultaneously, and also detects key release events.
+
+properties:
+  compatible:
+    const: digi,mca-keypad
+
+  rows-io-list:
+    description: List of MCA IOs used as row lines.
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 1
+
+  cols-io-list:
+    description: List of MCA IOs used as column lines.
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 1
+
+  linux,keymap:
+    description: Matrix keypad keymap definition.
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 1
+
+  debounce-ms:
+    description: Debounce filter in milliseconds.
+    $ref: /schemas/types.yaml#/definitions/uint32
+    minimum: 0
+
+  pwr-off-wakeup:
+    type: boolean
+    description: Enable wakeup from power-off through keypad events.
+
+  autorepeat:
+    type: boolean
+    description: Enable Linux input subsystem auto-repeat.
+
+required:
+  - compatible
+  - rows-io-list
+  - cols-io-list
+  - linux,keymap
+
+additionalProperties: false
+
+examples:
+  - |
+    mca@63 {
+        mca_keypad: keypad {
+            compatible = "digi,mca-keypad";
+            rows-io-list = <7 9>;
+            cols-io-list = <5 17 6 8>;
+            pwr-off-wakeup;
+            debounce-ms = <10>;
+
+            linux,keymap = <MATRIX_KEY(0, 0, KEY_UP)
+                            MATRIX_KEY(0, 1, KEY_DOWN)
+                            MATRIX_KEY(0, 2, KEY_VOLUMEDOWN)
+                            MATRIX_KEY(0, 3, KEY_HOME)
+                            MATRIX_KEY(1, 0, KEY_RIGHT)
+                            MATRIX_KEY(1, 1, KEY_LEFT)
+                            MATRIX_KEY(1, 2, KEY_ENTER)
+                            MATRIX_KEY(1, 3, KEY_VOLUMEUP)>;
+
+            autorepeat;
+        };
+    };

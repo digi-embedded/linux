@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/misc/digi,mca-tamper.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Digi MCA tamper detector
+
+maintainers:
+  - name: Digi International
+    email: hector.palacios@digi.com
+
+description: |
+  Tamper detection block provided by the Digi MCA (Micro Controller Assist).
+
+  The MCA tamper block can monitor up to four tamper interfaces. Interfaces
+  0 and 1 are used for digital tamper detection, while interfaces 2 and 3
+  are used for analog comparison.
+
+properties:
+  compatible:
+    const: digi,mca-tamper
+
+  digi,tamper-if-list:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: |
+      List of enabled tamper interfaces.
+    items:
+      enum: [0, 1, 2, 3]
+    uniqueItems: true
+    minItems: 1
+    maxItems: 4
+
+required:
+  - compatible
+
+additionalProperties: false
+
+examples:
+  - |
+    mca@7e {
+        mca_tamper: tamper {
+            compatible = "digi,mca-tamper";
+            digi,tamper-if-list = <0 1 2 3>;
+        };
+    };

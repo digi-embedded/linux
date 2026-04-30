@@ -1,0 +1,120 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2026 Digi International Inc.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "../freescale/imx95-pinfunc.h"
+#include <dt-bindings/clock/fsl,imx95-clock.h>
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: Wi-Fi";
+
+			wlan_pwrseq: wlan-pwrseq {
+				compatible = "mmc-pwrseq-simple";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_wifi_ctrl>;
+				reset-gpios = <&gpio2 19 GPIO_ACTIVE_LOW>; /* WL_REG_ON */
+				/* Use CCM CKO3 to clock the Wi-Fi chipset */
+				clocks = <&scmi_clk IMX95_CLK_CCMCKO3>;
+				clock-names = "ext_clock";
+				/* Configure CCMCKO3 to be sourced from 32K */
+				assigned-clocks = <&scmi_clk IMX95_CLK_CCMCKO3>;
+				assigned-clock-parents = <&scmi_clk IMX95_CLK_32K>;
+				status = "okay";
+			};
+
+			wireless {
+				/* U-Boot will fill in the MAC address here */
+			};
+		};
+	};
+
+	/* Enable USDHC3 (Wireless) */
+	fragment@1 {
+		target = <&usdhc3>;
+		__overlay__ {
+			pinctrl-names = "default", "state_100mhz", "state_200mhz", "sleep";
+			pinctrl-0 = <&pinctrl_usdhc3>;
+			pinctrl-1 = <&pinctrl_usdhc3_100mhz>;
+			pinctrl-2 = <&pinctrl_usdhc3_200mhz>;
+			pinctrl-3 = <&pinctrl_usdhc3>;
+			mmc-pwrseq = <&wlan_pwrseq>;
+			vqmmc-supply = <&reg_1v8_rf>;
+			bus-width = <4>;
+			cap-power-off-card;
+			non-removable;
+			wakeup-source;
+			max-frequency = <100000000>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			brcmf: bcrmf@1 {
+				reg = <1>;
+				compatible = "brcm,bcm4329-fmac";
+			};
+		};
+	};
+
+	/* Enable 1V8_RF regulator */
+	fragment@2 {
+		target = <&reg_1v8_rf>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	fragment@3 {
+		target = <&scmi_iomuxc>;
+		__overlay__ {
+			pinctrl_usdhc3: usdhc3grp {
+				fsl,pins = <
+					IMX95_PAD_SD3_CLK__USDHC3_CLK				0x1582
+					IMX95_PAD_SD3_CMD__USDHC3_CMD				0x1382
+					IMX95_PAD_SD3_DATA0__USDHC3_DATA0			0x1382
+					IMX95_PAD_SD3_DATA1__USDHC3_DATA1			0x1382
+					IMX95_PAD_SD3_DATA2__USDHC3_DATA2			0x1382
+					IMX95_PAD_SD3_DATA3__USDHC3_DATA3			0x1382
+				>;
+			};
+
+			pinctrl_usdhc3_100mhz: usdhc3-100mhzgrp {
+				fsl,pins = <
+					IMX95_PAD_SD3_CLK__USDHC3_CLK				0x158e
+					IMX95_PAD_SD3_CMD__USDHC3_CMD				0x138e
+					IMX95_PAD_SD3_DATA0__USDHC3_DATA0			0x138e
+					IMX95_PAD_SD3_DATA1__USDHC3_DATA1			0x138e
+					IMX95_PAD_SD3_DATA2__USDHC3_DATA2			0x138e
+					IMX95_PAD_SD3_DATA3__USDHC3_DATA3			0x138e
+				>;
+			};
+
+			pinctrl_usdhc3_200mhz: usdhc3-200mhzgrp {
+				fsl,pins = <
+					IMX95_PAD_SD3_CLK__USDHC3_CLK				0x15fe
+					IMX95_PAD_SD3_CMD__USDHC3_CMD				0x13fe
+					IMX95_PAD_SD3_DATA0__USDHC3_DATA0			0x13fe
+					IMX95_PAD_SD3_DATA1__USDHC3_DATA1			0x13fe
+					IMX95_PAD_SD3_DATA2__USDHC3_DATA2			0x13fe
+					IMX95_PAD_SD3_DATA3__USDHC3_DATA3			0x13fe
+				>;
+			};
+
+			pinctrl_wifi_ctrl: wifictrl {
+				fsl,pins = <
+					/* 32 kHz clock */
+					IMX95_PAD_CCM_CLKO3__CCMSRCGPCMIX_TOP_CLKO_3	0x111e
+					/* WL_REG_ON */
+					IMX95_PAD_GPIO_IO19__GPIO2_IO_BIT19	0x31e
+				>;
+			};
+		};
+	};
+};

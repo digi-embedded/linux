@@ -1,0 +1,23 @@
+$id: "http://devicetree.org/schemas/mfd/digi,mca-ioexp.yaml#"
+
+allOf:
+  - $ref: /schemas/mfd/digi,mca-common.yaml#
+
+properties:
+  compatible:
+    const: digi,mca-ioexp
+
+  digi,restore-config-on-resume:
+    type: boolean
+
+patternProperties:
+  "^gpio$":
+    $ref: /schemas/gpio/digi,mca-gpio.yaml#
+
+  "^adc$":
+    $ref: /schemas/iio/adc/digi,mca-adc.yaml#
+
+required:
+  - compatible
+
+unevaluatedProperties: false

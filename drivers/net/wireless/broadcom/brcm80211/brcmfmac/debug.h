@@ -29,6 +29,16 @@
 #define BRCMF_MSGBUF_VAL	0x00040000
 #define BRCMF_PCIE_VAL		0x00080000
 #define BRCMF_FWCON_VAL		0x00100000
+#define BRCMF_ULP_VAL		0x00200000
+#define BRCMF_TWT_VAL		0x00400000
+#define BRCMF_SDIOEXT_VAL	0x00800000
+
+#define BRCMF_DEBUG_DUMP_TIME_BUF_LEN (17 + 1)
+#define BRCMF_LOG_DUMP_TS_MULTIPLIER_VALUE    60
+#define BRCMF_LOG_DUMP_BOOTTIME    "%5lld.%06ld"
+#define BRCMF_OK 0
+#define BRCMF_COMMON_DUMP_PATH    "/root/"
+#define vfs_write(fp, buf, len, pos) kernel_write(fp, buf, len, pos)
 
 /* set default print format */
 #undef pr_fmt
@@ -107,6 +117,10 @@ do {								\
 
 #endif /* defined(DEBUG) || defined(CONFIG_BRCM_TRACING) */
 
+#define MSGTRACE_VERSION 1
+#define MSGTRACE_HDR_TYPE_MSG 0
+#define MSGTRACE_HDR_TYPE_LOG 1
+
 #define brcmf_dbg_hex_dump(test, data, len, fmt, ...)			\
 do {									\
 	trace_brcmf_hexdump((void *)data, len);				\
@@ -121,8 +135,13 @@ struct brcmf_pub;
 struct dentry *brcmf_debugfs_get_devdir(struct brcmf_pub *drvr);
 void brcmf_debugfs_add_entry(struct brcmf_pub *drvr, const char *fn,
 			     int (*read_fn)(struct seq_file *seq, void *data));
+int brcmf_debug_write_file(struct brcmf_bus *bus, const char *file_name,
+			   u32 flags, void *buf, size_t size);
+void brcmf_debug_get_dump_time(char *str);
+int brcmf_debug_ramdump_to_file(struct brcmf_bus *bus, void *dump, size_t size, char *fname);
 int brcmf_debug_create_memdump(struct brcmf_bus *bus, const void *data,
 			       size_t len);
+int brcmf_debug_fwlog_init(struct brcmf_pub *drvr);
 #else
 static inline struct dentry *brcmf_debugfs_get_devdir(struct brcmf_pub *drvr)
 {
@@ -138,6 +157,25 @@ int brcmf_debug_create_memdump(struct brcmf_bus *bus, const void *data,
 {
 	return 0;
 }
+
+static inline
+int brcmf_debug_fwlog_init(struct brcmf_pub *drvr)
+{
+	return 0;
+}
 #endif
 
+/* Message trace header */
+struct msgtrace_hdr {
+	u8	version;
+	u8	trace_type;
+	u16	len;    /* Len of the trace */
+	u32	seqnum; /* Sequence number of message */
+	/* Number of discarded bytes because of trace overflow  */
+	u32	discarded_bytes;
+	/* Number of discarded printf because of trace overflow */
+	u32	discarded_printf;
+};
+
+#define MSGTRACE_HDRLEN		sizeof(struct msgtrace_hdr)
 #endif /* BRCMFMAC_DEBUG_H */

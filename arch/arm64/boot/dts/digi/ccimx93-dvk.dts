@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2024, Digi International Inc.
+ * Copyright 2022-2026, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -41,24 +41,6 @@
 		#clock-cells = <0>;
 		clock-frequency = <24000000>;
 		clock-output-names = "xtal_24MHz";
-	};
-
-	lvds_backlight: lvds_backlight {
-		compatible = "pwm-backlight";
-		pwms = <&tpm6 1 50000 0>;
-		brightness-levels = <0 20 25 30 35 40 100>;
-		default-brightness-level = <6>;
-		status = "disabled";
-	};
-
-	lvds_panel: lvds_panel {
-		status = "disabled";
-
-		port {
-			panel_lvds_in: endpoint {
-				remote-endpoint = <&lvds_out>;
-			};
-		};
 	};
 
 	hdmi-connector {
@@ -118,13 +100,6 @@
 			vin-supply = <&reg_5v_board>;
 			enable-active-low;
 		};
-
-		reg_vref_1v8: regulator-adc-vref {
-			compatible = "regulator-fixed";
-			regulator-name = "vref_1v8";
-			regulator-min-microvolt = <1800000>;
-			regulator-max-microvolt = <1800000>;
-		};
 	};
 
 	sound_max98089: sound-max98089 {
@@ -160,15 +135,8 @@
 	};
 };
 
-/* LVDS PWM backlight */
-&tpm6 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_tpm6>;
-};
-
 /* ADC - 4 channels available on expansion connector */
 &adc1 {
-	vref-supply = <&reg_vref_1v8>;
 	status = "okay";
 };
 
@@ -250,18 +218,6 @@
 
 &ldb {
 	status = "disabled";
-
-	lvds-channel@0 {
-		status = "disabled";
-
-		port@1 {
-			reg = <1>;
-
-			lvds_out: endpoint {
-				remote-endpoint = <&panel_lvds_in>;
-			};
-		};
-	};
 };
 
 &ldb_phy {
@@ -277,21 +233,6 @@
 	pinctrl-0 = <&pinctrl_lpi2c3>;
 	pinctrl-1 = <&pinctrl_lpi2c3>;
 	status = "okay";
-
-	goodix_touch: gt9271@14 {
-		compatible = "goodix,gt9271";
-		reg = <0x14>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_touch>;
-		/* LVDS interrupt */
-		interrupt-parent = <&gpio2>;
-		interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
-		irq-gpios = <&gpio2 24 GPIO_ACTIVE_HIGH>;
-		reload-fw-on-resume;
-		skip-firmware-request;
-		vin-supply = <&reg_5v_board>;
-		status = "disabled";
-	};
 
 	ext_rtc: ext_rtc@52 {
 		compatible = "microcrystal,rv3028";
@@ -873,14 +814,6 @@
 		>;
 	};
 
-	/* LVDS touch interface IOs */
-	pinctrl_touch: touchgrp {
-		fsl,pins = <
-			/* LVDS touch interrupt */
-			MX93_PAD_GPIO_IO24__GPIO2_IO24				0x31e
-		>;
-	};
-
 	/* SD card */
 	pinctrl_usdhc2_gpio: usdhc2gpiogrp {
 		fsl,pins = <
@@ -987,13 +920,6 @@
 		fsl,pins = <
 			/* USBC Alert */
 			MX93_PAD_ENET2_TXC__GPIO4_IO21				0x31e
-		>;
-	};
-
-	/* LVDS PWM backlight */
-	pinctrl_tpm6: tpm6grp {
-		fsl,pins = <
-			MX93_PAD_GPIO_IO23__TPM6_CH1					0x19e
 		>;
 	};
 };

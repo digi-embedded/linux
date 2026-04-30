@@ -1,0 +1,17 @@
+$id: "http://devicetree.org/schemas/mfd/digi,mca-stm32u031.yaml#"
+
+allOf:
+  - $ref: /schemas/mfd/digi,mca-common.yaml#
+
+properties:
+  compatible:
+    const: digi,mca-stm32u031
+
+patternProperties:
+  "^pwrkey$":
+    $ref: /schemas/input/digi,mca-pwrkey.yaml#
+
+required:
+  - compatible
+
+unevaluatedProperties: false

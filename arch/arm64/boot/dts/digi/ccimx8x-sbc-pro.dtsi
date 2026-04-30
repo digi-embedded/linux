@@ -662,9 +662,6 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lt8912>;
 		reset-gpios = <&lsio_gpio1 27 GPIO_ACTIVE_LOW>;
-		/* MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_LPM |
-		   MIPI_DSI_MODE_NO_EOT_PACKET | MIPI_DSI_MODE_VIDEO_BURST */
-		digi,mipi-mode-flags = <0xA03>;
 		vdd-supply = <&reg_3v3_ext>;
 		status = "disabled";
 

@@ -1,0 +1,152 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2026 Digi International Inc.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/clock/fsl,imx95-clock.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include "../freescale/imx95-pinfunc.h"
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: NXP EXPI-OS08A20 MIPI camera";
+		};
+	};
+
+	/* Camera sensor */
+	fragment@1 {
+		target = <&lpi2c2>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			/* MIPI-CSI camera */
+			os08a20: os08a20_mipi@36 {
+				compatible = "ovti,os08a20";
+				reg = <0x36>;
+				/* MIPI_CSI1_PWDN#: MCA PA3 */
+				reset-gpios = <&mca_gpio 0 GPIO_ACTIVE_LOW>;
+				orientation = <2>;
+				rotation = <0>;
+				status = "okay";
+
+				port {
+					os08a20_mipi_0_ep: endpoint {
+						remote-endpoint = <&mipi_csi0_ep>;
+						data-lanes = <1 2 3 4>;
+						clock-lanes = <0>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Enable MIPI Rx DPHY */
+	fragment@2 {
+		target = <&dphy_rx>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable MIPI CSI */
+	fragment@3 {
+		target = <&mipi_csi0>;
+		__overlay__ {
+			status = "okay";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					mipi_csi0_ep: endpoint {
+						remote-endpoint = <&os08a20_mipi_0_ep>;
+						data-lanes = <1 2 3 4>;
+						clock-lanes = <0>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+					mipi_csi0_out: endpoint {
+						remote-endpoint = <&formatter_0_in>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Enable CSI pixel formatter */
+	fragment@4 {
+		target = <&csi_pixel_formatter_0>;
+		__overlay__ {
+			status = "okay";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					formatter_0_in: endpoint {
+						remote-endpoint = <&mipi_csi0_out>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					formatter_0_out: endpoint {
+						remote-endpoint = <&isi_in_2>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Enable the Image Sensing Interface */
+	fragment@5 {
+		target = <&isi>;
+		__overlay__ {
+			status = "okay";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				/*
+				* ISI ports 0 and 1 are fed by DPU pixel-link outputs.
+				* ISI ports 2 and 3 are fed by CameraMix
+				* (formatter/interleaver) outputs.
+				*/
+				port@2 {
+					reg = <2>;
+
+					isi_in_2: endpoint {
+						remote-endpoint = <&formatter_0_out>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Enable Neo ISP */
+	fragment@6 {
+		target = <&neoisp0>;
+		__overlay__ {
+			compatible = "nxp,imx95-b0-neoisp";
+			status = "okay";
+		};
+	};
+};

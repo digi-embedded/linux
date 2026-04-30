@@ -29,7 +29,7 @@
 
 	/* Camera sensor */
 	fragment@1 {
-		target = <&lpi2c3>;
+		target = <&lpi2c2>;
 		__overlay__ {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -38,11 +38,10 @@
 			ov5640_mipi: ov5640_mipi@3c {
 				compatible = "ovti,ov5640";
 				reg = <0x3c>;
-				pinctrl-names = "default";
-				pinctrl-0 = <&pinctrl_mipi>;
 				clocks = <&mipi_csi_xtal24m>;
 				clock-names = "xclk";
-				powerdown-gpios = <&gpio5 17 GPIO_ACTIVE_LOW>;
+				/* MIPI_CSI1_PWDN#: MCA PA3 */
+				powerdown-gpios = <&mca_gpio 0 GPIO_ACTIVE_LOW>;
 				digi,use-pm-ops;
 				status = "okay";
 
@@ -150,18 +149,12 @@
 		};
 	};
 
-
-	/* pinctrl */
+	/* Enable Neo ISP */
 	fragment@6 {
-		target = <&scmi_iomuxc>;
+		target = <&neoisp0>;
 		__overlay__ {
-			/* MIPI Camera */
-			pinctrl_mipi: mipi {
-				fsl,pins = <
-					/* Camera PWUP */
-					IMX95_PAD_GPIO_IO37__GPIO5_IO_BIT17		0x31e
-				>;
-			};
+			compatible = "nxp,imx95-b0-neoisp";
+			status = "okay";
 		};
 	};
 

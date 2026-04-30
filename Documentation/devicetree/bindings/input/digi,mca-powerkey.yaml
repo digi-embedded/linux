@@ -1,0 +1,133 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/input/digi,mca-pwrkey.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Digi MCA power key
+
+maintainers:
+  - name: Digi International
+    email: hector.palacios@digi.com
+
+description: |
+  Power key input driver provided by the Digi MCA (Micro Controller Assist).
+
+  The exact event generation semantics depend on the MCA variant:
+
+    - digi,mca-pwrkey:
+      Used on KL03/KL17-based MCA variants. KEY_POWER is associated with
+      long press of the POWER button, and KEY_SLEEP with short press of
+      the POWER button.
+
+    - digi,mca-smarc-pwrkey:
+      Used on STM32U031-based MCA variants. KEY_POWER is associated with
+      press of the POWER button, while KEY_SLEEP is associated with press
+      of the STANDBY button.
+
+properties:
+  compatible:
+    enum:
+      - digi,mca-pwrkey
+      - digi,mca-smarc-pwrkey
+
+  digi,key-power:
+    type: boolean
+    description: |
+      Enable KEY_POWER event generation.
+
+      On digi,mca-pwrkey, this generates KEY_POWER on long press of the
+      POWER button.
+
+      On digi,mca-smarc-pwrkey, this generates KEY_POWER on press of
+      the POWER button.
+
+  digi,key-power-up:
+    type: boolean
+    description: |
+      Generate KEY_POWER release event on release of the POWER button.
+
+  digi,key-sleep:
+    type: boolean
+    description: |
+      Enable KEY_SLEEP event generation.
+
+      On digi,mca-pwrkey, this generates KEY_SLEEP on short press of the
+      POWER button.
+
+      On digi,mca-smarc-pwrkey, this generates KEY_SLEEP on press of
+      the STANDBY button.
+
+  digi,debounce-ms:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    maximum: 12750
+    description: |
+      Debounce filter in milliseconds.
+
+      On digi,mca-pwrkey, debounce applies to the POWER button.
+
+      On digi,mca-smarc-pwrkey, debounce applies to both the POWER
+      and STANDBY buttons.
+
+  digi,pwroff-delay-sec:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    minimum: 0
+    maximum: 255
+    description: |
+      Delay in seconds associated with POWER button press handling.
+
+      On digi,mca-pwrkey, this is the number of seconds the POWER button
+      must be pressed to generate a KEY_POWER event.
+
+      On digi,mca-smarc-pwrkey, this is the number of seconds the
+      POWER button must be pressed to force PMIC power-off.
+
+  digi,pwroff-guard-sec:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    minimum: 0
+    maximum: 255
+    description: |
+      Number of seconds the MCA waits for the OS to power off the system
+      before forcing power-off.
+
+      Supported only on digi,mca-pwrkey.
+
+required:
+  - compatible
+
+allOf:
+  - if:
+      properties:
+        compatible:
+          const: digi,mca-smarc-pwrkey
+    then:
+      properties:
+        digi,pwroff-guard-sec: false
+
+additionalProperties: false
+
+examples:
+  - |
+    mca@7e {
+        pwrkey {
+            compatible = "digi,mca-pwrkey";
+            digi,key-power;
+            digi,key-power-up;
+            digi,key-sleep;
+            digi,debounce-ms = <100>;
+            digi,pwroff-delay-sec = <6>;
+            digi,pwroff-guard-sec = <30>;
+        };
+    };
+
+  - |
+    mca@20 {
+        pwrkey {
+            compatible = "digi,mca-smarc-pwrkey";
+            digi,key-power;
+            digi,key-power-up;
+            digi,key-sleep;
+            digi,debounce-ms = <100>;
+            digi,pwroff-delay-sec = <6>;
+        };
+    };

@@ -1,7 +1,7 @@
 /* mca-uart.c - UART driver for MCA devices.
  * Based on sc16is7xx.c, by Jon Ringle <jringle@gridpoint.com>
  *
- * Copyright (C) 2017-2022  Digi International Inc
+ * Copyright (C) 2017-2026  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -872,13 +872,7 @@ static int mca_uart_get_config_of(struct mca_uart_drv *uart_drv, int num_uarts)
 			continue;
 		}
 		mca_uart->baddr = val;
-
-		if (of_property_read_u32(node, "index", &val)) {
-			dev_err(uart_drv->dev,
-				"invalid/missing index entry in devicetree\n");
-			continue;
-		}
-		mca_uart->line = val;
+		mca_uart->line = (val - MCA_UART0_OFFSET) / MCA_REG_UART_LEN;
 
 		if (mca_uart_get_pins(uart_drv, mca_uart, node))
 			continue;
@@ -1019,8 +1013,7 @@ static int mca_uart_probe(struct platform_device *pdev)
 	}
 
 	/* Check if the firmware has uart support */
-	if (!MCA_FEATURE_IS_SUPPORTED(mca, MCA_UART_KL03_MIN_FW,
-	                              MCA_UART_KL17_MIN_FW)) {
+	if (!mca_feature_is_supported(mca, MCA_FUNC_UART)) {
 		dev_err(&pdev->dev,
 			"UART is not supported in MCA firmware v%d.%02d.\n",
 			MCA_FW_VER_MAJOR(mca->fw_version),

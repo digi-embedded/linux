@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Digi International, Inc.
+ * Copyright 2016-2026 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -87,7 +87,7 @@
 		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
-		fw-update-gpio = <&gpio4 14 GPIO_ACTIVE_LOW>;
+		fw-update-gpios = <&gpio4 14 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mca_cc6ul>;
 
@@ -140,7 +140,6 @@
 
 			mca_uart0: serial@900 {
 				reg = <0x900>;
-				index = <0>;
 			};
 		};
 	};

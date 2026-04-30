@@ -1,6 +1,6 @@
 /* mca-adc.c - ADC driver for MCA devices.
  *
- * Copyright (C) 2017 - 2022  Digi International Inc
+ * Copyright (C) 2017-2026  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -699,6 +699,7 @@ static int mca_adc_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct device *mca_dev = mca->dev;
+	const struct mca_adc_data *devdata;
 	int gpio_base = mca->gpio_base;
 	struct regmap *regmap = mca->regmap;
 	struct mca_adc *mca_adc;
@@ -714,8 +715,13 @@ static int mca_adc_probe(struct platform_device *pdev)
 	int ret = 0;
 	u8 adc_comp_ch_list[MCA_MAX_IOS];
 
-	if (!mca_dev || !mca_dev->parent || !mca_dev->parent->of_node)
-		return -EPROBE_DEFER;
+	devdata = of_device_get_match_data(&pdev->dev);
+	if (!devdata)
+		return -EINVAL;
+
+	np = pdev->dev.of_node;
+	if (!np || !of_device_is_available(np))
+		return -ENODEV;
 
 	/* wait for the gpio-mca driver until it is initialized */
 	if (mca->gpio_base == -1)
@@ -730,81 +736,67 @@ static int mca_adc_probe(struct platform_device *pdev)
 	mca_adc->regmap = regmap;
 	mca_adc->dev = mca_dev;
 	mca_adc->irq = -1;
+	mca_adc->vref = get_vref(mca_dev, regmap, np);
 
-	/* Find entry in device-tree */
-	if (mca_dev->of_node) {
-		const struct mca_adc_data *devdata =
-				    of_device_get_match_data(&pdev->dev);
-		const char * compatible = pdev->dev.driver->
-				    of_match_table[devdata->devtype].compatible;
+	of_property_for_each_u32(np, "digi,adc-ch-list",
+					prop, cur, ch) {
+		if (ch >= MCA_MAX_IOS)
+			continue;
 
-		/* Return if mca_adc node does not exist or if it is disabled */
-		np = of_find_compatible_node(mca_dev->of_node, NULL, compatible);
-		if (!np || !of_device_is_available(np))
-			return -ENODEV;
-
-		mca_adc->vref = get_vref(mca_dev, regmap, np);
-
-		of_property_for_each_u32(np, "digi,adc-ch-list",
-					 prop, cur, ch) {
-			if (ch >= MCA_MAX_IOS)
-				continue;
-
-			/*
-			 * Verify that the requested IOs are ADC capable and
-			 * enable the channel for ADC operation
-			 */
-			ret = regmap_read(regmap, MCA_REG_ADC_CFG0_0 + ch,
-					  &cfg);
-			if (ret) {
-				dev_err(mca_dev,
-					"Error reading ADC%d CFG register (%d)\n",
-					ch, ret);
-				goto error_dev_free;
-			}
-
-			/* Remove the channel from the list if not capable */
-			if (!(cfg & MCA_REG_ADC_CFG0_CAPABLE)) {
-				dev_warn(mca_dev,
-					 "Removing ADC%d, IO not ADC capable\n",
-					 ch);
-				continue;
-			}
-
-			adc_ch_list[num_adcs] = (u8)ch;
-			num_adcs++;
+		/*
+			* Verify that the requested IOs are ADC capable and
+			* enable the channel for ADC operation
+			*/
+		ret = regmap_read(regmap, MCA_REG_ADC_CFG0_0 + ch,
+					&cfg);
+		if (ret) {
+			dev_err(mca_dev,
+				"Error reading ADC%d CFG register (%d)\n",
+				ch, ret);
+			goto error_dev_free;
 		}
 
-		of_property_for_each_u32(np, "digi,comparator-ch-list",
-					 prop, cur, ch) {
-			u32 cfg;
-
-			if (ch >= MCA_MAX_IOS)
-				continue;
-
-			/*
-			 * Verify that the requested IOs are ADC capable
-			 */
-			ret = regmap_read(regmap, MCA_REG_ADC_CFG0_0 + ch,
-					  &cfg);
-			if (ret) {
-				dev_err(&pdev->dev,
-					"Failed read ADC%d CFG register (%d)\n",
-					ch, ret);
-				continue;
-			}
-
-			/* Remove the channel from the list if not capable */
-			if (!(cfg & MCA_REG_ADC_CFG0_CAPABLE)) {
-				dev_warn(&pdev->dev,
-					 "Removing ADC%d, IO no ADC capable\n",
-					 ch);
-				continue;
-			}
-
-			adc_comp_ch_list[num_comps] = (u8)ch;
-			num_comps++;
+		/* Remove the channel from the list if not capable */
+		if (!(cfg & MCA_REG_ADC_CFG0_CAPABLE)) {
+			dev_warn(mca_dev,
+					"Removing ADC%d, IO not ADC capable\n",
+					ch);
+			continue;
 		}
+
+		adc_ch_list[num_adcs] = (u8)ch;
+		num_adcs++;
+	}
+
+	of_property_for_each_u32(np, "digi,comparator-ch-list",
+					prop, cur, ch) {
+		u32 cfg;
+
+		if (ch >= MCA_MAX_IOS)
+			continue;
+
+		/*
+			* Verify that the requested IOs are ADC capable
+			*/
+		ret = regmap_read(regmap, MCA_REG_ADC_CFG0_0 + ch,
+					&cfg);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Failed read ADC%d CFG register (%d)\n",
+				ch, ret);
+			continue;
+		}
+
+		/* Remove the channel from the list if not capable */
+		if (!(cfg & MCA_REG_ADC_CFG0_CAPABLE)) {
+			dev_warn(&pdev->dev,
+					"Removing ADC%d, IO no ADC capable\n",
+					ch);
+			continue;
+		}
+
+		adc_comp_ch_list[num_comps] = (u8)ch;
+		num_comps++;
 	}
 
 	if (!num_adcs && !num_comps)

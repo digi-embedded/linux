@@ -1,5 +1,5 @@
 /* pwrkey-mca.c - Power Key device driver for MCA on ConnectCore modules
- * Copyright (C) 2016 - 2022  Digi International Inc
+ * Copyright (C) 2016 - 2026  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -230,16 +230,9 @@ static int of_mca_pwrkey_read_settings(struct device_node *np,
 	pwrkey->key_power = of_property_read_bool(np, "digi,key-power");
 	pwrkey->key_power_up = of_property_read_bool(np, "digi,key-power-up");
 	if (pwrkey->key_power_up) {
-		if (!MCA_FEATURE_IS_SUPPORTED(pwrkey->mca, PWRKEY_UP_KL03_FW_VER,
-		                              PWRKEY_UP_KL17_FW_VER)) {
-			uint16_t min_version = pwrkey->mca->dev_id == MCA_KL03_DEVICE_ID ?
-			                                              PWRKEY_UP_KL03_FW_VER :
-			                                              PWRKEY_UP_KL17_FW_VER;
+		if (!mca_feature_is_supported(pwrkey->mca, MCA_FUNC_PWRKEY_UP)) {
 			dev_warn(pwrkey->mca->dev,
-				 "Invalid MCA firmware version for key-power-up."
-				 " Required MCAv%d.%d or above\n",
-				 MCA_FW_VER_MAJOR(min_version),
-				 MCA_FW_VER_MINOR(min_version));
+				 "Invalid MCA firmware version for key-power-up.\b");
 			pwrkey->key_power_up = false;
 		}
 	}
@@ -327,25 +320,17 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct mca_pwrkey *pwrkey;
-	const struct mca_pwrkey_data *devdata =
-				      of_device_get_match_data(&pdev->dev);
+	const struct mca_pwrkey_data *devdata;
 	struct device_node *np = NULL;
 	int ret = 0;
 
-	if (!mca || !mca->dev || !mca->dev->parent ||
-	    !mca->dev->parent->of_node)
-                return -EPROBE_DEFER;
+	devdata = of_device_get_match_data(&pdev->dev);
+	if (!devdata)
+		return -EINVAL;
 
-	/* Find entry in device-tree */
-	if (mca->dev->of_node) {
-		const char * compatible = pdev->dev.driver->
-				    of_match_table[0].compatible;
-
-		/* Return if pwrkey node does not exist or if it is disabled */
-		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
-		if (!np || !of_device_is_available(np))
-			return -ENODEV;
-	}
+	np = pdev->dev.of_node;
+	if (!np || !of_device_is_available(np))
+		return -ENODEV;
 
 	pwrkey = devm_kzalloc(&pdev->dev, sizeof(struct mca_pwrkey),
 			     GFP_KERNEL);
@@ -361,8 +346,7 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 		goto err_free;
 	}
 
-	if (MCA_FEATURE_IS_SUPPORTED(mca, DEBTB50M_KL03_FW_VER,
-	                             DEBTB50M_KL17_FW_VER))
+	if (mca_feature_is_supported(mca, MCA_FUNC_DEBTB50M))
 		pwrkey->supports_debtb50ms = true;
 
 	platform_set_drvdata(pdev, pwrkey);
@@ -499,9 +483,15 @@ static struct mca_pwrkey_data mca_pwrkey_devdata = {
 };
 
 static const struct of_device_id mca_pwrkey_ids[] = {
-        { .compatible = "digi,mca-pwrkey",
-	  .data = &mca_pwrkey_devdata},
-        { /* sentinel */ }
+	{
+		.compatible = "digi,mca-pwrkey",
+		.data = &mca_pwrkey_devdata,
+	},
+	{
+		.compatible = "digi,mca-smarc-pwrkey",
+		.data = &mca_pwrkey_devdata,
+	},
+	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_pwrkey_ids);
 #endif

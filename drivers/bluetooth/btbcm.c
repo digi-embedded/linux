@@ -32,9 +32,14 @@
 #define BDADDR_BCM43341B (&(bdaddr_t) {{0xac, 0x1f, 0x00, 0x1b, 0x34, 0x43}})
 
 #define BCM_FW_NAME_LEN			64
-#define BCM_FW_NAME_COUNT_MAX		4
+#define BCM_FW_NAME_COUNT_MAX		5
 /* For kmalloc-ing the fw-name array instead of putting it on the stack */
 typedef char bcm_fw_name[BCM_FW_NAME_LEN];
+
+#define MAX_REGDMN_LEN					10
+static char btbcm_regdmn[MAX_REGDMN_LEN] = "FCC";
+module_param_string(regdmn, btbcm_regdmn, MAX_REGDMN_LEN, 0444);
+MODULE_PARM_DESC(regdmn, "Regulatory domain");
 
 #ifdef CONFIG_EFI
 static int btbcm_set_bdaddr_from_efi(struct hci_dev *hdev)
@@ -514,6 +519,8 @@ static const struct bcm_subver_table bcm_uart_subver_table[] = {
 	{ 0x4106, "BCM4335A0"	},	/* 002.001.006 */
 	{ 0x410c, "BCM43430B0"	},	/* 002.001.012 */
 	{ 0x2119, "BCM4373A0"	},	/* 001.001.025 */
+	{ 0x2220, "CYW55500A1"	},	/* 001.002.032 */
+	{ 0x2257, "CYW55560A1"  },	/* 001.002.087 */
 	{ }
 };
 
@@ -652,6 +659,14 @@ int btbcm_initialize(struct hci_dev *hdev, bool *fw_load_done, bool use_autobaud
 		return -ENOMEM;
 
 	if (hw_name) {
+		/*
+		 * First try to load the firmware specified by regdmn, and if that
+		 * fails, fall back to load the generic firmware.
+		 */
+		snprintf(fw_name[fw_name_count], BCM_FW_NAME_LEN,
+			 "brcm/%s%s_%s.hcd", hw_name, postfix, btbcm_regdmn);
+		fw_name_count++;
+
 		if (board_name) {
 			snprintf(fw_name[fw_name_count], BCM_FW_NAME_LEN,
 				 "brcm/%s%s.%s.hcd", hw_name, postfix, board_name);

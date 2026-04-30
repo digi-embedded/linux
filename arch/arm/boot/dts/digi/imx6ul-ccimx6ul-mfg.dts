@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Digi International, Inc.
+ * Copyright (C) 2017-2024, Digi International Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -18,7 +18,7 @@
 / {
 	model = "Digi International ConnectCore 6UL Manufacturing Setup.";
 	compatible = "digi,ccimx6ulstarter", "digi,ccimx6ul", "fsl,imx6ul";
-	digi,machine,name = "ccimx6ul_module_min";
+	digi,machine,name = "ccimx6ul_mfg_bscan";
 };
 
 /* UART5 (Console) */
@@ -41,8 +41,8 @@
 	imx6ul-ccimx6ul {
 		pinctrl_uart5: uart5grp {
 			fsl,pins = <
-			MX6UL_PAD_UART5_TX_DATA__UART5_DCE_TX	0x1b0b1
-			MX6UL_PAD_UART5_RX_DATA__UART5_DCE_RX	0x1b0b1
+				MX6UL_PAD_UART5_TX_DATA__UART5_DCE_TX	0x1b0b1
+				MX6UL_PAD_UART5_RX_DATA__UART5_DCE_RX	0x1b0b1
 			>;
 		};
 	};
