@@ -214,7 +214,7 @@
 		compatible = "nxp,ptn5110";
 		reg = <0x53>;
 		interrupt-parent = <&mca_gpio>;
-		interrupts = <15 IRQ_TYPE_LEVEL_LOW>;
+		interrupts = <15 IRQ_TYPE_EDGE_FALLING>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ptn5110>;
 
