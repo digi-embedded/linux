@@ -179,18 +179,12 @@
 	ethphy0: ethernet-phy@5 {
 		reg = <5>;
 		compatible = "ethernet-phy-ieee802.3-c22";
-		// TODO: MCA PC1
-		// interrupt-parent = <&mca_gpio>;
-		// interrupts = <? IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 	};
 
 	ethphy1: ethernet-phy@7 {
 		reg = <7>;
 		compatible = "ethernet-phy-ieee802.3-c22";
-		// TODO: MCA PC1
-		// interrupt-parent = <&mca_gpio>;
-		// interrupts = <? IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 	};
 };
