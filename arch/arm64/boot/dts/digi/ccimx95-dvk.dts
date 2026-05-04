@@ -275,8 +275,12 @@
 
 /* LPUART3 routed to RS485 transceiver */
 &lpuart3 {
-	linux,rs485-enabled-at-boot-time;
-	digi,rts-gpio = <&mca_gpio 18 GPIO_ACTIVE_HIGH>;
+	/*
+	 * Disable RS485 on DVKv2 because DE/RE# line is an MCA_IO
+	 * that cannot be toggled in interrupt context.
+	 */
+	// linux,rs485-enabled-at-boot-time;
+	// digi,rts-gpio = <&mca_gpio 18 GPIO_ACTIVE_HIGH>;
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "okay";
