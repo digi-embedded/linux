@@ -113,10 +113,6 @@
 	};
 };
 
-&cm7 {
-	status = "disabled";
-};
-
 &csi_pixel_formatter_0 {
 	status = "okay";
 
