@@ -335,7 +335,6 @@ static int imx8mp_reset_set(struct reset_controller_dev *rcdev,
 
 	case IMX8MP_RESET_PCIEPHY_PERST:
 	case IMX8MP_RESET_PCIE_CTRL_APPS_EN:
-	case IMX8MP_RESET_PCIE_CTRL_APPS_CLK_REQ:
 		value = assert ? 0 : bit;
 		break;
 	}

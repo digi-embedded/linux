@@ -117,25 +117,6 @@ static void dwc3_imx8mp_set_role_post(struct dwc3 *dwc, u32 role)
 	}
 }
 
-static struct xhci_plat_priv dwc3_imx8mp_xhci_priv = {
-	.quirks = XHCI_MISSING_CAS |
-		  XHCI_SKIP_PHY_INIT,
-};
-
-static struct dwc3_platform_data dwc3_imx8mp_pdata = {
-	.xhci_priv = &dwc3_imx8mp_xhci_priv,
-	.set_role_post = dwc3_imx8mp_set_role_post,
-	.quirks = DWC3_SOFT_ITP_SYNC,
-};
-
-static struct of_dev_auxdata dwc3_imx8mp_auxdata[] = {
-	{
-	.compatible = "snps,dwc3",
-	.platform_data = &dwc3_imx8mp_pdata,
-	},
-	{},
-};
-
 static int dwc3_imx8mp_probe(struct platform_device *pdev)
 {
 	struct device		*dev = &pdev->dev;
@@ -207,7 +188,7 @@ static int dwc3_imx8mp_probe(struct platform_device *pdev)
 		goto disable_rpm;
 	}
 
-	err = of_platform_populate(node, NULL, dwc3_imx8mp_auxdata, dev);
+	err = of_platform_populate(node, NULL, NULL, dev);
 	if (err) {
 		dev_err(&pdev->dev, "failed to create dwc3 core\n");
 		goto err_node_put;
@@ -225,7 +206,7 @@ static int dwc3_imx8mp_probe(struct platform_device *pdev)
 					IRQF_ONESHOT, dev_name(dev), dwc3_imx);
 	if (err) {
 		dev_err(dev, "failed to request IRQ #%d --> %d\n", irq, err);
-		goto depopulate;
+		goto put_dwc3;
 	}
 
 	device_set_wakeup_capable(dev, true);
@@ -233,6 +214,8 @@ static int dwc3_imx8mp_probe(struct platform_device *pdev)
 
 	return 0;
 
+put_dwc3:
+	put_device(&dwc3_imx->dwc3->dev);
 depopulate:
 	of_platform_depopulate(dev);
 err_node_put:
@@ -254,6 +237,8 @@ static int dwc3_imx8mp_remove(struct platform_device *pdev)
 {
 	struct dwc3_imx8mp *dwc3_imx = platform_get_drvdata(pdev);
 	struct device *dev = &pdev->dev;
+
+	put_device(&dwc3_imx->dwc3->dev);
 
 	pm_runtime_get_sync(dev);
 	of_platform_depopulate(dev);

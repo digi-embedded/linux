@@ -67,7 +67,6 @@ static const struct hns3_stats hns3_rxq_stats[] = {
 
 #define HNS3_TQP_STATS_COUNT (HNS3_TXQ_STATS_COUNT + HNS3_RXQ_STATS_COUNT)
 
-#define HNS3_SELF_TEST_TYPE_NUM         4
 #define HNS3_NIC_LB_TEST_PKT_NUM	1
 #define HNS3_NIC_LB_TEST_RING_ID	0
 #define HNS3_NIC_LB_TEST_PACKET_SIZE	128
@@ -93,6 +92,7 @@ static int hns3_lp_setup(struct net_device *ndev, enum hnae3_loop loop, bool en)
 	case HNAE3_LOOP_PARALLEL_SERDES:
 	case HNAE3_LOOP_APP:
 	case HNAE3_LOOP_PHY:
+	case HNAE3_LOOP_EXTERNAL:
 		ret = h->ae_algo->ops->set_loopback(h, loop, en);
 		break;
 	default:
@@ -300,6 +300,10 @@ out:
 
 static void hns3_set_selftest_param(struct hnae3_handle *h, int (*st_param)[2])
 {
+	st_param[HNAE3_LOOP_EXTERNAL][0] = HNAE3_LOOP_EXTERNAL;
+	st_param[HNAE3_LOOP_EXTERNAL][1] =
+			h->flags & HNAE3_SUPPORT_EXTERNAL_LOOPBACK;
+
 	st_param[HNAE3_LOOP_APP][0] = HNAE3_LOOP_APP;
 	st_param[HNAE3_LOOP_APP][1] =
 			h->flags & HNAE3_SUPPORT_APP_LOOPBACK;
@@ -318,16 +322,10 @@ static void hns3_set_selftest_param(struct hnae3_handle *h, int (*st_param)[2])
 			h->flags & HNAE3_SUPPORT_PHY_LOOPBACK;
 }
 
-static void hns3_selftest_prepare(struct net_device *ndev,
-				  bool if_running, int (*st_param)[2])
+static void hns3_selftest_prepare(struct net_device *ndev, bool if_running)
 {
 	struct hns3_nic_priv *priv = netdev_priv(ndev);
 	struct hnae3_handle *h = priv->ae_handle;
-
-	if (netif_msg_ifdown(h))
-		netdev_info(ndev, "self test start\n");
-
-	hns3_set_selftest_param(h, st_param);
 
 	if (if_running)
 		ndev->netdev_ops->ndo_stop(ndev);
@@ -367,18 +365,15 @@ static void hns3_selftest_restore(struct net_device *ndev, bool if_running)
 
 	if (if_running)
 		ndev->netdev_ops->ndo_open(ndev);
-
-	if (netif_msg_ifdown(h))
-		netdev_info(ndev, "self test end\n");
 }
 
 static void hns3_do_selftest(struct net_device *ndev, int (*st_param)[2],
 			     struct ethtool_test *eth_test, u64 *data)
 {
-	int test_index = 0;
+	int test_index = HNAE3_LOOP_APP;
 	u32 i;
 
-	for (i = 0; i < HNS3_SELF_TEST_TYPE_NUM; i++) {
+	for (i = HNAE3_LOOP_APP; i < HNAE3_LOOP_NONE; i++) {
 		enum hnae3_loop loop_type = (enum hnae3_loop)st_param[i][0];
 
 		if (!st_param[i][1])
@@ -397,6 +392,20 @@ static void hns3_do_selftest(struct net_device *ndev, int (*st_param)[2],
 	}
 }
 
+static void hns3_do_external_lb(struct net_device *ndev,
+				struct ethtool_test *eth_test, u64 *data)
+{
+	data[HNAE3_LOOP_EXTERNAL] = hns3_lp_up(ndev, HNAE3_LOOP_EXTERNAL);
+	if (!data[HNAE3_LOOP_EXTERNAL])
+		data[HNAE3_LOOP_EXTERNAL] = hns3_lp_run_test(ndev, HNAE3_LOOP_EXTERNAL);
+	hns3_lp_down(ndev, HNAE3_LOOP_EXTERNAL);
+
+	if (data[HNAE3_LOOP_EXTERNAL])
+		eth_test->flags |= ETH_TEST_FL_FAILED;
+
+	eth_test->flags |= ETH_TEST_FL_EXTERNAL_LB_DONE;
+}
+
 /**
  * hns3_nic_self_test - self test
  * @ndev: net device
@@ -406,7 +415,9 @@ static void hns3_do_selftest(struct net_device *ndev, int (*st_param)[2],
 static void hns3_self_test(struct net_device *ndev,
 			   struct ethtool_test *eth_test, u64 *data)
 {
-	int st_param[HNS3_SELF_TEST_TYPE_NUM][2];
+	struct hns3_nic_priv *priv = netdev_priv(ndev);
+	struct hnae3_handle *h = priv->ae_handle;
+	int st_param[HNAE3_LOOP_NONE][2];
 	bool if_running = netif_running(ndev);
 
 	if (hns3_nic_resetting(ndev)) {
@@ -414,13 +425,29 @@ static void hns3_self_test(struct net_device *ndev,
 		return;
 	}
 
-	/* Only do offline selftest, or pass by default */
-	if (eth_test->flags != ETH_TEST_FL_OFFLINE)
+	if (!(eth_test->flags & ETH_TEST_FL_OFFLINE))
 		return;
 
-	hns3_selftest_prepare(ndev, if_running, st_param);
+	if (netif_msg_ifdown(h))
+		netdev_info(ndev, "self test start\n");
+
+	hns3_set_selftest_param(h, st_param);
+
+	/* external loopback test requires that the link is up and the duplex is
+	 * full, do external test first to reduce the whole test time
+	 */
+	if (eth_test->flags & ETH_TEST_FL_EXTERNAL_LB) {
+		hns3_external_lb_prepare(ndev, if_running);
+		hns3_do_external_lb(ndev, eth_test, data);
+		hns3_external_lb_restore(ndev, if_running);
+	}
+
+	hns3_selftest_prepare(ndev, if_running);
 	hns3_do_selftest(ndev, st_param, eth_test, data);
 	hns3_selftest_restore(ndev, if_running);
+
+	if (netif_msg_ifdown(h))
+		netdev_info(ndev, "self test end\n");
 }
 
 static void hns3_update_limit_promisc_mode(struct net_device *netdev,
@@ -739,7 +766,9 @@ static int hns3_get_link_ksettings(struct net_device *netdev,
 		hns3_get_ksettings(h, cmd);
 		break;
 	case HNAE3_MEDIA_TYPE_FIBER:
-		if (module_type == HNAE3_MODULE_TYPE_CR)
+		if (module_type == HNAE3_MODULE_TYPE_UNKNOWN)
+			cmd->base.port = PORT_OTHER;
+		else if (module_type == HNAE3_MODULE_TYPE_CR)
 			cmd->base.port = PORT_DA;
 		else
 			cmd->base.port = PORT_FIBRE;
@@ -1697,6 +1726,7 @@ static int hns3_get_tunable(struct net_device *netdev,
 			    void *data)
 {
 	struct hns3_nic_priv *priv = netdev_priv(netdev);
+	struct hnae3_handle *h = priv->ae_handle;
 	int ret = 0;
 
 	switch (tuna->id) {
@@ -1707,10 +1737,44 @@ static int hns3_get_tunable(struct net_device *netdev,
 	case ETHTOOL_RX_COPYBREAK:
 		*(u32 *)data = priv->rx_copybreak;
 		break;
+	case ETHTOOL_TX_COPYBREAK_BUF_SIZE:
+		*(u32 *)data = h->kinfo.tx_spare_buf_size;
+		break;
 	default:
 		ret = -EOPNOTSUPP;
 		break;
 	}
+
+	return ret;
+}
+
+static int hns3_set_tx_spare_buf_size(struct net_device *netdev,
+				      u32 data)
+{
+	struct hns3_nic_priv *priv = netdev_priv(netdev);
+	struct hnae3_handle *h = priv->ae_handle;
+	int ret;
+
+	if (hns3_nic_resetting(netdev))
+		return -EBUSY;
+
+	h->kinfo.tx_spare_buf_size = data;
+
+	ret = hns3_reset_notify(h, HNAE3_DOWN_CLIENT);
+	if (ret)
+		return ret;
+
+	ret = hns3_reset_notify(h, HNAE3_UNINIT_CLIENT);
+	if (ret)
+		return ret;
+
+	ret = hns3_reset_notify(h, HNAE3_INIT_CLIENT);
+	if (ret)
+		return ret;
+
+	ret = hns3_reset_notify(h, HNAE3_UP_CLIENT);
+	if (ret)
+		hns3_reset_notify(h, HNAE3_UNINIT_CLIENT);
 
 	return ret;
 }
@@ -1720,6 +1784,7 @@ static int hns3_set_tunable(struct net_device *netdev,
 			    const void *data)
 {
 	struct hns3_nic_priv *priv = netdev_priv(netdev);
+	u32 old_tx_spare_buf_size, new_tx_spare_buf_size;
 	struct hnae3_handle *h = priv->ae_handle;
 	int i, ret = 0;
 
@@ -1737,6 +1802,27 @@ static int hns3_set_tunable(struct net_device *netdev,
 		for (i = h->kinfo.num_tqps; i < h->kinfo.num_tqps * 2; i++)
 			priv->ring[i].rx_copybreak = priv->rx_copybreak;
 
+		break;
+	case ETHTOOL_TX_COPYBREAK_BUF_SIZE:
+		old_tx_spare_buf_size = h->kinfo.tx_spare_buf_size;
+		new_tx_spare_buf_size = *(u32 *)data;
+		ret = hns3_set_tx_spare_buf_size(netdev, new_tx_spare_buf_size);
+		if (ret ||
+		    (!priv->ring->tx_spare && new_tx_spare_buf_size != 0)) {
+			int ret1;
+
+			netdev_warn(netdev,
+				    "change tx spare buf size fail, revert to old value\n");
+			ret1 = hns3_set_tx_spare_buf_size(netdev,
+							  old_tx_spare_buf_size);
+			if (ret1) {
+				netdev_err(netdev,
+					   "revert to old tx spare buf size fail\n");
+				return ret1;
+			}
+
+			return ret;
+		}
 		break;
 	default:
 		ret = -EOPNOTSUPP;

@@ -115,7 +115,7 @@ qca_tty_receive(struct serdev_device *serdev, const unsigned char *data,
 			if (!qca->rx_skb) {
 				netdev_dbg(netdev, "recv: out of RX resources\n");
 				n_stats->rx_errors++;
-				return i;
+				return i + 1;
 			}
 		}
 	}
@@ -347,7 +347,7 @@ static int qca_uart_probe(struct serdev_device *serdev)
 
 	of_property_read_u32(serdev->dev.of_node, "current-speed", &speed);
 
-	ret = of_get_mac_address(serdev->dev.of_node, qca->net_dev->dev_addr);
+	ret = of_get_ethdev_address(serdev->dev.of_node, qca->net_dev);
 	if (ret) {
 		eth_hw_addr_random(qca->net_dev);
 		dev_info(&serdev->dev, "Using random MAC address: %pM\n",

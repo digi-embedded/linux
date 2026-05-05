@@ -124,7 +124,7 @@ int mi_read(struct mft_inode *mi, bool is_mft)
 	struct rw_semaphore *rw_lock = NULL;
 
 	if (is_mounted(sbi)) {
-		if (!is_mft) {
+		if (!is_mft && mft_ni) {
 			rw_lock = &mft_ni->file.run_lock;
 			down_read(rw_lock);
 		}
@@ -148,7 +148,7 @@ int mi_read(struct mft_inode *mi, bool is_mft)
 		ni_lock(mft_ni);
 		down_write(rw_lock);
 	}
-	err = attr_load_runs_vcn(mft_ni, ATTR_DATA, NULL, 0, &mft_ni->file.run,
+	err = attr_load_runs_vcn(mft_ni, ATTR_DATA, NULL, 0, run,
 				 vbo >> sbi->cluster_bits);
 	if (rw_lock) {
 		up_write(rw_lock);
@@ -180,6 +180,12 @@ ok:
 	return 0;
 
 out:
+	if (err == -E_NTFS_CORRUPT) {
+		ntfs_err(sbi->sb, "mft corrupted");
+		ntfs_set_state(sbi, NTFS_DIRTY_ERROR);
+		err = -EINVAL;
+	}
+
 	return err;
 }
 
@@ -242,8 +248,8 @@ struct ATTRIB *mi_enum_attr(struct mft_inode *mi, struct ATTRIB *attr)
 	if ((t32 & 0xf) || (t32 > 0x100))
 		return NULL;
 
-	/* Check boundary. */
-	if (off + asize > used)
+	/* Check overflow and boundary. */
+	if (off + asize < off || off + asize > used)
 		return NULL;
 
 	/* Check size of attribute. */
@@ -259,6 +265,11 @@ struct ATTRIB *mi_enum_attr(struct mft_inode *mi, struct ATTRIB *attr)
 		t32 = le32_to_cpu(attr->res.data_size);
 		if (t16 + t32 > asize)
 			return NULL;
+
+		if (attr->name_len &&
+		    le16_to_cpu(attr->name_off) + sizeof(short) * attr->name_len > t16) {
+			return NULL;
+		}
 
 		return attr;
 	}
@@ -395,28 +406,6 @@ int mi_format_new(struct mft_inode *mi, struct ntfs_sb_info *sbi, CLST rno,
 }
 
 /*
- * mi_mark_free - Mark record as unused and marks it as free in bitmap.
- */
-void mi_mark_free(struct mft_inode *mi)
-{
-	CLST rno = mi->rno;
-	struct ntfs_sb_info *sbi = mi->sbi;
-
-	if (rno >= MFT_REC_RESERVED && rno < MFT_REC_FREE) {
-		ntfs_clear_mft_tail(sbi, rno, rno + 1);
-		mi->dirty = false;
-		return;
-	}
-
-	if (mi->mrec) {
-		clear_rec_inuse(mi->mrec);
-		mi->dirty = true;
-		mi_write(mi, 0);
-	}
-	ntfs_mark_rec_free(sbi, rno);
-}
-
-/*
  * mi_insert_attr - Reserve space for new attribute.
  *
  * Return: Not full constructed attribute or NULL if not possible to create.
@@ -497,9 +486,14 @@ bool mi_remove_attr(struct ntfs_inode *ni, struct mft_inode *mi,
 	if (aoff + asize > used)
 		return false;
 
-	if (ni && is_attr_indexed(attr)) {
-		le16_add_cpu(&ni->mi.mrec->hard_links, -1);
-		ni->mi.dirty = true;
+	if (ni && is_attr_indexed(attr) && attr->type == ATTR_NAME) {
+		u16 links = le16_to_cpu(ni->mi.mrec->hard_links);
+		if (!links) {
+			/* minor error. Not critical. */
+		} else {
+			ni->mi.mrec->hard_links = cpu_to_le16(links - 1);
+			ni->mi.dirty = true;
+		}
 	}
 
 	used -= asize;

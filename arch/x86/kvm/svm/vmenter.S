@@ -77,6 +77,9 @@ SYM_FUNC_START(__svm_vcpu_run)
 	/* "POP" @vmcb to RAX. */
 	pop %_ASM_AX
 
+	/* Clobbers EFLAGS.ZF */
+	VM_CLEAR_CPU_BUFFERS
+
 	/* Enter guest mode */
 	sti
 
@@ -118,6 +121,9 @@ SYM_FUNC_START(__svm_vcpu_run)
 	 * from the kernel.
 	 */
 	UNTRAIN_RET
+
+	/* SRSO */
+	ALTERNATIVE "", "call entry_ibpb", X86_FEATURE_IBPB_ON_VMEXIT
 
 	/*
 	 * Clear all general purpose registers except RSP and RAX to prevent
@@ -186,6 +192,9 @@ SYM_FUNC_START(__svm_sev_es_vcpu_run)
 
 	/* Move @vmcb to RAX. */
 	mov %_ASM_ARG1, %_ASM_AX
+
+	/* Clobbers EFLAGS.ZF */
+	VM_CLEAR_CPU_BUFFERS
 
 	/* Enter guest mode */
 	sti

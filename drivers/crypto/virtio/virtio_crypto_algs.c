@@ -255,7 +255,7 @@ static int virtio_crypto_alg_skcipher_close_session(
 			vcrypto->ctrl_status.status,
 			destroy_session->session_id);
 
-		return -EINVAL;
+		err = -EINVAL;
 	}
 	spin_unlock(&vcrypto->ctrl_lock);
 
@@ -568,8 +568,6 @@ int virtio_crypto_skcipher_crypt_req(
 	ret = __virtio_crypto_skcipher_do_req(vc_sym_req, req, data_vq);
 	if (ret < 0)
 		return ret;
-
-	virtqueue_kick(data_vq->vq);
 
 	return 0;
 }

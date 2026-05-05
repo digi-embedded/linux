@@ -119,7 +119,6 @@ struct evsel {
 	bool			errored;
 	struct hashmap		*per_pkg_mask;
 	int			err;
-	int			cpu_iter;
 	struct {
 		evsel__sb_cb_t	*cb;
 		void		*data;
@@ -232,6 +231,8 @@ void evsel__init(struct evsel *evsel, struct perf_event_attr *attr, int idx);
 void evsel__exit(struct evsel *evsel);
 void evsel__delete(struct evsel *evsel);
 
+void evsel__set_priv_destructor(void (*destructor)(void *priv));
+
 struct callchain_param;
 
 void evsel__config(struct evsel *evsel, struct record_opts *opts,
@@ -247,6 +248,11 @@ bool evsel__is_cache_op_valid(u8 type, u8 op);
 static inline bool evsel__is_bpf(struct evsel *evsel)
 {
 	return evsel->bpf_counter_ops != NULL;
+}
+
+static inline bool evsel__is_bperf(struct evsel *evsel)
+{
+	return evsel->bpf_counter_ops != NULL && list_empty(&evsel->bpf_counter_list);
 }
 
 #define EVSEL__MAX_ALIASES 8

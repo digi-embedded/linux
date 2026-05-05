@@ -233,6 +233,9 @@ static int qxl_add_mode(struct drm_connector *connector,
 		return 0;
 
 	mode = drm_cvt_mode(dev, width, height, 60, false, false, false);
+	if (!mode)
+		return 0;
+
 	if (preferred)
 		mode->type |= DRM_MODE_TYPE_PREFERRED;
 	mode->hdisplay = width;
@@ -1220,6 +1223,9 @@ int qxl_destroy_monitors_object(struct qxl_device *qdev)
 
 	if (!qdev->monitors_config_bo)
 		return 0;
+
+	kfree(qdev->dumb_heads);
+	qdev->dumb_heads = NULL;
 
 	qdev->monitors_config = NULL;
 	qdev->ram_header->monitors_config = 0;

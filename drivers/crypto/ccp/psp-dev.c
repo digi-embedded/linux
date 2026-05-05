@@ -42,6 +42,9 @@ static irqreturn_t psp_irq_handler(int irq, void *data)
 	/* Read the interrupt status: */
 	status = ioread32(psp->io_regs + psp->vdata->intsts_reg);
 
+	/* Clear the interrupt status by writing the same value we read. */
+	iowrite32(status, psp->io_regs + psp->vdata->intsts_reg);
+
 	/* invoke subdevice interrupt handlers */
 	if (status) {
 		if (psp->sev_irq_handler)
@@ -50,9 +53,6 @@ static irqreturn_t psp_irq_handler(int irq, void *data)
 		if (psp->tee_irq_handler)
 			psp->tee_irq_handler(irq, psp->tee_irq_data, status);
 	}
-
-	/* Clear the interrupt status by writing the same value we read. */
-	iowrite32(status, psp->io_regs + psp->vdata->intsts_reg);
 
 	return IRQ_HANDLED;
 }
@@ -249,6 +249,17 @@ struct psp_device *psp_get_master_device(void)
 	struct sp_device *sp = sp_get_psp_master_device();
 
 	return sp ? sp->psp_data : NULL;
+}
+
+int psp_restore(struct sp_device *sp)
+{
+	struct psp_device *psp = sp->psp_data;
+	int ret = 0;
+
+	if (psp->tee_data)
+		ret = tee_restore(psp);
+
+	return ret;
 }
 
 void psp_pci_init(void)

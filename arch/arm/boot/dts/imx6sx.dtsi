@@ -179,59 +179,22 @@
 		interrupt-parent = <&gpc>;
 		ranges;
 
-		busfreq {
-			compatible = "fsl,imx_busfreq";
-			clocks = <&clks IMX6SX_CLK_PLL2_BUS>, <&clks IMX6SX_CLK_PLL2_PFD2>,
-				<&clks IMX6SX_CLK_PLL2_198M>, <&clks IMX6SX_CLK_ARM>,
-				<&clks IMX6SX_CLK_PLL3_USB_OTG>, <&clks IMX6SX_CLK_PERIPH>,
-				<&clks IMX6SX_CLK_PERIPH_PRE>, <&clks IMX6SX_CLK_PERIPH_CLK2>,
-				<&clks IMX6SX_CLK_PERIPH_CLK2_SEL>, <&clks IMX6SX_CLK_OSC>,
-				<&clks IMX6SX_CLK_PLL1_SYS>, <&clks IMX6SX_CLK_PERIPH2>,
-				<&clks IMX6SX_CLK_AHB>, <&clks IMX6SX_CLK_OCRAM_PODF>,
-				<&clks IMX6SX_CLK_PLL1_SW>, <&clks IMX6SX_CLK_PERIPH2_PRE>,
-				<&clks IMX6SX_CLK_PERIPH2_CLK2_SEL>, <&clks IMX6SX_CLK_PERIPH2_CLK2>,
-				<&clks IMX6SX_CLK_STEP>, <&clks IMX6SX_CLK_MMDC_PODF>,
-				<&clks IMX6SX_CLK_M4>;
-			clock-names = "pll2_bus", "pll2_pfd2_396m", "pll2_198m", "arm",
-					"pll3_usb_otg", "periph", "periph_pre", "periph_clk2",
-					"periph_clk2_sel", "osc", "pll1_sys", "periph2",
-					"ahb", "ocram", "pll1_sw", "periph2_pre",
-					"periph2_clk2_sel", "periph2_clk2", "step", "mmdc",
-					"m4";
-			fsl,max_ddr_freq = <400000000>;
-		};
-
-		ocrams: sram@8f8000 {
-			compatible = "fsl,lpm-sram";
-			reg = <0x8f8000 0x4000>;
+		ocram_s: sram@8f8000 {
+			compatible = "mmio-sram";
+			reg = <0x008f8000 0x4000>;
+			ranges = <0 0x008f8000 0x4000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 			clocks = <&clks IMX6SX_CLK_OCRAM_S>;
 		};
 
-		ocrams_ddr: sram@900000 {
-			compatible = "fsl,ddr-lpm-sram";
-			reg = <0x900000 0x1000>;
-			clocks = <&clks IMX6SX_CLK_OCRAM>;
-		};
-
-		ocram: sram@901000 {
+		ocram: sram@900000 {
 			compatible = "mmio-sram";
-			reg = <0x901000 0x1F000>;
+			reg = <0x00900000 0x20000>;
+			ranges = <0 0x00900000 0x20000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 			clocks = <&clks IMX6SX_CLK_OCRAM>;
-		};
-
-		ocram_mf: sram-mf@900000 {
-			compatible = "fsl,mega-fast-sram";
-			reg = <0x900000 0x20000>;
-			clocks = <&clks IMX6SX_CLK_OCRAM>;
-		};
-
-		ocram_optee {
-			compatible = "fsl,optee-lpm-sram";
-			reg = <0x8f8000 0x4000>;
-			overw_reg = <&ocrams_ddr 0x904000 0x1000>,
-					<&ocram 0x905000 0x1b000>,
-					<&ocrams 0x900000 0x4000>;
-			overw_clock = <&ocrams &clks IMX6SX_CLK_OCRAM>;
 		};
 
 		intc: interrupt-controller@a01000 {
@@ -281,7 +244,7 @@
 			power-domains = <&pd_pu>;
 		};
 
-		dma_apbh: dma-apbh@1804000 {
+		dma_apbh: dma-controller@1804000 {
 			compatible = "fsl,imx6sx-dma-apbh", "fsl,imx28-dma-apbh";
 			reg = <0x01804000 0x2000>;
 			interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
@@ -940,31 +903,7 @@
 				reg = <0x020e4000 0x4000>;
 			};
 
-			ldb: ldb@20e0014 {
-				#address-cells = <1>;
-				#size-cells = <0>;
-				compatible = "fsl,imx6sx-ldb", "fsl,imx53-ldb";
-				gpr = <&gpr>;
-				status = "disabled";
-				clocks = <&clks IMX6SX_CLK_LDB_DI0>,
-					 <&clks IMX6SX_CLK_LCDIF1_SEL>,
-					 <&clks IMX6SX_CLK_LCDIF2_SEL>,
-					 <&clks IMX6SX_CLK_LDB_DI0_DIV_3_5>,
-					 <&clks IMX6SX_CLK_LDB_DI0_DIV_7>,
-					 <&clks IMX6SX_CLK_LDB_DI0_DIV_SEL>;
-				clock-names = "ldb_di0",
-					      "di0_sel",
-					      "di1_sel",
-					      "ldb_di0_div_3_5",
-					      "ldb_di0_div_7",
-					      "ldb_di0_div_sel";
-				lvds-channel@0 {
-					reg = <0>;
-					status = "disabled";
-				};
-			};
-
-			sdma: sdma@20ec000 {
+			sdma: dma-controller@20ec000 {
 				compatible = "fsl,imx6sx-sdma", "fsl,imx6q-sdma";
 				reg = <0x020ec000 0x4000>;
 				interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;

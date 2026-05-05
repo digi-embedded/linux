@@ -32,9 +32,6 @@ struct dpaa2_mac {
 	struct phy *serdes_phy;
 };
 
-bool dpaa2_mac_is_type_fixed(struct fsl_mc_device *dpmac_dev,
-			     struct fsl_mc_io *mc_io);
-
 int dpaa2_mac_open(struct dpaa2_mac *mac);
 
 void dpaa2_mac_close(struct dpaa2_mac *mac);

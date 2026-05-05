@@ -359,7 +359,7 @@ static int instantiate_rng(struct device *ctrldev, int state_handle_mask,
 		}
 
 		dev_info(ctrldev, "Instantiated RNG4 SH%d\n", sh_idx);
-		/* Clear the contents before recreating the descriptor */
+		/* Clear the contents before using the descriptor */
 		memset(desc, 0x00, CAAM_CMD_SZ * 7);
 	}
 

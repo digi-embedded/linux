@@ -22,7 +22,6 @@
 
 /* Each policer is serialized by its individual spinlock */
 
-static unsigned int police_net_id;
 static struct tc_action_ops act_police_ops;
 
 static int tcf_police_walker(struct net *net, struct sk_buff *skb,
@@ -30,7 +29,7 @@ static int tcf_police_walker(struct net *net, struct sk_buff *skb,
 				 const struct tc_action_ops *ops,
 				 struct netlink_ext_ack *extack)
 {
-	struct tc_action_net *tn = net_generic(net, police_net_id);
+	struct tc_action_net *tn = net_generic(net, act_police_ops.net_id);
 
 	return tcf_generic_walker(tn, skb, cb, type, ops, extack);
 }
@@ -58,7 +57,7 @@ static int tcf_police_init(struct net *net, struct nlattr *nla,
 	struct tc_police *parm;
 	struct tcf_police *police;
 	struct qdisc_rate_table *R_tab = NULL, *P_tab = NULL;
-	struct tc_action_net *tn = net_generic(net, police_net_id);
+	struct tc_action_net *tn = net_generic(net, act_police_ops.net_id);
 	struct tcf_police_params *new;
 	bool exists = false;
 	u32 index;
@@ -366,23 +365,23 @@ static int tcf_police_dump(struct sk_buff *skb, struct tc_action *a,
 	opt.burst = PSCHED_NS2TICKS(p->tcfp_burst);
 	if (p->rate_present) {
 		psched_ratecfg_getrate(&opt.rate, &p->rate);
-		if ((police->params->rate.rate_bytes_ps >= (1ULL << 32)) &&
+		if ((p->rate.rate_bytes_ps >= (1ULL << 32)) &&
 		    nla_put_u64_64bit(skb, TCA_POLICE_RATE64,
-				      police->params->rate.rate_bytes_ps,
+				      p->rate.rate_bytes_ps,
 				      TCA_POLICE_PAD))
 			goto nla_put_failure;
 	}
 	if (p->peak_present) {
 		psched_ratecfg_getrate(&opt.peakrate, &p->peak);
-		if ((police->params->peak.rate_bytes_ps >= (1ULL << 32)) &&
+		if ((p->peak.rate_bytes_ps >= (1ULL << 32)) &&
 		    nla_put_u64_64bit(skb, TCA_POLICE_PEAKRATE64,
-				      police->params->peak.rate_bytes_ps,
+				      p->peak.rate_bytes_ps,
 				      TCA_POLICE_PAD))
 			goto nla_put_failure;
 	}
 	if (p->pps_present) {
 		if (nla_put_u64_64bit(skb, TCA_POLICE_PKTRATE64,
-				      police->params->ppsrate.rate_pkts_ps,
+				      p->ppsrate.rate_pkts_ps,
 				      TCA_POLICE_PAD))
 			goto nla_put_failure;
 		if (nla_put_u64_64bit(skb, TCA_POLICE_PKTBURST64,
@@ -414,7 +413,7 @@ nla_put_failure:
 
 static int tcf_police_search(struct net *net, struct tc_action **a, u32 index)
 {
-	struct tc_action_net *tn = net_generic(net, police_net_id);
+	struct tc_action_net *tn = net_generic(net, act_police_ops.net_id);
 
 	return tcf_idr_search(tn, a, index);
 }
@@ -510,20 +509,20 @@ static struct tc_action_ops act_police_ops = {
 
 static __net_init int police_init_net(struct net *net)
 {
-	struct tc_action_net *tn = net_generic(net, police_net_id);
+	struct tc_action_net *tn = net_generic(net, act_police_ops.net_id);
 
 	return tc_action_net_init(net, tn, &act_police_ops);
 }
 
 static void __net_exit police_exit_net(struct list_head *net_list)
 {
-	tc_action_net_exit(net_list, police_net_id);
+	tc_action_net_exit(net_list, act_police_ops.net_id);
 }
 
 static struct pernet_operations police_net_ops = {
 	.init = police_init_net,
 	.exit_batch = police_exit_net,
-	.id   = &police_net_id,
+	.id   = &act_police_ops.net_id,
 	.size = sizeof(struct tc_action_net),
 };
 

@@ -168,7 +168,7 @@ static int dpaa2_xsk_disable_pool(struct net_device *dev, u16 qid)
 		netdev_err(dev, "xsk_rxq_info_reg_mem_model() failed (err = %d)\n",
 			   err);
 
-	dpaa2_eth_free_dpbp(priv, priv->channel[qid]->bp);
+	dpaa2_eth_free_dpbp(priv);
 
 	priv->channel[qid]->xsk_zc = false;
 	priv->channel[qid]->xsk_pool = NULL;

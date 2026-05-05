@@ -222,6 +222,11 @@ void vgic_v4_get_vlpi_state(struct vgic_irq *irq, bool *val)
 	*val = !!(*ptr & mask);
 }
 
+int vgic_v4_request_vpe_irq(struct kvm_vcpu *vcpu, int irq)
+{
+	return request_irq(irq, vgic_v4_doorbell_handler, 0, "vcpu", vcpu);
+}
+
 /**
  * vgic_v4_init - Initialize the GICv4 data structures
  * @kvm:	Pointer to the VM being initialized
@@ -282,8 +287,7 @@ int vgic_v4_init(struct kvm *kvm)
 			irq_flags &= ~IRQ_NOAUTOEN;
 		irq_set_status_flags(irq, irq_flags);
 
-		ret = request_irq(irq, vgic_v4_doorbell_handler,
-				  0, "vcpu", vcpu);
+		ret = vgic_v4_request_vpe_irq(vcpu, irq);
 		if (ret) {
 			kvm_err("failed to allocate vcpu IRQ%d\n", irq);
 			/*
@@ -329,14 +333,15 @@ void vgic_v4_teardown(struct kvm *kvm)
 	its_vm->vpes = NULL;
 }
 
-int vgic_v4_put(struct kvm_vcpu *vcpu, bool need_db)
+int vgic_v4_put(struct kvm_vcpu *vcpu)
 {
 	struct its_vpe *vpe = &vcpu->arch.vgic_cpu.vgic_v3.its_vpe;
 
 	if (!vgic_supports_direct_msis(vcpu->kvm) || !vpe->resident)
 		return 0;
 
-	return its_make_vpe_non_resident(vpe, need_db);
+	return its_make_vpe_non_resident(vpe,
+			vcpu->arch.flags & KVM_ARM64_VCPU_IN_WFI);
 }
 
 int vgic_v4_load(struct kvm_vcpu *vcpu)
@@ -345,6 +350,9 @@ int vgic_v4_load(struct kvm_vcpu *vcpu)
 	int err;
 
 	if (!vgic_supports_direct_msis(vcpu->kvm) || vpe->resident)
+		return 0;
+
+	if (vcpu->arch.flags & KVM_ARM64_VCPU_IN_WFI)
 		return 0;
 
 	/*

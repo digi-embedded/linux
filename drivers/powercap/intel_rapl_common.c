@@ -212,12 +212,33 @@ static int find_nr_power_limit(struct rapl_domain *rd)
 static int set_domain_enable(struct powercap_zone *power_zone, bool mode)
 {
 	struct rapl_domain *rd = power_zone_to_rapl_domain(power_zone);
+	u64 val;
+	int ret;
 
 	if (rd->state & DOMAIN_STATE_BIOS_LOCKED)
 		return -EACCES;
 
 	cpus_read_lock();
-	rapl_write_data_raw(rd, PL1_ENABLE, mode);
+	ret = rapl_write_data_raw(rd, PL1_ENABLE, mode);
+	if (ret) {
+		cpus_read_unlock();
+		return ret;
+	}
+
+	/* Check if the ENABLE bit was actually changed */
+	ret = rapl_read_data_raw(rd, PL1_ENABLE, true, &val);
+	if (ret) {
+		cpus_read_unlock();
+		return ret;
+	}
+
+	if (mode != val) {
+		pr_debug("%s cannot be %s\n", power_zone->name,
+			 mode ? "enabled" : "disabled");
+		cpus_read_unlock();
+		return 0;
+	}
+
 	if (rapl_defaults->set_floor_freq)
 		rapl_defaults->set_floor_freq(rd, mode);
 	cpus_read_unlock();
@@ -938,6 +959,9 @@ static u64 rapl_compute_time_window_core(struct rapl_package *rp, u64 value,
 		y = value & 0x1f;
 		value = (1 << y) * (4 + f) * rp->time_unit / 4;
 	} else {
+		if (value < rp->time_unit)
+			return 0;
+
 		do_div(value, rp->time_unit);
 		y = ilog2(value);
 		f = div64_u64(4 * (value - (1 << y)), 1 << y);
@@ -979,7 +1003,6 @@ static const struct rapl_defaults rapl_defaults_spr_server = {
 	.check_unit = rapl_check_unit_core,
 	.set_floor_freq = set_floor_freq_default,
 	.compute_time_window = rapl_compute_time_window_core,
-	.dram_domain_energy_unit = 15300,
 	.psys_domain_energy_unit = 1000000000,
 };
 

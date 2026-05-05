@@ -39,6 +39,7 @@
  */
 #define MLXBF_GIGE_BCAST_MAC_FILTER_IDX 0
 #define MLXBF_GIGE_LOCAL_MAC_FILTER_IDX 1
+#define MLXBF_GIGE_MAX_FILTER_IDX       3
 
 /* Define for broadcast MAC literal */
 #define BCAST_MAC_ADDR 0xFFFFFFFFFFFF
@@ -51,11 +52,6 @@
 #define MLXBF_GIGE_ERROR_INTR_IDX       0
 #define MLXBF_GIGE_RECEIVE_PKT_INTR_IDX 1
 #define MLXBF_GIGE_LLU_PLU_INTR_IDX     2
-#define MLXBF_GIGE_PHY_INT_N            3
-
-#define MLXBF_GIGE_MDIO_DEFAULT_PHY_ADDR 0x3
-
-#define MLXBF_GIGE_DEFAULT_PHY_INT_GPIO 12
 
 struct mlxbf_gige_stats {
 	u64 hw_access_errors;
@@ -82,11 +78,7 @@ struct mlxbf_gige {
 	void __iomem *mdio_io;
 	void __iomem *clk_io;
 	struct mii_bus *mdiobus;
-	void __iomem *gpio_io;
-	struct irq_domain *irqdomain;
-	u32 phy_int_gpio_mask;
 	spinlock_t lock;      /* for packet processing indices */
-	spinlock_t gpio_lock; /* for GPIO bus access */
 	u16 rx_q_entries;
 	u16 tx_q_entries;
 	u64 *tx_wqe_base;
@@ -160,9 +152,13 @@ enum mlxbf_gige_res {
 int mlxbf_gige_mdio_probe(struct platform_device *pdev,
 			  struct mlxbf_gige *priv);
 void mlxbf_gige_mdio_remove(struct mlxbf_gige *priv);
-irqreturn_t mlxbf_gige_mdio_handle_phy_interrupt(int irq, void *dev_id);
-void mlxbf_gige_mdio_enable_phy_int(struct mlxbf_gige *priv);
 
+void mlxbf_gige_enable_multicast_rx(struct mlxbf_gige *priv);
+void mlxbf_gige_disable_multicast_rx(struct mlxbf_gige *priv);
+void mlxbf_gige_enable_mac_rx_filter(struct mlxbf_gige *priv,
+				     unsigned int index);
+void mlxbf_gige_disable_mac_rx_filter(struct mlxbf_gige *priv,
+				      unsigned int index);
 void mlxbf_gige_set_mac_rx_filter(struct mlxbf_gige *priv,
 				  unsigned int index, u64 dmac);
 void mlxbf_gige_get_mac_rx_filter(struct mlxbf_gige *priv,
@@ -185,8 +181,5 @@ void mlxbf_gige_free_irqs(struct mlxbf_gige *priv);
 int mlxbf_gige_poll(struct napi_struct *napi, int budget);
 extern const struct ethtool_ops mlxbf_gige_ethtool_ops;
 void mlxbf_gige_update_tx_wqe_next(struct mlxbf_gige *priv);
-
-int mlxbf_gige_gpio_init(struct platform_device *pdev, struct mlxbf_gige *priv);
-void mlxbf_gige_gpio_free(struct mlxbf_gige *priv);
 
 #endif /* !defined(__MLXBF_GIGE_H__) */

@@ -207,9 +207,9 @@ struct hw_bank {
  * @in_lpm: if the core in low power mode
  * @wakeup_int: if wakeup interrupt occur
  * @rev: The revision number for controller
+ * @mutex: protect code from concorrent running when doing role switch
  * @power_lost_work: work item when controller power is lost
  * @power_lost_wq: work queue for controller power is lost
- * @mutex: protect code from concorrent running
  */
 struct ci_hdrc {
 	struct device			*dev;
@@ -262,6 +262,7 @@ struct ci_hdrc {
 	bool				in_lpm;
 	bool				wakeup_int;
 	enum ci_revision		rev;
+	struct mutex                    mutex;
 	struct work_struct		power_lost_work;
 	struct workqueue_struct		*power_lost_wq;
 	/* register save area for suspend&resume */
@@ -275,7 +276,6 @@ struct ci_hdrc {
 	u32				pm_configured_flag;
 	u32				pm_portsc;
 	u32				pm_usbmode;
-	struct mutex			mutex;
 };
 
 static inline struct ci_role_driver *ci_role(struct ci_hdrc *ci)
@@ -302,14 +302,13 @@ static inline int ci_role_start(struct ci_hdrc *ci, enum ci_role role)
 
 	if (ci->usb_phy) {
 		if (role == CI_ROLE_HOST)
-			usb_phy_set_mode(ci->usb_phy,
-					CUR_USB_MODE_HOST);
+			usb_phy_set_event(ci->usb_phy, USB_EVENT_ID);
 		else
-			usb_phy_set_mode(ci->usb_phy,
-					CUR_USB_MODE_DEVICE);
+			/* in device mode but vbus is invalid*/
+			usb_phy_set_event(ci->usb_phy, USB_EVENT_NONE);
 	}
 
-	return 0;
+	return ret;
 }
 
 static inline void ci_role_stop(struct ci_hdrc *ci)
@@ -324,7 +323,7 @@ static inline void ci_role_stop(struct ci_hdrc *ci)
 	ci->roles[role]->stop(ci);
 
 	if (ci->usb_phy)
-		usb_phy_set_mode(ci->usb_phy, CUR_USB_MODE_NONE);
+		usb_phy_set_event(ci->usb_phy, USB_EVENT_NONE);
 }
 
 static inline enum usb_role ci_role_to_usb_role(struct ci_hdrc *ci)

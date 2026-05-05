@@ -283,6 +283,8 @@ EXPORT_SYMBOL_GPL(osc_pc_lpi_support_confirmed);
 bool osc_sb_native_usb4_support_confirmed;
 EXPORT_SYMBOL_GPL(osc_sb_native_usb4_support_confirmed);
 
+bool osc_sb_cppc_not_supported;
+
 static u8 sb_uuid_str[] = "0811B06E-4A27-44F9-8D60-3CBBC22E7B48";
 static void acpi_bus_osc_negotiate_platform_control(void)
 {
@@ -337,6 +339,12 @@ static void acpi_bus_osc_negotiate_platform_control(void)
 		kfree(context.ret.pointer);
 		return;
 	}
+
+#ifdef CONFIG_X86
+	if (boot_cpu_has(X86_FEATURE_HWP))
+		osc_sb_cppc_not_supported = !(capbuf_ret[OSC_SUPPORT_DWORD] &
+				(OSC_SB_CPC_SUPPORT | OSC_SB_CPCV2_SUPPORT));
+#endif
 
 	/*
 	 * Now run _OSC again with query flag clear and with the caps
@@ -1327,8 +1335,10 @@ static int __init acpi_init(void)
 	}
 
 	acpi_kobj = kobject_create_and_add("acpi", firmware_kobj);
-	if (!acpi_kobj)
-		pr_debug("%s: kset create error\n", __func__);
+	if (!acpi_kobj) {
+		pr_err("Failed to register kobject\n");
+		return -ENOMEM;
+	}
 
 	init_prmt();
 	result = acpi_bus_init();

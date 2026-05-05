@@ -240,7 +240,7 @@ static void lpi2c_imx_stop(struct lpi2c_imx_struct *lpi2c_imx)
    CLKHI = I2C_CLK_RATIO * clk_cycle */
 static int lpi2c_imx_config(struct lpi2c_imx_struct *lpi2c_imx)
 {
-	u16 prescale, filt, sethold = 0, datavd;
+	u8 prescale, filt, sethold, datavd;
 	unsigned int clk_rate, clk_cycle, clkhi, clklo;
 	enum lpi2c_imx_pincfg pincfg;
 	unsigned int temp;
@@ -718,51 +718,8 @@ static int lpi2c_imx_xfer(struct i2c_adapter *adapter,
 		if (num == 1 && msgs[0].len == 0)
 			goto stop;
 
-		if (is_use_dma(lpi2c_imx, &msgs[i])) {
-			lpi2c_imx->using_dma = true;
-
-			writel(0x1, lpi2c_imx->base + LPI2C_MFCR);
-
-			lpi2c_imx->dma_buf = i2c_get_dma_safe_msg_buf(&msgs[i],
-							    I2C_DMA_THRESHOLD);
-			if (lpi2c_imx->dma_buf) {
-				/* Enable I2C DMA function */
-				writel(MDER_TDDE | MDER_RDDE, lpi2c_imx->base + LPI2C_MDER);
-
-				result = lpi2c_dma_xfer(lpi2c_imx, &msgs[i]);
-
-				/* Disable I2C DMA function */
-				writel(0, lpi2c_imx->base + LPI2C_MDER);
-				i2c_put_dma_safe_msg_buf(lpi2c_imx->dma_buf,
-							 lpi2c_imx->msg,
-							 lpi2c_imx->xferred);
-
-				switch (result) {
-				/* transfer success */
-				case 0:
-					if (!(msgs[i].flags & I2C_M_RD)) {
-						result = lpi2c_imx_txfifo_empty(lpi2c_imx);
-						if (result)
-							goto stop;
-					}
-					continue;
-				/* transfer failed, use pio */
-				case I2C_USE_PIO:
-					lpi2c_cleanup_dma(lpi2c_imx);
-					break;
-				/*
-				 * transfer failed, cannot use pio.
-				 * Send stop, and then return error.
-				 */
-				default:
-					lpi2c_cleanup_dma(lpi2c_imx);
-					writel(GEN_STOP << 8, lpi2c_imx->base + LPI2C_MTDR);
-					goto check_ndf;
-				}
-			}
-		}
-
-		lpi2c_imx->using_dma = false;
+		lpi2c_imx->rx_buf = NULL;
+		lpi2c_imx->tx_buf = NULL;
 		lpi2c_imx->delivered = 0;
 		lpi2c_imx->msglen = msgs[i].len;
 		reinit_completion(&lpi2c_imx->complete);
@@ -808,10 +765,14 @@ disable:
 static irqreturn_t lpi2c_imx_isr(int irq, void *dev_id)
 {
 	struct lpi2c_imx_struct *lpi2c_imx = dev_id;
+	unsigned int enabled;
 	unsigned int temp;
+
+	enabled = readl(lpi2c_imx->base + LPI2C_MIER);
 
 	lpi2c_imx_intctrl(lpi2c_imx, 0);
 	temp = readl(lpi2c_imx->base + LPI2C_MSR);
+	temp &= enabled;
 
 	if (temp & MSR_NDF) {
 		lpi2c_imx->is_ndf = true;

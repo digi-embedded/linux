@@ -564,9 +564,13 @@ struct dpaa2_eth_priv {
 	u16 tx_data_offset;
 	void __iomem *onestep_reg_base;
 	u8 ptp_correction_off;
+	void (*dpaa2_set_onestep_params_cb)(struct dpaa2_eth_priv *priv,
+					    u32 offset, u8 udp);
+	struct fsl_mc_device *dpbp_dev;
 	struct dpaa2_eth_buf_pool *bp[DPAA2_ETH_MAX_BPS];
 	int num_bps;
 	u16 rx_buf_size;
+	u16 bpid;
 	struct iommu_domain *iommu_domain;
 
 	enum hwtstamp_tx_types tx_tstamp_type;	/* Tx timestamping type */
@@ -731,7 +735,7 @@ static inline bool dpaa2_eth_rx_pause_enabled(u64 link_options)
 
 static inline unsigned int dpaa2_eth_needed_headroom(struct sk_buff *skb)
 {
-	unsigned int headroom = DPAA2_ETH_SWA_SIZE;
+	unsigned int headroom = DPAA2_ETH_SWA_SIZE + DPAA2_ETH_TX_BUF_ALIGN;
 
 	/* If we don't have an skb (e.g. XDP buffer), we only need space for
 	 * the software annotation area
@@ -816,8 +820,7 @@ int dpaa2_eth_open(struct net_device *net_dev);
 int dpaa2_eth_stop(struct net_device *net_dev);
 
 struct dpaa2_eth_buf_pool *dpaa2_eth_allocate_dpbp(struct dpaa2_eth_priv *priv);
-void dpaa2_eth_free_dpbp(struct dpaa2_eth_priv *priv,
-			 struct dpaa2_eth_buf_pool *bp);
+void dpaa2_eth_free_dpbp(struct dpaa2_eth_priv *priv);
 
 void *dpaa2_iova_to_virt(struct iommu_domain *domain, dma_addr_t iova_addr);
 void dpaa2_eth_recycle_buf(struct dpaa2_eth_priv *priv,

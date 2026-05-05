@@ -2893,8 +2893,10 @@ int rt5682_register_dai_clks(struct rt5682_priv *rt5682)
 		}
 
 		if (dev->of_node) {
-			devm_of_clk_add_hw_provider(dev, of_clk_hw_simple_get,
+			ret = devm_of_clk_add_hw_provider(dev, of_clk_hw_simple_get,
 						    dai_clk_hw);
+			if (ret)
+				return ret;
 		} else {
 			ret = devm_clk_hw_register_clkdev(dev, dai_clk_hw,
 							  init.name,
@@ -2950,6 +2952,9 @@ static int rt5682_suspend(struct snd_soc_component *component)
 
 	if (rt5682->is_sdw)
 		return 0;
+
+	if (rt5682->irq)
+		disable_irq(rt5682->irq);
 
 	cancel_delayed_work_sync(&rt5682->jack_detect_work);
 	cancel_delayed_work_sync(&rt5682->jd_check_work);
@@ -3018,6 +3023,9 @@ static int rt5682_resume(struct snd_soc_component *component)
 	rt5682->jack_type = 0;
 	mod_delayed_work(system_power_efficient_wq,
 		&rt5682->jack_detect_work, msecs_to_jiffies(0));
+
+	if (rt5682->irq)
+		enable_irq(rt5682->irq);
 
 	return 0;
 }

@@ -331,7 +331,7 @@ static bool initialized;
  * This default is used whenever the current disk size is unknown.
  * [Now it is rather a minimum]
  */
-#define MAX_DISK_SIZE 4		/* 3984 */
+#define MAX_DISK_SIZE (PAGE_SIZE / 1024)
 
 /*
  * globals used by 'result()'
@@ -4587,8 +4587,10 @@ static int __init do_floppy_init(void)
 			goto out_put_disk;
 
 		err = floppy_alloc_disk(drive, 0);
-		if (err)
+		if (err) {
+			blk_mq_free_tag_set(&tag_sets[drive]);
 			goto out_put_disk;
+		}
 
 		timer_setup(&motor_off_timer[drive], motor_off_callback, 0);
 	}
