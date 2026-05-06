@@ -11,14 +11,12 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	pinctrl-1 = <&pinctrl_flexcan2_sleep>;
-	status = "okay";
 };
 
 &flexcan3 {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_flexcan3>;
 	pinctrl-1 = <&pinctrl_flexcan3_sleep>;
-	status = "okay";
 };
 
 &flexspi1 {
@@ -159,7 +157,6 @@
 	pinctrl-1 = <&pinctrl_enetc0_sleep>;
 	phy-handle = <&ethphy0>;
 	phy-mode = "rgmii-id";
-	status = "okay";
 };
 
 &enetc_port1 {
@@ -168,13 +165,11 @@
 	pinctrl-1 = <&pinctrl_enetc1_sleep>;
 	phy-handle = <&ethphy1>;
 	phy-mode = "rgmii-id";
-	status = "okay";
 };
 
 &netc_emdio {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_emdio>;
-	status = "okay";
 
 	ethphy0: ethernet-phy@5 {
 		reg = <5>;
@@ -195,18 +190,12 @@
 			   NXP_NETC_SERIAL>;
 };
 
-&netc_timer {
-	status = "okay";
-};
-
 &pcie0 {
 	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_OUTPUT>;
-	status = "okay";
 };
 
 &pcie1 {
 	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_OUTPUT>;
-	status = "okay";
 };
 
 &sai3 {
@@ -225,7 +214,6 @@
 			       <3612672000>, <393216000>,
 			       <361267200>, <12288000>;
 	fsl,sai-mclk-direction-output;
-	status = "okay";
 };
 
 /* Disable BBM (i.MX95 RTC and ON/OFF key) */
@@ -243,7 +231,6 @@
 	cd-gpios = <&gpio3 00 GPIO_ACTIVE_HIGH>;
 	fsl,cd-gpio-wakeup-disable;
 	bus-width = <4>;
-	status = "okay";
 };
 
 &vpuctrl {

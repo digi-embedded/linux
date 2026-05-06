@@ -159,12 +159,24 @@
 	status = "okay";
 };
 
+/* GBE1 */
+&enetc_port0 {
+	status = "okay";
+};
+
+/* GBE2 */
+&enetc_port1 {
+	status = "okay";
+};
+
 &flexcan2 {
 	xceiver-supply = <&reg_5v_board>;
+	status = "okay";
 };
 
 &flexcan3 {
 	xceiver-supply = <&reg_5v_board>;
+	status = "okay";
 };
 
 &flexspi1 {
@@ -173,9 +185,9 @@
 	pinctrl-1 = <&pinctrl_flexspi1>;
 	/*
 	 * TODO: reset line unsupported by FlexSPI driver
-	 * SMARC_ESPI_RESET# comes from MCA PA12
+	 * SMARC_ESPI_RESET# comes from MCA_IO16
 	 */
-	status = "disabled";
+	status = "okay";
 };
 
 &isi {
@@ -272,6 +284,10 @@
 		clock-names = "mclk";
 		dvdd-supply = <&reg_vdd_1v8_dummy>;
 	};
+};
+
+&lpi2c5 {
+	status = "okay";
 };
 
 &lpi2c7 {
@@ -411,16 +427,27 @@
 	status = "okay";
 };
 
+/* Shared Ethernet MDIO */
+&netc_emdio {
+	status = "okay";
+};
+
+&netc_timer {
+	status = "okay";
+};
+
 /* M.2 E-Key slot */
 &pcie0 {
 	vpcie-supply = <&reg_3v3_board>;
 	reset-gpio = <&mca_gpio 25 GPIO_ACTIVE_LOW>;	/* MCA PB10 */
+	status = "okay";
 };
 
 /* M.2 B-Key slot */
 &pcie1 {
 	vpcie-supply = <&reg_3v3_board>;
 	reset-gpio = <&mca_gpio 10 GPIO_ACTIVE_LOW>;	/* MCA PB1 */
+	status = "okay";
 };
 
 &pcie1_ep {
@@ -436,6 +463,10 @@
 		reg = <0>;
 		status = "okay";
 	};
+};
+
+&sai3 {
+	status = "okay";
 };
 
 &usb2 {
@@ -486,6 +517,7 @@
 /* MicroSD */
 &usdhc2 {
 	vmmc-supply = <&reg_3v3_board>;
+	status = "okay";
 };
 
 &wdog3 {
