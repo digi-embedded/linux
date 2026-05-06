@@ -414,13 +414,13 @@
 /* M.2 E-Key slot */
 &pcie0 {
 	vpcie-supply = <&reg_3v3_board>;
-	reset-gpios = <&mca_gpio 25 GPIO_ACTIVE_LOW>;	/* MCA PB10 */
+	reset-gpio = <&mca_gpio 25 GPIO_ACTIVE_LOW>;	/* MCA PB10 */
 };
 
 /* M.2 B-Key slot */
 &pcie1 {
 	vpcie-supply = <&reg_3v3_board>;
-	reset-gpios = <&mca_gpio 10 GPIO_ACTIVE_LOW>;	/* MCA PB1 */
+	reset-gpio = <&mca_gpio 10 GPIO_ACTIVE_LOW>;	/* MCA PB1 */
 };
 
 &pcie1_ep {
