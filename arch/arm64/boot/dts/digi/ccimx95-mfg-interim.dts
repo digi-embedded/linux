@@ -364,7 +364,7 @@
 
 /* mikroBUS SPI interface */
 &lpspi8 {
-	fsl,spi-num-chipselects = <1>;
+	num-cs = <1>;
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_lpspi8>;
 	pinctrl-1 = <&pinctrl_lpspi8_gpio>;
