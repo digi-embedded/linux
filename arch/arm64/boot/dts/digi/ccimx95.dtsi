@@ -159,28 +159,6 @@
 };
 
 &thermal_zones {
-	a55 {
-		trips {
-			atrip2: trip2 {
-				temperature = <55000>;
-				hysteresis = <2000>;
-				type = "active";
-			};
-
-			atrip3: trip3 {
-				temperature = <65000>;
-				hysteresis = <2000>;
-				type = "active";
-			};
-
-			atrip4: trip4 {
-				temperature = <75000>;
-				hysteresis = <2000>;
-				type = "active";
-			};
-		};
-	};
-
 	pf09 {
 		polling-delay-passive = <250>;
 		polling-delay = <2000>;
