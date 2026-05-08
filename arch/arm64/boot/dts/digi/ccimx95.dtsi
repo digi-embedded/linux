@@ -148,6 +148,30 @@
 	vref-supply = <&reg_vdd_1v8_dummy>;
 };
 
+&ana_alert {
+	temperature = <85000>;
+	hysteresis = <2000>;
+	type = "passive";
+};
+
+&ana_crit0 {
+	temperature = <100000>;
+	hysteresis = <2000>;
+	type = "critical";
+};
+
+&cpu_alert0 {
+	temperature = <85000>;
+	hysteresis = <2000>;
+	type = "passive";
+};
+
+&cpu_crit0 {
+	temperature = <100000>;
+	hysteresis = <2000>;
+	type = "critical";
+};
+
 /* Enable GPIO1 to be used in Linux (not reserved by SM) */
 &gpio1 {
 	status = "okay";
