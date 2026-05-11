@@ -46,6 +46,17 @@
 		};
 	};
 
+	leds {
+		compatible = "gpio-leds";
+
+		boot_led: boot-led {
+			label = "boot";
+			gpios = <&mca_gpio 1 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "default-on";
+			default-state = "on";
+		};
+	};
+
 	/* Required placeholder to inject LVDS0 overlay */
 	lvds0-panel {
 		status = "disabled";
