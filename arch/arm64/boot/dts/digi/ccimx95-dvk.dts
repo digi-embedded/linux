@@ -369,8 +369,7 @@
 };
 
 &usb2 {
-	/* On SMARC DVKv1 powered directly from VIN_5V */
-	vbus-supply = <&reg_board_main>;
+	vbus-supply = <&reg_5v_board>;
 	dr_mode = "host";
 	disable-over-current;
 	status = "okay";
