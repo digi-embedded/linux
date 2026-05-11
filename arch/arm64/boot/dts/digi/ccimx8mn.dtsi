@@ -545,7 +545,7 @@
 	pinctrl-1 = <&pinctrl_uart2_sleep>;
 	assigned-clocks = <&clk IMX8MN_CLK_UART2>;
 	assigned-clock-parents = <&clk IMX8MN_SYS_PLL1_80M>;
-	fsl,uart-has-rtscts;
+	uart-has-rtscts;
 	status = "disabled";
 };
 

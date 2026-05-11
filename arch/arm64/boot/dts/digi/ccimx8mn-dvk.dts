@@ -697,7 +697,7 @@
 	 * RS-232 mode (uncomment these lines to use this UART in RS232 mode).
 	 * Choose the ones that match your DVK version.
 	 */
-	//fsl,uart-has-rtscts;
+	//uart-has-rtscts;
 	//For DVK: version >= 3 (R291, R292 and R359 on the DVK must be removed)
 	//pinctrl-0 = <&pinctrl_uart3>;
 	//For DVK: version <= 2
@@ -712,7 +712,7 @@
 	pinctrl-0 = <&pinctrl_uart4>, <&pinctrl_xbee2_gpios>;
 	assigned-clocks = <&clk IMX8MN_CLK_UART4>;
 	assigned-clock-parents = <&clk IMX8MN_SYS_PLL1_80M>;
-	fsl,uart-has-rtscts;
+	uart-has-rtscts;
 	status = "okay";
 };
 

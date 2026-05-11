@@ -416,7 +416,6 @@
 &lpuart4 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart4>, <&pinctrl_xbee_rf_gpios>;
-	fsl,uart-has-rtscts;
 	/* Uncomment to remove DMA if using A0 silicon of the CPU */
 //	/delete-property/dmas;
 //	/delete-property/dma-names;
