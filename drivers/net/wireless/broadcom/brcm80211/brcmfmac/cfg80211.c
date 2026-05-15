@@ -8826,6 +8826,40 @@ brcmf_notify_assoc_resp_ie(struct brcmf_if *ifp,
 	return 0;
 }
 
+static s32
+brcmf_notify_country_code_changed(struct brcmf_if *ifp,
+				  const struct brcmf_event_msg *e, void *data)
+{
+	struct brcmf_cfg80211_info *cfg = ifp->drvr->config;
+	struct brcmf_fil_country_le ccreq = {};
+	s32 country_err;
+	s32 err;
+
+	country_err = brcmf_fil_iovar_data_get(ifp, "country", &ccreq,
+					       sizeof(ccreq));
+	if (country_err)
+		bphy_err(ifp->drvr, "country code changed event received but failed to get country (%d)\n",
+			 country_err);
+	else
+		brcmf_info("country code changed event received: ccode=%.*s rev=%d\n",
+			   BRCMF_COUNTRY_BUF_SZ, ccreq.ccode, (s32)le32_to_cpu(ccreq.rev));
+
+	brcmf_abort_scanning(cfg);
+
+	cfg->bands_reset_required = true;
+	err = brcmf_setup_wiphybands(cfg);
+	if (err) {
+		cfg->bands_reset_required = false;
+		bphy_err(ifp->drvr, "failed to update wiphy bands after country code change (%d)\n",
+			 err);
+		return err;
+	}
+
+	brcmf_info("wiphy bands updated after country code change\n");
+
+	return 0;
+}
+
 static void brcmf_register_event_handlers(struct brcmf_cfg80211_info *cfg)
 {
 	struct brcmf_if *ifp = netdev_priv(cfg_to_ndev(cfg));
@@ -8903,6 +8937,8 @@ static void brcmf_register_event_handlers(struct brcmf_cfg80211_info *cfg)
 			    brcmf_notify_assoc_req_ie);
 	brcmf_fweh_register(cfg->pub, BRCMF_E_ASSOC_RESP_IE,
 			    brcmf_notify_assoc_resp_ie);
+	brcmf_fweh_register(cfg->pub, BRCMF_E_COUNTRY_CODE_CHANGED,
+			    brcmf_notify_country_code_changed);
 	brcmf_fweh_register(cfg->pub, BRCMF_E_ICMP_ECHO_REQ,
 			    brcmf_wiphy_icmp_echo_req_event_handler);
 }
