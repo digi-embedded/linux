@@ -98,6 +98,7 @@ enum mca_func {
 	MCA_FUNC_PWRKEY_UP,
 	MCA_FUNC_RTC_PREPARE,
 	MCA_FUNC_LEDS,
+	MCA_FUNC_GPIO_LVL_IRQ,
 	MCA_FUNC_MAX	/* Last element */
 };
 

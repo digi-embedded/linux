@@ -71,6 +71,7 @@ struct mca_gpio {
 	int irq[MCA_MAX_GPIO_IRQ_BANKS];
 	uint8_t deb_timer_cfg[MCA_MAX_GPIO_IRQ_BANKS];
 	uint8_t pwroff_wakeup_dis[MCA_MAX_IO_BYTES];
+	bool gpio_level_irqs;
 };
 
 static char const *const irq_gpio_bank_name[] = {
@@ -338,9 +339,11 @@ static int mca_gpio_irq_set_type(struct irq_data *d, unsigned int type)
 	u32 gpio_idx = d->hwirq;
 
 	if ((type & IRQ_TYPE_LEVEL_HIGH) || (type & IRQ_TYPE_LEVEL_LOW)) {
-		dev_err(gpio->dev,
-			"IRQ %d: level IRQs are not supported\n", d->irq);
-		return -EINVAL;
+		if (!gpio->gpio_level_irqs) {
+			dev_err(gpio->dev,
+				"IRQ %d: level IRQs are not supported\n", d->irq);
+			return -EINVAL;
+		}
 	}
 
 	/*
@@ -356,6 +359,16 @@ static int mca_gpio_irq_set_type(struct irq_data *d, unsigned int type)
 
 	if (type & IRQ_TYPE_EDGE_FALLING)
 		gpio->irq_cfg[gpio_idx] |= MCA_GPIO_IRQ_EDGE_FALL;
+
+	if (type & IRQ_TYPE_LEVEL_HIGH) {
+		gpio->irq_cfg[gpio_idx] |= MCA_GPIO_IRQ_EDGE_RISE;
+		gpio->irq_cfg[gpio_idx] |= MCA_GPIO_IRQ_LEVEL;
+	}
+
+	if (type & IRQ_TYPE_LEVEL_LOW) {
+		gpio->irq_cfg[gpio_idx] |= MCA_GPIO_IRQ_EDGE_FALL;
+		gpio->irq_cfg[gpio_idx] |= MCA_GPIO_IRQ_LEVEL;
+	}
 
 	return 0;
 }
@@ -507,6 +520,10 @@ static int mca_gpio_probe(struct platform_device *pdev)
 		dev_err(mca_dev, "Read invalid number of gpios (%d). "
 			"Valid range is 1..%d.\n", ngpio, MCA_MAX_IOS);
 		goto err;
+	}
+
+	if (mca_feature_is_supported(mca, MCA_FUNC_GPIO_LVL_IRQ)) {
+		gpio->gpio_level_irqs = 1;
 	}
 
 	nbank = (ngpio + 7) / 8;
