@@ -59,9 +59,15 @@
 		linux_cma: linux,cma {
 			compatible = "shared-dma-pool";
 			reusable;
-			size = <0 0x3c000000>;
+			/* Default 256MiB (only if 'digi,size-table' not processed) */
+			size = <0 0x10000000>;
 			alloc-ranges = <0 0x80000000 0 0x7F000000>;
 			linux,cma-default;
+			digi,size-table = <
+				/* RAM          CMA*/
+				0x0 0x80000000  0x0 0x10000000	/* 2 GiB variants -> 256 MiB of CMA */
+				0x2 0x00000000  0x0 0x3c000000	/* 8 GiB variants -> 960 MiB of CMA */
+			>;
 		};
 
 		vpu_boot: vpu_boot@a0000000 {
