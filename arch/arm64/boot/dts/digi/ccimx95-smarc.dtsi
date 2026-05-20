@@ -173,13 +173,17 @@
 
 	ethphy0: ethernet-phy@5 {
 		reg = <5>;
-		compatible = "ethernet-phy-ieee802.3-c22";
+		compatible = "ethernet-phy-id0022.1652"; /* PHY ID for Microchip LAN8840 */
+		interrupt-parent = <&mca_gpio>;
+		interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 	};
 
 	ethphy1: ethernet-phy@7 {
 		reg = <7>;
-		compatible = "ethernet-phy-ieee802.3-c22";
+		compatible = "ethernet-phy-id0022.1652"; /* PHY ID for Microchip LAN8840 */
+		interrupt-parent = <&mca_gpio>;
+		interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 	};
 };
