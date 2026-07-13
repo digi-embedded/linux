@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Digi International Inc.
+ * Copyright 2024-2026 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -42,19 +42,17 @@
 			pinctrl-1 = <&ccmp25_usart1_idle_pins>;
 			pinctrl-2 = <&ccmp25_usart1_sleep_pins>;
 			uart-has-rtscts;
+			digi,keep-tx-enabled;
 			status = "okay";
 
-			/*
-			 * Currently the early FW is not supported by the driver, so we use
-			 * the generic HCI_UART support.
-			 */
-//			cyw55512_bt: cyw55512-bt {
-//				shutdown-gpios = <&gpioz 5 GPIO_ACTIVE_HIGH>; /* BT_REG_EN */
-//				compatible = "brcm,bcm43438-bt";
-//				max-speed = <3000000>;
-//				vbat-supply = <&scmi_v3v3>;
-//				vddio-supply = <&scmi_ldo8_1v8_rf>;
-//			};
+			cyw55512_bt: cyw55512-bt {
+				shutdown-gpios = <&gpioz 5 GPIO_ACTIVE_HIGH>; /* BT_REG_EN */
+				compatible = "infineon,cyw55572-bt";
+				max-speed = <3000000>;
+				brcm,requires-autobaud-mode;
+				vbat-supply = <&scmi_v3v3>;
+				vddio-supply = <&scmi_ldo8_1v8_rf>;
+			};
 		};
 	};
 
@@ -77,7 +75,6 @@
 		__overlay__ {
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <1800000>;
-			regulator-always-on;
 		};
 	};
 };
