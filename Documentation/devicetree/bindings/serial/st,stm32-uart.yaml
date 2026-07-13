@@ -86,6 +86,12 @@ properties:
       (TIOCCBRK). The default behavior of the UART (without this property) is to
       only send one BREAK character.
 
+  digi,keep-tx-enabled:
+    type: boolean
+    description:
+      Keep the transmitter enabled during UART reconfiguration to prevent the
+      TX line from being temporarily released.
+
 allOf:
   - $ref: rs485.yaml#
   - $ref: serial.yaml#

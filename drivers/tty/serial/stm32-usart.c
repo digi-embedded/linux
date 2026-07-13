@@ -1489,6 +1489,11 @@ static void stm32_usart_set_termios(struct uart_port *port,
 	u32 cr1, cr2, cr3, isr, presc, brr = 0;
 	unsigned long flags;
 	int brr_fit = 0, ret;
+	bool hold_tx = false;
+	struct device_node *np = port->dev->of_node;
+
+	if (of_get_property(np, "digi,keep-tx-enabled", NULL))
+		hold_tx = true;
 
 	pm_runtime_get(port->dev);
 
@@ -1508,8 +1513,13 @@ static void stm32_usart_set_termios(struct uart_port *port,
 	if (ret)
 		dev_err(port->dev, "Transmission is not complete\n");
 
-	/* Stop serial port and reset value */
-	writel_relaxed(0, port->membase + ofs->cr1);
+	if (hold_tx) {
+		/* Stop serial port but keep transmitter enabled */
+		stm32_usart_clr_bits(port, ofs->cr1, USART_CR1_RE | BIT(0));
+	} else {
+		/* Stop serial port and reset value */
+		writel_relaxed(0, port->membase + ofs->cr1);
+	}
 
 	/* flush RX & TX FIFO */
 	if (ofs->rqr != UNDEF_REG)
