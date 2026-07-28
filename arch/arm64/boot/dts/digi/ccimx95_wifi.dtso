@@ -51,7 +51,6 @@
 			cap-power-off-card;
 			non-removable;
 			wakeup-source;
-			max-frequency = <100000000>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
