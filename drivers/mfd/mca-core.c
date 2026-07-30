@@ -1395,7 +1395,7 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 				 "Cannot read SOM hardware version (%d)\n", ret);
 
 		mca->fw_update_gpio = devm_gpiod_get_optional(mca->dev,
-				      "fw-update", GPIOD_ASIS);
+				      "fw-update", GPIOD_OUT_LOW);
 		if (IS_ERR(mca->fw_update_gpio))
 			return dev_err_probe(mca->dev,
 					     PTR_ERR(mca->fw_update_gpio),
