@@ -98,6 +98,11 @@
 	};
 };
 
+&adc1 {
+	/* ADC Vref is derived from the SoC VDD_ANAx_1P8 rail. */
+	vref-supply = <&reg_vdd_1v8_dummy>;
+};
+
 /* Configure pwrkey timeout */
 &bbnsm_pwrkey {
 	/* Supported discrete values: 0 (disable power-off), 5, 10, 15 */
